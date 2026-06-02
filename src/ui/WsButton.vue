@@ -1,25 +1,26 @@
 <template>
   <button
-    :class="['ws-button', `ws-button--${type}`, `ws-button--${size}`, { 'ws-button--block': block, 'ws-button--loading': loading, 'ws-button--disabled': disabled }]"
-    :disabled="disabled || loading"
-    :type="htmlType"
-    :aria-busy="loading"
-    :aria-label="ariaLabel"
-    @click="!disabled && !loading && $emit('click', $event)"
+    :class="['ws-button', `ws-button--${props.type}`, `ws-button--${props.size}`, { 'ws-button--block': props.block, 'ws-button--loading': props.loading, 'ws-button--disabled': props.disabled, 'ws-button--icon-only': props.iconOnly }]"
+    :disabled="props.disabled || props.loading"
+    :type="props.htmlType"
+    :aria-busy="props.loading"
+    :aria-label="props.ariaLabel"
+    @click="!props.disabled && !props.loading && $emit('click', $event)"
   >
-    <span v-if="loading" class="ws-button__spinner"></span>
-    <span v-if="$slots.icon && !loading" class="ws-button__icon"><slot name="icon" /></span>
-    <span class="ws-button__content"><slot /></span>
+    <span v-if="props.loading" class="ws-button__spinner"></span>
+    <span v-if="$slots.icon && !props.loading" class="ws-button__icon"><slot name="icon" /></span>
+    <span :class="['ws-button__content', { 'ws-button__content--sr-only': props.iconOnly }]"><slot /></span>
   </button>
 </template>
 
 <script setup lang="ts">
-withDefaults(defineProps<{
-  type?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'text'
+const props = withDefaults(defineProps<{
+  type?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'text' | 'primary-gradient' | 'accent'
   size?: 'sm' | 'md' | 'lg'
   disabled?: boolean
   loading?: boolean
   block?: boolean
+  iconOnly?: boolean
   htmlType?: 'button' | 'submit' | 'reset'
   ariaLabel?: string
 }>(), {
@@ -28,6 +29,7 @@ withDefaults(defineProps<{
   disabled: false,
   loading: false,
   block: false,
+  iconOnly: false,
   htmlType: 'button',
 })
 
@@ -92,6 +94,32 @@ defineEmits<{ click: [e: MouseEvent] }>()
   animation: ws-spin var(--duration-slow) linear infinite;
 }
 .ws-button__icon { display: inline-flex; align-items: center; }
+.ws-button__content--sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0);
+  white-space: nowrap; border: 0;
+}
+.ws-button--icon-only.ws-button--sm { width: 28px; height: 28px; padding: 0; }
+.ws-button--icon-only.ws-button--md { width: 32px; height: 32px; padding: 0; }
+.ws-button--icon-only.ws-button--lg { width: 40px; height: 40px; padding: 0; }
+.ws-button--icon-only .ws-button__icon { margin: 0 auto; }
 
+.ws-button--primary-gradient {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent, #A855F7) 100%);
+  color: white;
+  border: none;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+.ws-button--primary-gradient:hover:not(.ws-button--disabled) { filter: brightness(1.08); }
+.ws-button--primary-gradient:active:not(.ws-button--disabled) { transform: scale(var(--state-pressed-scale)); }
 
+.ws-button--accent {
+  background: var(--color-accent, #A855F7);
+  color: white;
+  border: none;
+}
+.ws-button--accent:hover:not(.ws-button--disabled) { filter: brightness(1.08); }
+.ws-button--accent:active:not(.ws-button--disabled) { transform: scale(var(--state-pressed-scale)); }
 </style>
