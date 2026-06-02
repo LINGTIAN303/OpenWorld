@@ -1,9 +1,11 @@
 import type { StorybookConfig } from '@storybook/vue3-vite'
+import { fileURLToPath } from 'node:url'
 
 const config: StorybookConfig = {
   stories: [
     '../src/ui/__stories__/**/*.mdx',
     '../src/ui/__stories__/**/*.stories.@(js|ts)',
+    '../src/plugins/official/workflow/__stories__/**/*.stories.@(js|ts)',
   ],
   addons: [
     '@storybook/addon-essentials',
@@ -14,6 +16,14 @@ const config: StorybookConfig = {
     options: {},
   },
   docs: {},
+  viteFinal: async (config) => {
+    config.resolve = config.resolve ?? {}
+    config.resolve.alias = {
+      ...(config.resolve.alias ?? {}),
+      '@': fileURLToPath(new URL('../src', import.meta.url)),
+    }
+    return config
+  },
 }
 
 export default config
