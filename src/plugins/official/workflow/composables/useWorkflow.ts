@@ -35,9 +35,37 @@ client
   })
   .catch((e) => console.warn('[useWorkflow] 加载工作流列表失败:', e))
 
-function handleWorkflowList(_e: Event) {
-  // 外部通知（包括 Agent tool）触发重新拉后端
-  void refreshList()
+function handleWorkflowList(e: Event) {
+  // 统一世界协议:detail.action ∈ {create, delete, refresh, update}
+  // 由 useNewWorkflow / Agent 工具派发
+  const detail = (e as CustomEvent<WorkflowListEventDetail>).detail
+  if (!detail) {
+    void refreshList()
+    return
+  }
+  switch (detail.action) {
+    case 'create':
+      if (detail.definition) {
+        const def = detail.definition
+        addWorkflow({
+          id: def.id,
+          latestVersion: 1,
+          name: def.name,
+          category: def.category || 'custom',
+          description: def.description ?? null,
+          updatedAt: Date.now(),
+        })
+      }
+      break
+    case 'delete':
+      if (detail.id) removeWorkflow(detail.id)
+      break
+    case 'refresh':
+    case 'update':
+    default:
+      void refreshList()
+      break
+  }
 }
 
 function handleWorkflowRun(e: Event) {
@@ -158,6 +186,19 @@ function removeWorkflow(workflowId: string) {
   removePersistedWorkflow(workflowId)
 }
 
+/**
+ * 本地添加 / 更新工作流摘要(乐观更新)。
+ * 由 handleWorkflowList(create) 或组件直接调用。
+ */
+function addWorkflow(summary: WorkflowSummary): void {
+  const idx = workflowList.findIndex((w) => w.id === summary.id)
+  if (idx !== -1) {
+    workflowList[idx] = summary
+  } else {
+    workflowList.push(summary)
+  }
+}
+
 function getActiveRun(): WorkflowRunState | null {
   if (!activeRunId.value) return null
   return runs.get(activeRunId.value) || null
@@ -210,6 +251,7 @@ export function useWorkflow() {
     setActiveRun,
     removeRun,
     removeWorkflow,
+    addWorkflow,
     getActiveRun,
     refreshList,
     unregisterListeners,
