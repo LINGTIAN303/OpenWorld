@@ -1,8 +1,8 @@
 <template>
-  <div class="workflow-list">
-    <div class="list-header">
-      <h3><WsIcon name="outline" size="sm" /> 工作流</h3>
-      <div class="search-bar">
+  <div class="ws-workflow-list">
+    <div class="ws-workflow-list__header">
+      <h3 class="ws-workflow-list__title">工作流</h3>
+      <div class="ws-workflow-list__tools">
         <input
           v-model="keyword"
           type="text"
@@ -10,177 +10,135 @@
           class="search-input"
           aria-label="搜索工作流"
         />
+        <WsSegmentedControl
+          v-model="sortKey"
+          :options="sortOptions"
+          size="sm"
+          aria-label="排序"
+        />
       </div>
     </div>
 
-    <WsEmpty v-if="filteredWorkflows.length === 0" preset="no-data" title="暂无工作流" description="告诉 AI Agent &quot;创建一个工作流&quot; 即可开始" />
+    <WorkflowEmptyState
+      v-if="filteredWorkflows.length === 0"
+      :no-results="keyword.trim().length > 0"
+      :keyword="keyword"
+    />
 
-    <div v-else class="workflow-cards">
-      <div
+    <div v-else class="ws-workflow-list__grid">
+      <WorkflowCard
         v-for="wf in filteredWorkflows"
         :key="wf.id"
-        class="workflow-card"
-      >
-        <div class="card-header">
-          <span class="card-icon"><WsIcon name="lightning" size="sm" /></span>
-          <span class="card-name">{{ wf.name }}</span>
-        </div>
-        <div class="card-meta">
-          <span class="card-category">{{ wf.category }}</span>
-        </div>
-        <p v-if="wf.description" class="card-desc">{{ wf.description }}</p>
-        <div class="card-actions">
-          <button class="card-btn edit" @click="$emit('edit', wf.id)" title="编辑"><WsIcon name="edit" size="xs" /> 编辑</button>
-          <button class="card-btn launch" @click="$emit('launch', wf.id)" title="运行"><WsIcon name="arrow-up" size="xs" /> 运行</button>
-          <button class="card-btn delete" @click="$emit('delete', wf.id)" title="删除"><WsIcon name="delete" size="xs" /> 删除</button>
-        </div>
-      </div>
+        :workflow="wf"
+        @edit="(id) => emit('edit', id)"
+        @launch="(id) => emit('launch', id)"
+        @delete="(id) => emit('delete', id)"
+      />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import WsIcon from '../../../../ui/WsIcon.vue'
-import WsEmpty from '../../../../ui/WsEmpty.vue'
+import WsSegmentedControl from '@/ui/WsSegmentedControl.vue'
+import WorkflowCard from './WorkflowCard.vue'
+import WorkflowEmptyState from './WorkflowEmptyState.vue'
 import type { WorkflowSummary } from '../types'
+
+type SortKey = 'created-desc' | 'name-asc' | 'updated-desc'
 
 const props = defineProps<{
   workflows: readonly WorkflowSummary[]
 }>()
 
-defineEmits<{
-  launch: [workflowId: string]
+const emit = defineEmits<{
   edit: [workflowId: string]
+  launch: [workflowId: string]
   delete: [workflowId: string]
 }>()
 
 const keyword = ref('')
+const sortKey = ref<SortKey>('created-desc')
+
+const sortOptions: ReadonlyArray<{ label: string; value: SortKey }> = [
+  { label: '最新', value: 'created-desc' },
+  { label: '名称', value: 'name-asc' },
+  { label: '最近运行', value: 'updated-desc' },
+]
+
+function compareWorkflows(a: WorkflowSummary, b: WorkflowSummary, key: SortKey): number {
+  switch (key) {
+    case 'name-asc':
+      return a.name.localeCompare(b.name, 'zh-Hans-CN')
+    case 'updated-desc':
+      return b.updatedAt - a.updatedAt
+    case 'created-desc':
+    default: {
+      // createdAt 可能缺失,降级到 updatedAt
+      const aTime = a.createdAt ? Date.parse(a.createdAt) : a.updatedAt
+      const bTime = b.createdAt ? Date.parse(b.createdAt) : b.updatedAt
+      return bTime - aTime
+    }
+  }
+}
 
 const filteredWorkflows = computed(() => {
-  if (!keyword.value) return props.workflows
-  const kw = keyword.value.toLowerCase()
-  return props.workflows.filter(wf =>
-    wf.name.toLowerCase().includes(kw) ||
-    wf.category.toLowerCase().includes(kw) ||
-    (wf.description ?? '').toLowerCase().includes(kw)
-  )
+  const kw = keyword.value.trim().toLowerCase()
+  const filtered = kw
+    ? props.workflows.filter(
+        (wf) =>
+          wf.name.toLowerCase().includes(kw) ||
+          wf.category.toLowerCase().includes(kw) ||
+          (wf.description ?? '').toLowerCase().includes(kw),
+      )
+    : [...props.workflows]
+  filtered.sort((a, b) => compareWorkflows(a, b, sortKey.value))
+  return filtered
 })
 </script>
 
 <style scoped>
-.workflow-list {
-  padding: 16px;
+.ws-workflow-list {
+  padding: var(--space-4);
 }
-
-.list-header {
+.ws-workflow-list__header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
 }
-
-.list-header h3 {
+.ws-workflow-list__title {
   margin: 0;
   font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
 }
-
-.search-input {
-  padding: 6px 12px;
-  border: 1px solid var(--border-color, #e5e7eb);
-  border-radius: 6px;
-  font-size: var(--font-size-sm);
-  width: 200px;
-}
-
-.workflow-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 12px;
-}
-
-.workflow-card {
-  padding: 14px;
-  border: 1px solid var(--border-color, #e5e7eb);
-  border-radius: 8px;
-  transition: all 0.15s;
-}
-
-.workflow-card:hover {
-  border-color: var(--primary, #3b82f6);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.card-header {
+.ws-workflow-list__tools {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: var(--space-2);
+  flex-wrap: wrap;
 }
-
-.card-icon {
-  font-size: var(--font-size-xl);
-}
-
-.card-name {
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-base);
-}
-
-.card-meta {
-  margin-bottom: 4px;
-}
-
-.card-category {
-  font-size: var(--font-size-xs);
-  padding: 2px 8px;
-  border-radius: 10px;
-  background: var(--hover-bg, #f3f4f6);
-  color: var(--text-secondary, #6b7280);
-}
-
-.card-desc {
+.search-input {
+  padding: 6px 12px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm, 6px);
   font-size: var(--font-size-sm);
-  color: var(--text-secondary, #6b7280);
-  margin: 0 0 10px 0;
-  line-height: 1.4;
+  background: var(--color-bg-input, var(--color-bg-primary));
+  color: var(--color-text-primary);
+  width: 200px;
+  font-family: var(--font-family-base);
 }
-
-.card-actions {
-  display: flex;
-  gap: 6px;
+.search-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus-ring);
 }
-
-.card-btn {
-  padding: 4px 10px;
-  border: 1px solid var(--border-color, #e5e7eb);
-  border-radius: 5px;
-  background: var(--color-bg-surface);
-  cursor: pointer;
-  font-size: var(--font-size-xs);
-  transition: all 0.15s;
-}
-
-.card-btn:hover {
-  border-color: var(--primary, #3b82f6);
-  color: var(--primary, #3b82f6);
-}
-
-.card-btn.launch {
-  border-color: var(--color-success);
-  color: var(--color-success);
-}
-
-.card-btn.launch:hover {
-  background: color-mix(in srgb, var(--color-success) 15%, transparent);
-}
-
-.card-btn.delete {
-  border-color: color-mix(in srgb, var(--color-danger) 50%, transparent);
-  color: var(--color-danger);
-}
-
-.card-btn.delete:hover {
-  background: color-mix(in srgb, var(--color-danger) 15%, transparent);
+.ws-workflow-list__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-3);
 }
 </style>
