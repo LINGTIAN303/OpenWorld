@@ -53,7 +53,7 @@ function toggle() {
 function updatePosition() {
   if (!triggerRef.value) return
   const rect = triggerRef.value.getBoundingClientRect()
-  const gap = 6
+  const gap = props.offset
   switch (props.placement) {
     case 'top':
       pos.value = { top: rect.top - gap, left: rect.left + rect.width / 2 }
