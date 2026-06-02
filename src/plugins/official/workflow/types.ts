@@ -63,7 +63,24 @@ export interface WorkflowSummary {
   category: string
   description: string | null
   updatedAt: number
+  /** 最近一次运行的状态(无运行则为 'idle') */
+  status?: RunStatus
+  /** 节点数(用于卡片角标展示) */
+  nodeCount?: number
+  /** ISO 字符串;后端无此字段时由前端 fallback */
+  createdAt?: string
+  /** ISO 字符串或 null(从未运行) */
+  lastRunAt?: string | null
 }
+
+/** 工作流运行状态(对齐 src-tauri/src/workflow/runs.rs::RunStatus) */
+export type RunStatus =
+  | 'idle'
+  | 'queued'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
 
 export interface RunSummary {
   runId: string
