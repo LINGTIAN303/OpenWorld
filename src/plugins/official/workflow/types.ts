@@ -73,14 +73,17 @@ export interface WorkflowSummary {
   lastRunAt?: string | null
 }
 
-/** 工作流运行状态(对齐 src-tauri/src/workflow/runs.rs::RunStatus) */
+/** 工作流运行状态(对齐 src-tauri/src/workflow/runs.rs::RunStatus + WsStatusDot) */
 export type RunStatus =
   | 'idle'
   | 'queued'
   | 'running'
+  | 'paused'
   | 'completed'
   | 'failed'
   | 'cancelled'
+  | 'skipped'
+  | 'awaiting-decision'
 
 export interface RunSummary {
   runId: string
