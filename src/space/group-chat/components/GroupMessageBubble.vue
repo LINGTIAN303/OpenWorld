@@ -1,0 +1,326 @@
+<template>
+  <div v-if="msg.role === 'system'" class="group-msg system-msg">
+    <span class="system-text">{{ msg.content }}</span>
+  </div>
+  <div v-else class="group-msg" :class="[`msg-${msg.role}`]" style="animation: msg-slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);">
+    <div v-if="msg.role === 'assistant'" class="msg-speaker" :style="{ '--speaker-color': msg.speakerColor || '#888' }">
+      <div class="speaker-avatar" :style="{ background: msg.speakerColor || '#888' }">
+        <span v-if="msg.speakerAvatar">{{ msg.speakerAvatar }}</span>
+        <span v-else class="avatar-letter">{{ (msg.speakerName || '?')[0] }}</span>
+      </div>
+      <span class="speaker-name">{{ msg.speakerName || 'Agent' }}</span>
+    </div>
+    <div class="msg-body" :style="msg.role === 'assistant' ? { borderLeftColor: msg.speakerColor || 'var(--color-border)' } : undefined">
+      <div v-if="msg.thinking" class="msg-thinking" :style="{ '--speaker-color': msg.speakerColor || 'var(--color-primary)' }">
+        <details>
+          <summary>思考过程</summary>
+          <div class="thinking-content">{{ msg.thinking }}</div>
+        </details>
+      </div>
+      <div class="msg-text" :class="{ 'has-uncertainty': hasUncertainty }">
+        <div v-if="msg.role === 'assistant'" class="msg-text-content" :class="{ 'text-collapsed': !textExpanded && isLong }">
+          <div v-html="renderedContent"></div>
+        </div>
+        <div v-else v-html="renderedUserContent"></div>
+        <span v-if="hasUncertainty" class="uncertainty-badge">待确认</span>
+      </div>
+      <div v-if="isLong" class="text-expand-btn" @click="textExpanded = !textExpanded">
+        {{ textExpanded ? '收起' : '展开全文' }}
+      </div>
+      <div class="msg-actions">
+        <button class="action-btn" @click="onCopy" title="复制"><WsIcon name="copy" size="xs" /></button>
+        <span class="msg-time">{{ formatTime(msg.timestamp) }}</span>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed } from 'vue'
+import type { AgentMessage } from '@agent/index'
+import { hasUncertaintyMarkers } from '../HallucinationGuard'
+import { useMessageRender } from '../composables/useMessageRender'
+import { useMessageTime } from '../composables/useMessageTime'
+import WsIcon from '../../../ui/WsIcon.vue'
+
+const props = defineProps<{ msg: AgentMessage }>()
+
+const { renderContent, isTextLong, textExpanded } = useMessageRender()
+const { formatTime } = useMessageTime()
+
+const hasUncertainty = computed(() =>
+  props.msg.role === 'assistant' ? hasUncertaintyMarkers(props.msg.content ?? '') : false
+)
+
+const isLong = computed(() =>
+  props.msg.role === 'assistant' ? isTextLong(props.msg.content ?? '') : false
+)
+
+const renderedContent = computed(() => {
+  if (props.msg.role !== 'assistant') return ''
+  const content = props.msg.content ?? ''
+  const rendered = renderContent(content)
+  return rendered.replace(/【待确认】/g, '<mark class="uncertainty-mark">【待确认】</mark>')
+})
+
+const renderedUserContent = computed(() => {
+  const content = props.msg.content ?? ''
+  return content
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>')
+})
+
+function onCopy() {
+  const text = props.msg.content ?? ''
+  navigator.clipboard.writeText(text).catch(() => {})
+}
+</script>
+
+<style scoped>
+.group-msg {
+  padding: 8px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.system-msg {
+  text-align: center;
+  padding: 6px;
+}
+
+.system-text {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  background: var(--color-surface);
+  padding: 4px 12px;
+  border-radius: 12px;
+}
+
+.msg-speaker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.speaker-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.avatar-letter {
+  color: white;
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+}
+
+.speaker-name {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--speaker-color);
+}
+
+.msg-body {
+  margin-left: 36px;
+  padding: 8px 12px;
+  border-radius: 0 12px 12px 12px;
+  background: var(--color-surface-elevated);
+  border-left: 3px solid var(--color-border);
+  max-width: 85%;
+}
+
+.msg-user .msg-body {
+  margin-left: 0;
+  margin-right: 36px;
+  border-radius: 12px 0 12px 12px;
+  border-left: none;
+  border-right: 3px solid var(--color-primary);
+  margin-left: auto;
+}
+
+.msg-text {
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  color: var(--color-text);
+}
+
+.msg-text-content {
+  position: relative;
+}
+
+.msg-text-content.text-collapsed {
+  max-height: 160px;
+  overflow: hidden;
+}
+
+.msg-text-content.text-collapsed::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  background: linear-gradient(transparent, var(--color-surface-elevated));
+  pointer-events: none;
+}
+
+.has-uncertainty {
+  position: relative;
+}
+
+.uncertainty-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: var(--font-size-2xs);
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.uncertainty-mark {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.msg-thinking {
+  margin-bottom: 6px;
+  border-left: 3px solid var(--speaker-color, var(--color-primary));
+  padding-left: 8px;
+}
+
+.msg-thinking summary {
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+  color: var(--speaker-color, var(--color-text-tertiary));
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.thinking-content {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  margin-top: 4px;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.msg-text :deep(h1), .msg-text :deep(h2), .msg-text :deep(h3) {
+  margin: 8px 0 4px;
+  font-weight: var(--font-weight-semibold);
+}
+
+.msg-text :deep(h1) { font-size: var(--font-size-xl) }
+.msg-text :deep(h2) { font-size: var(--font-size-lg) }
+.msg-text :deep(h3) { font-size: var(--font-size-md) }
+.msg-text :deep(p) { margin: 4px 0 }
+.msg-text :deep(ul), .msg-text :deep(ol) { margin: 4px 0; padding-left: 20px }
+.msg-text :deep(li) { margin: 2px 0 }
+.msg-text :deep(code) {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: var(--font-size-sm);
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+.msg-text :deep(pre) {
+  background: rgba(0, 0, 0, 0.25);
+  padding: 10px 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.msg-text :deep(pre code) {
+  background: none;
+  padding: 0;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+.msg-text :deep(blockquote) {
+  border-left: 3px solid var(--color-primary);
+  margin: 6px 0;
+  padding: 4px 12px;
+  opacity: 0.85;
+}
+.msg-text :deep(table) { border-collapse: collapse; margin: 8px 0; font-size: var(--font-size-sm) }
+.msg-text :deep(th), .msg-text :deep(td) {
+  border: 1px solid var(--color-border);
+  padding: 4px 8px;
+}
+.msg-text :deep(a) { color: var(--color-primary); text-decoration: underline }
+.msg-text :deep(hr) { border: none; border-top: 1px solid var(--color-border); margin: 8px 0 }
+
+.text-expand-btn {
+  display: inline-block;
+  padding: 2px 8px;
+  margin-top: 4px;
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--color-primary);
+  background: rgba(108, 92, 231, 0.08);
+  border: 1px solid rgba(108, 92, 231, 0.15);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.text-expand-btn:hover {
+  background: rgba(108, 92, 231, 0.15);
+}
+
+.msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  height: 20px;
+}
+
+.group-msg:hover .msg-actions {
+  opacity: 1;
+}
+
+.action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  padding: 2px 4px;
+  border-radius: 4px;
+  opacity: 0.6;
+  transition: opacity 0.1s;
+}
+
+.action-btn:hover {
+  opacity: 1;
+}
+
+.msg-time {
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-tertiary);
+  margin-left: auto;
+}
+
+@keyframes msg-slide-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+</style>

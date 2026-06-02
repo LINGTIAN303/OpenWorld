@@ -1,0 +1,101 @@
+<h2>工作流编辑器体验优化方向</h2>
+<p class="subtitle">当前编辑器偏向开发者，我们来看看具体问题在哪里，以及可以怎么改</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">🔴 当前：开发者风格</div>
+    <div class="mockup-body" style="font-size:13px;">
+      <div style="display:flex;gap:8px;padding:8px;background:#1e1e2e;border-radius:6px;color:#cdd6f4;">
+        <div style="width:160px;border-right:1px solid #45475a;padding-right:8px;">
+          <div style="font-size:11px;color:#6c7086;margin-bottom:6px;">节点类型</div>
+          <div style="padding:4px 6px;background:#313244;border-radius:3px;margin-bottom:3px;font-size:11px;">▶️ start</div>
+          <div style="padding:4px 6px;background:#313244;border-radius:3px;margin-bottom:3px;font-size:11px;">⏹️ end</div>
+          <div style="padding:4px 6px;background:#313244;border-radius:3px;margin-bottom:3px;font-size:11px;">🔀 condition</div>
+          <div style="padding:4px 6px;background:#313244;border-radius:3px;margin-bottom:3px;font-size:11px;">🤔 agent_decision</div>
+          <div style="padding:4px 6px;background:#313244;border-radius:3px;margin-bottom:3px;font-size:11px;">🔄 loop</div>
+          <div style="padding:4px 6px;background:#313244;border-radius:3px;margin-bottom:3px;font-size:11px;">⚡ parallel</div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+          <div style="padding:4px 8px;background:#181825;border-radius:4px;font-size:11px;">
+            <span style="color:#a6e3a1;">▶️ start</span> <span style="color:#6c7086;">→</span> <span style="color:#f9e2af;">🔀 condition</span> <span style="color:#6c7086;">→</span> <span style="color:#f38ba8;">⏹️ end</span>
+          </div>
+          <div style="padding:6px;background:#313244;border-radius:4px;">
+            <div style="font-size:10px;color:#6c7086;">属性面板</div>
+            <div style="margin-top:4px;">
+              <div style="font-size:10px;color:#a6adc8;">skill_id: <span style="color:#f38ba8;">____</span></div>
+              <div style="font-size:10px;color:#a6adc8;">prompt: <span style="color:#f38ba8;">____</span></div>
+              <div style="font-size:10px;color:#a6adc8;">output_preference_channel: <span style="color:#f38ba8;">[select ▼]</span></div>
+              <div style="font-size:10px;color:#a6adc8;">allowed_tools: <span style="color:#f38ba8;">[JSON textarea]</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:8px;padding:6px;background:#fef2f2;border-radius:4px;font-size:11px;color:#991b1b;">
+        ⚠️ 缺少 config.expression
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">🟢 优化后：用户友好风格</div>
+    <div class="mockup-body" style="font-size:13px;">
+      <div style="display:flex;gap:8px;padding:8px;background:#f8fafc;border-radius:6px;color:#334155;">
+        <div style="width:160px;border-right:1px solid #e2e8f0;padding-right:8px;">
+          <div style="font-size:11px;color:#94a3b8;margin-bottom:6px;">🧩 节点库</div>
+          <div style="font-size:10px;color:#94a3b8;margin-bottom:4px;">流程控制</div>
+          <div style="padding:4px 6px;background:#f0fdf4;border-left:3px solid #22c55e;border-radius:3px;margin-bottom:3px;font-size:11px;">▶️ 开始</div>
+          <div style="padding:4px 6px;background:#fef2f2;border-left:3px solid #ef4444;border-radius:3px;margin-bottom:3px;font-size:11px;">⏹️ 结束</div>
+          <div style="padding:4px 6px;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:3px;margin-bottom:3px;font-size:11px;">🔀 条件判断</div>
+          <div style="font-size:10px;color:#94a3b8;margin:6px 0 4px;">智能</div>
+          <div style="padding:4px 6px;background:#fdf2f8;border-left:3px solid #ec4899;border-radius:3px;margin-bottom:3px;font-size:11px;">🤔 AI 决策</div>
+          <div style="padding:4px 6px;background:#f5f3ff;border-left:3px solid #8b5cf6;border-radius:3px;margin-bottom:3px;font-size:11px;">🎯 技能</div>
+          <div style="font-size:10px;color:#94a3b8;margin:6px 0 4px;">循环</div>
+          <div style="padding:4px 6px;background:#fff7ed;border-left:3px solid #f97316;border-radius:3px;margin-bottom:3px;font-size:11px;">🔄 重复执行</div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+          <div style="padding:4px 8px;background:white;border:1px solid #e2e8f0;border-radius:6px;font-size:11px;">
+            <span style="color:#22c55e;">▶️ 开始</span> <span style="color:#94a3b8;">→</span> <span style="color:#f59e0b;">🔀 条件判断</span> <span style="color:#94a3b8;">→</span> <span style="color:#ef4444;">⏹️ 结束</span>
+          </div>
+          <div style="padding:6px;background:white;border:1px solid #e2e8f0;border-radius:6px;">
+            <div style="font-size:11px;font-weight:600;color:#1e293b;">🎯 技能节点</div>
+            <div style="margin-top:6px;">
+              <div style="font-size:10px;color:#64748b;margin-bottom:2px;">选择技能</div>
+              <div style="padding:3px 6px;background:#f1f5f9;border-radius:3px;font-size:11px;">📝 写作助手 ▼</div>
+              <div style="font-size:10px;color:#64748b;margin:4px 0 2px;">提示词</div>
+              <div style="padding:3px 6px;background:#f1f5f9;border-radius:3px;font-size:11px;color:#94a3b8;">描述你想要完成的任务...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:8px;padding:6px;background:#fffbeb;border-radius:4px;font-size:11px;color:#92400e;">
+        💡 请在"条件判断"节点中填写判断条件
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:24px;">
+  <h3>核心差异对比</h3>
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>🟢 优化后的改进</h4>
+      <ul>
+        <li><strong>中文标签</strong> — "条件判断" 而非 "condition"</li>
+        <li><strong>分组归类</strong> — 流程控制/智能/循环，而非扁平列表</li>
+        <li><strong>友好表单</strong> — 下拉选择、占位提示，而非原始字段名</li>
+        <li><strong>引导性错误</strong> — "请填写判断条件" 而非 "缺少 config.expression"</li>
+        <li><strong>视觉层次</strong> — 彩色左边框 + 分组标题</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>🔴 当前的问题</h4>
+      <ul>
+        <li>字段名是英文开发者术语</li>
+        <li>复杂配置要手写 JSON</li>
+        <li>节点面板无分组</li>
+        <li>错误提示偏技术</li>
+        <li>空白画布无引导</li>
+      </ul>
+    </div>
+  </div>
+</div>

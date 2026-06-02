@@ -1,0 +1,59 @@
+<h2>嵌套图 — 实体深钻</h2>
+<p class="subtitle">Project Graph 的核心特性：双击节点进入子图。在 WorldSmith 中这意味着什么？</p>
+
+<div class="section">
+<h3>概念：什么是"进入节点"？</h3>
+<p style="color:#aaa;margin-bottom:16px;">在 Project Graph 中，一个节点可以"jump into"，内部展开为一个全新的画布。在 WorldSmith 中，我们需要定义：当用户"进入"一个实体节点时，看到的是什么？</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="nest-entity-relations" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>实体的关系子图</h3>
+      <p>进入节点后，看到该实体的所有直接关系——关联实体围绕它展开，形成一个以该实体为中心的局部关系网。类似"聚焦模式"的增强版。</p>
+      <div style="margin-top:8px;padding:8px;background:#222;border-radius:8px;font-size:0.8em;color:#999;">
+        示例：进入"张三"节点 → 看到 张三的家人们、所属势力、持有道具、参与事件
+      </div>
+    </div>
+  </div>
+  <div class="option" data-choice="nest-custom-canvas" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>实体的专属画布</h3>
+      <p>每个实体拥有一个独立的自由画布，用户可以在其中手动放置文本框、图片、备注、子节点等，构建该实体的"内部思维导图"。类似 Project Graph 的 jump into。</p>
+      <div style="margin-top:8px;padding:8px;background:#222;border-radius:8px;font-size:0.8em;color:#999;">
+        示例：进入"张三"节点 → 一个空白画布，可自由添加"性格分析""成长轨迹""关键抉择"等子节点
+      </div>
+    </div>
+  </div>
+  <div class="option" data-choice="nest-both" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>两者兼有 — 自动关系图 + 自由画布</h3>
+      <p>进入节点后，默认展示自动生成的关系子图（来自 relationStore），同时用户可以在该画布上自由添加自定义内容（文本框、备注等），两者共存。</p>
+      <div style="margin-top:8px;padding:8px;background:#222;border-radius:8px;font-size:0.8em;color:#999;">
+        示例：进入"张三" → 自动显示关系网 + 用户可添加自由笔记/分析节点
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px;">
+<h3>导航方式</h3>
+<p style="color:#aaa;margin-bottom:12px;">无论选择哪种嵌套方式，都需要一个导航机制在层级间穿梭</p>
+<div style="background:#161625;border:1px solid #333;border-radius:12px;padding:16px;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+    <span style="background:#6c5ce7;color:white;padding:2px 8px;border-radius:4px;font-size:0.8em;">面包屑导航</span>
+    <span style="color:#999;font-size:0.85em;">全局图 > 张三 > 家族关系</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+    <span style="background:#6c5ce7;color:white;padding:2px 8px;border-radius:4px;font-size:0.8em;">快捷键返回</span>
+    <span style="color:#999;font-size:0.85em;">Esc 返回上层 / Backspace 返回全局图</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <span style="background:#6c5ce7;color:white;padding:2px 8px;border-radius:4px;font-size:0.8em;">Ctrl+双击</span>
+    <span style="color:#999;font-size:0.85em;">进入节点 / 双击普通编辑</span>
+  </div>
+</div>
+</div>

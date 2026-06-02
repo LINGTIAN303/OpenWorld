@@ -1,0 +1,239 @@
+<h2>§5 架构 · 数据流 · 错误处理 · 测试</h2>
+<p class="subtitle">纯工程视角,作为设计文档的"硬约束"部分。下方一张总览图,其他纯文字。</p>
+
+<h3>5.1 架构分层</h3>
+
+<div class="mockup">
+  <div class="mockup-header">架构总览 · 5 层</div>
+  <div class="mockup-body" style="background:#0f0f23;padding:18px">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;font-family:Inter,system-ui">
+
+      <!-- L1 Token -->
+      <div style="background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.3);border-radius:6px;padding:10px">
+        <div style="font:600 10px/1 Inter;color:#8b5cf6;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">L1 · Token</div>
+        <div style="font:500 11px/1.3 Inter;color:#e0e0e0">design-tokens/<br>primitive / semantic / component</div>
+        <div style="font:400 9px/1.3 Inter;color:#666;margin-top:4px">已存在,不动</div>
+      </div>
+
+      <!-- L2 Ws* 原语 -->
+      <div style="background:rgba(45,212,191,.08);border:1px solid rgba(45,212,191,.3);border-radius:6px;padding:10px">
+        <div style="font:600 10px/1 Inter;color:#2dd4bf;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">L2 · 公共 Ws*</div>
+        <div style="font:500 11px/1.3 Inter;color:#e0e0e0">src/ui/<br>WsButton / WsCard / WsEmpty / WsPopover / WsModal / WsTabs / WsTag / WsInput ...</div>
+        <div style="font:400 9px/1.3 Inter;color:#666;margin-top:4px">本次:4 个微调</div>
+      </div>
+
+      <!-- L3 新原语 -->
+      <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:6px;padding:10px">
+        <div style="font:600 10px/1 Inter;color:#f59e0b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">L3 · 新原语</div>
+        <div style="font:500 11px/1.3 Inter;color:#e0e0e0">src/ui/<br>WsNodeChip / WsStatusDot / WsMiniBadge / WsSegmentedControl</div>
+        <div style="font:400 9px/1.3 Inter;color:#666;margin-top:4px">本次:4 个新增</div>
+      </div>
+
+      <!-- L4 工作流组件 -->
+      <div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.3);border-radius:6px;padding:10px">
+        <div style="font:600 10px/1 Inter;color:#3b82f6;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">L4 · 工作流组件</div>
+        <div style="font:500 11px/1.3 Inter;color:#e0e0e0">WorkflowCard / NewWorkflowDropdown / WorkflowEmptyState / NodePaletteItem / NodeInspectorPanel / NodeFormField / CanvasContextMenu / InlineNodeEditor / NodeHoverLayer / RunTimelineItem / AgentDecisionCard / ThreeViewLayout / EditorModeToggle / EditorPreferencesCard</div>
+        <div style="font:400 9px/1.3 Inter;color:#666;margin-top:4px">本次:14 个重做 / 新增</div>
+      </div>
+
+      <!-- L5 页面壳 -->
+      <div style="background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.3);border-radius:6px;padding:10px">
+        <div style="font:600 10px/1 Inter;color:#a855f7;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">L5 · 页面壳</div>
+        <div style="font:500 11px/1.3 Inter;color:#e0e0e0">WorkflowView / WorkflowList / WorkflowEditorView / WorkflowProgress / WorkflowRunsView</div>
+        <div style="font:400 9px/1.3 Inter;color:#666;margin-top:4px">本次:组合调用,壳层零改</div>
+      </div>
+
+    </div>
+    <div style="margin-top:14px;display:flex;align-items:center;gap:6px;font:500 11px/1 Inter;color:#666">
+      <span>单向依赖</span>
+      <div style="flex:1;height:1px;background:linear-gradient(90deg,#8b5cf6 0%,#2dd4bf 25%,#f59e0b 50%,#3b82f6 75%,#a855f7 100%)"></div>
+      <span style="font-family:'JetBrains Mono',monospace;color:#8b5cf6">L1 → L2 → L3 → L4 → L5</span>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:14px"><strong>状态管理分布</strong> —— composables 在哪一层:</p>
+<ul style="font:400 13px/1.7 Inter;color:#e0e0e0;padding-left:24px">
+  <li><strong style="color:#8b5cf6">L4 composables</strong>(本次新增/改):<code>useEditorPreferences</code>(localStorage 持久化的用户偏好)、<code>useNodeDragDrop</code>(统一处理拖拽/放置/数据传递)、<code>useCanvasContextMenu</code>(右键菜单开关/位置/类型筛选)</li>
+  <li><strong style="color:#3b82f6">L4 已有 composables</strong>(本次改):<code>useWorkflow.ts</code>(扩展 3 个事件订阅)、<code>useWorkflowEditor.ts</code>(挂载偏好 + 模式切换)、<code>useWorkflowRuns.ts</code>(决策事件订阅)</li>
+  <li><strong style="color:#666">L5 已有</strong>(本次不动):<code>useWorkflowClient.ts</code> + <code>dev-mock-store.ts</code>(数据层,零改动)</li>
+</ul>
+
+<h3 style="margin-top:32px">5.2 数据流</h3>
+
+<p class="subtitle">3 个核心场景的端到端数据流,每条都标注<strong>触发 → 处理 → 状态变更 → 副作用</strong>。</p>
+
+<div style="background:#0f0f23;border:1px solid #2a2a4a;border-radius:8px;padding:16px;margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#e0e0e0;line-height:1.7">
+
+<p style="color:#2dd4bf;font-weight:bold;margin:6px 0">▌ 场景 A:手动创建空白工作流</p>
+<pre style="margin:0;background:#1a1a2e;padding:10px;border-radius:5px;white-space:pre-wrap;word-break:break-all;color:#e0e0e0"><code>[1] 用户点击工具栏「+ 新建 ▾」→ NewWorkflowDropdown 打开(WsPopover)
+[2] 选「📄 空白工作流」→ emit('select', { kind: 'blank' })
+[3] WorkflowView.handleCreate() 读 useEditorPreferences.addMethods(确认)
+[4] await useWorkflowClient.mockCreate(WorkflowFactory.blank())
+    └─ dev-mock-store.mockCreate:写 localStorage + 返回新定义
+[5] dispatchEvent('worldsmith:workflow-list', { action: 'create', definition })
+    └─ useWorkflow.handleWorkflowList 收到 → refreshList() 更新 workflowList
+[6] workflowList.value.push(newSummary) → WorkflowList 重渲染
+[7] currentWorkflowId = newId; currentTab = 'editor'
+[8] WorkflowEditorView 加载新工作流,ThreeViewLayout 挂载
+[9] 画布自动放置 Start 节点(画布中心),光标定位
+[10] useWorkflowPersistence 自动 debounce 300ms 后保存草稿</code></pre>
+
+<p style="color:#f59e0b;font-weight:bold;margin:14px 0 6px">▌ 场景 B:从模板创建</p>
+<pre style="margin:0;background:#1a1a2e;padding:10px;border-radius:5px;white-space:pre-wrap;word-break:break-all;color:#e0e0e0"><code>[1-2] 同上,但 select.kind = 'from-template'
+[3] WorkflowView 打开 WsModal(TemplateLibrary)
+[4] 用户点模板卡 → emit('pick', template)
+[5] WorkflowView.handleCreateFromTemplate(template)
+    └─ WorkflowFactory.fromTemplate(template):展开 nodes/edges
+[6] await mockCreate(definition) → [同 4-9]
+[7] 关闭 WsModal;切到 editor tab;画布 fitView() 让所有节点可见</code></pre>
+
+<p style="color:#a855f7;font-weight:bold;margin:14px 0 6px">▌ 场景 C:agent_decision 暂停 → 决策 → 继续</p>
+<pre style="margin:0;background:#1a1a2e;padding:10px;border-radius:5px;white-space:pre-wrap;word-break:break-all;color:#e0e0e0"><code>[1] RunView 订阅 'worldsmith:workflow-run' 事件
+[2] 运行到 agent_decision 节点 → 后端 dispatch 'workflow_node_paused'
+    └─ useWorkflowRuns 收到 → 打开 AgentDecisionCard(非模态)
+[3] AgentDecisionCard 显示 context / question / options(从节点配置读)
+[4] 启动计时器(默认 5min timeout)
+[5] 用户点击某个 option → emit('decide', { choice, note? })
+[6] RunView.handleDecide():await workflow_continue({ runId, decision: choice })
+    └─ Tauri / dev-mock:写入决策;继续运行
+[7] AgentDecisionCard 关闭;画布节点从 'awaiting-decision' → 'running' → 'completed'
+[8] 决策事件写入 run.detail.log(WsCodeBlock 可查看)
+[9] 若 5min 内无操作 → 自动 fallback 到节点配置 defaultOption;emit 同样事件
+
+边界:若用户在 5min 内关掉卡片,后台计时继续;再次进入仍可见剩余时间</code></pre>
+
+</div>
+
+<h3 style="margin-top:32px">5.3 错误处理</h3>
+
+<p class="subtitle">5 类边界场景,每类给出 <strong>触发 → 检测 → 用户感知 → 恢复</strong>。</p>
+
+<table style="width:100%;border-collapse:collapse;margin-top:10px;font-family:Inter,system-ui;font-size:12px">
+  <thead>
+    <tr style="background:#1a1a2e">
+      <th style="text-align:left;padding:8px 10px;color:#8b5cf6;font:600 11px/1.2 Inter;border-bottom:1px solid #2a2a4a">场景</th>
+      <th style="text-align:left;padding:8px 10px;color:#8b5cf6;font:600 11px/1.2 Inter;border-bottom:1px solid #2a2a4a">检测</th>
+      <th style="text-align:left;padding:8px 10px;color:#8b5cf6;font:600 11px/1.2 Inter;border-bottom:1px solid #2a2a4a">用户感知</th>
+      <th style="text-align:left;padding:8px 10px;color:#8b5cf6;font:600 11px/1.2 Inter;border-bottom:1px solid #2a2a4a">恢复</th>
+    </tr>
+  </thead>
+  <tbody style="color:#e0e0e0">
+    <tr style="border-bottom:1px solid #1a1a2e">
+      <td style="padding:8px 10px">创建失败<br>(mockCreate 抛错)</td>
+      <td style="padding:8px 10px;color:#888">try/catch 捕获</td>
+      <td style="padding:8px 10px;color:#888">WsToast 红色 + WsModal 错误页</td>
+      <td style="padding:8px 10px;color:#888">重试按钮 / 关闭 Modal 回列表</td>
+    </tr>
+    <tr style="border-bottom:1px solid #1a1a2e">
+      <td style="padding:8px 10px">保存冲突<br>(编辑器多 tab 同时改)</td>
+      <td style="padding:8px 10px;color:#888">useWorkflowPersistence 检测 version 不一致</td>
+      <td style="padding:8px 10px;color:#888">WsConfirmDialog 弹窗:<br>「保留我的」/「采用云端」/「手动合并」</td>
+      <td style="padding:8px 10px;color:#888">三选一;失败可再次保存</td>
+    </tr>
+    <tr style="border-bottom:1px solid #1a1a2e">
+      <td style="padding:8px 10px">运行失败<br>(节点 throw)</td>
+      <td style="padding:8px 10px;color:#888">'workflow_node_failed' 事件</td>
+      <td style="padding:8px 10px;color:#888">画布节点标红(WsStatusDot failed)<br>+ 工具条红条 + 详情按钮</td>
+      <td style="padding:8px 10px;color:#888">查看错误日志 / 修复节点 / 重跑该节点</td>
+    </tr>
+    <tr style="border-bottom:1px solid #1a1a2e">
+      <td style="padding:8px 10px">决策超时</td>
+      <td style="padding:8px 10px;color:#888">setTimeout 5min 触发</td>
+      <td style="padding:8px 10px;color:#888">WsToast 警告「已自动选 X」<br>+ 详情日志记录</td>
+      <td style="padding:8px 10px;color:#888">运行继续;用户可手动改决策记录</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 10px">localStorage 满<br>(dev 模式)</td>
+      <td style="padding:8px 10px;color:#888">QuotaExceededError catch</td>
+      <td style="padding:8px 10px;color:#888">WsModal「存储空间已满」+ 提示清理</td>
+      <td style="padding:8px 10px;color:#888">清旧版本/导出后删除</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 style="margin-top:32px">5.4 测试策略</h3>
+
+<p class="subtitle">3 层 + 1 个手动验证清单。覆盖率目标:L4 composables ≥ 90%,L4 组件 ≥ 75%。</p>
+
+<ul style="font:400 13px/1.7 Inter;color:#e0e0e0;padding-left:24px">
+  <li><strong style="color:#8b5cf6">单元测试(Vitest)</strong>:
+    <ul style="padding-left:20px;margin-top:4px;color:#888">
+      <li>所有新 composables(<code>useEditorPreferences</code> / <code>useNodeDragDrop</code> / <code>useCanvasContextMenu</code>)— 含 localStorage 持久化、默认值、跨 tab 同步</li>
+      <li>新原语 props 渲染矩阵(WsNodeChip × 14 type × 3 size;WsStatusDot × 7 status × pulse)</li>
+      <li>WorkflowFactory.blank() / fromTemplate() 输出结构正确性</li>
+    </ul>
+  </li>
+  <li><strong style="color:#f59e0b">组件测试(Vue Test Utils)</strong>:
+    <ul style="padding-left:20px;margin-top:4px;color:#888">
+      <li>WorkflowCard 3 态 × hover/selected/error × 6 主题(矩阵采样)</li>
+      <li>NewWorkflowDropdown 3 项 + 点击外部关闭 + ESC 关闭</li>
+      <li>AgentDecisionCard 决策事件 / 超时 fallback / 自定义输入</li>
+      <li>EditorModeToggle 切换触发偏好更新</li>
+    </ul>
+  </li>
+  <li><strong style="color:#2dd4bf">E2E(Playwright,仅 dev 模式)</strong>:
+    <ul style="padding-left:20px;margin-top:4px;color:#888">
+      <li>「+ 新建 → 空白」端到端:列表出现新卡 / 进入编辑器 / Start 节点存在</li>
+      <li>「+ 新建 → 从模板 → 晨间简报」:3 个节点正确放置 / fitView 正常</li>
+      <li>agent_decision 触发 → 决策弹窗出现 → 选 "高" → 节点 completed</li>
+      <li>设置:切换 editMethod = inline → 画布节点变内联卡</li>
+    </ul>
+  </li>
+  <li><strong style="color:#a855f7">手动验证清单(6 主题 × 3 模式 = 18 个组合)</strong>:
+    <ul style="padding-left:20px;margin-top:4px;color:#888">
+      <li>每个主题(cosmic / aurora-abyss / light / forge-ember / ink-scroll / crystal-prism)切换后,刷新页面,workflow list 视觉一致</li>
+      <li>3 种编辑模式 × 大屏(1920) / 中屏(1280) / 小屏(1024)视觉验证</li>
+    </ul>
+  </li>
+</ul>
+
+<h3 style="margin-top:32px">5.5 迁阶段(增量,3 期)</h3>
+
+<p class="subtitle">避免一次性大改,降低风险。每期结束都可独立发布,既有功能不破坏。</p>
+
+<table style="width:100%;border-collapse:collapse;margin-top:10px;font-family:Inter,system-ui;font-size:12px">
+  <thead>
+    <tr style="background:#1a1a2e">
+      <th style="text-align:left;padding:8px 10px;color:#8b5cf6;font:600 11px/1.2 Inter;border-bottom:1px solid #2a2a4a">期</th>
+      <th style="text-align:left;padding:8px 10px;color:#8b5cf6;font:600 11px/1.2 Inter;border-bottom:1px solid #2a2a4a">范围</th>
+      <th style="text-align:left;padding:8px 10px;color:#8b5cf6;font:600 11px/1.2 Inter;border-bottom:1px solid #2a2a4a">交付</th>
+      <th style="text-align:left;padding:8px 10px;color:#8b5cf6;font:600 11px/1.2 Inter;border-bottom:1px solid #2a2a4a">验证</th>
+    </tr>
+  </thead>
+  <tbody style="color:#e0e0e0">
+    <tr style="border-bottom:1px solid #1a1a2e">
+      <td style="padding:8px 10px;font:600 12px Inter;color:#2dd4bf">P1</td>
+      <td style="padding:8px 10px">L3 新原语 4 个<br>+ L2 Ws* 微调 4 个<br>+ useEditorPreferences</td>
+      <td style="padding:8px 10px;color:#888">新原语可独立 demo;<br>Ws* 微调向后兼容</td>
+      <td style="padding:8px 10px;color:#888">Storybook 演示页<br>+ 现有组件不破</td>
+    </tr>
+    <tr style="border-bottom:1px solid #1a1a2e">
+      <td style="padding:8px 10px;font:600 12px Inter;color:#f59e0b">P2</td>
+      <td style="padding:8px 10px">L4 工作流专属组件 14 个(其中:<br>WorkflowCard / NewWorkflowDropdown / WorkflowEmptyState 先做)<br>+ WorkflowList 改造</td>
+      <td style="padding:8px 10px;color:#888">列表 + 手动创建流程上线<br>(高曝光、低风险)</td>
+      <td style="padding:8px 10px;color:#888">Playwright E2E 跑通<br>6 主题视觉无破</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 10px;font:600 12px Inter;color:#a855f7">P3</td>
+      <td style="padding:8px 10px">编辑器三栏 + 多范式<br>(ThreeViewLayout / NodePalette / NodeInspector / 拖拽 / 右键 / 内联 / 悬浮)<br>+ RunView + AgentDecisionCard</td>
+      <td style="padding:8px 10px;color:#888">完整编辑器体验<br>+ 决策 UI</td>
+      <td style="padding:8px 10px;color:#888">全部 E2E + 手动 6 主题清单</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 style="margin-top:32px">5.6 风险与对策</h3>
+
+<ul style="font:400 13px/1.7 Inter;color:#e0e0e0;padding-left:24px">
+  <li><strong style="color:#ef4444">R1:WsButton 加 gradient variant 后跟现有 primary 撞色</strong><br>对策:gradient 仅用于"主 CTA"场景,其他处仍用 primary;色板用 <code>--gradient-accent</code> 已有 token,不是新色。</li>
+  <li><strong style="color:#ef4444">R2:多范式编辑模式同时挂载会显著拖慢首屏</strong><br>对策:按需 <code>defineAsyncComponent</code>,首次只挂载当前 editMethod 对应的组件;切换偏好后再 lazy load 另一个。画布初次进入 &lt; 200ms 增量。</li>
+  <li><strong style="color:#ef4444">R3:HTML5 drag 在某些 webview 行为不一致(Tauri webkitgtk 已知坑)</strong><br>对策:同时实现 click 添加作为 fallback(已默认开启);drag 仅增强;拖拽失败的兜底是"点击加入 + 弹窗选位置"。</li>
+  <li><strong style="color:#ef4444">R4:agent_decision 5min 超时可能在某些场景过短 / 过长</strong><br>对策:超时时长纳入节点配置(per-node override),默认 5min;设 0 = 永不超时(等用户决策)。</li>
+  <li><strong style="color:#ef4444">R5:新原语发到 src/ui/ 后被 Agent 工具页 / 设置页等无关位置误用</strong><br>对策:文件头加 <code>@internal workflow-plugin</code> JSDoc 注释;不导出 index.ts,仅本插件可显式 import。</li>
+</ul>
+
+<p class="subtitle" style="margin-top:24px">
+💡 §5 完。我下面要写设计文档 <code>docs/superpowers/specs/2026-06-03-workflow-plugin-ui-redesign-design.md</code>,把 §1-§5 + 视觉决定全部沉淀。<br>
+文档写完会做自检(placeholder / 一致性 / 范围 / 歧义),然后给你审阅;你 OK 后再交接 writing-plans 出实现计划。
+</p>

@@ -1,0 +1,224 @@
+<h2>群管理面板设计</h2>
+<p class="subtitle">群信息设置 + 成员管理 + 发言控制</p>
+
+<div class="section">
+  <h3>1. 群信息面板</h3>
+  <p>点击群头像/群名展开，可编辑群名、群头像、群公告</p>
+
+  <div class="mockup">
+    <div class="mockup-header">群信息面板</div>
+    <div class="mockup-body" style="padding:16px;font-size:12px;max-width:360px">
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#6c5ce7,#a29bfe);color:white;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 8px;cursor:pointer;position:relative">
+          👥
+          <div style="position:absolute;bottom:-2px;right:-2px;width:20px;height:20px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:10px;border:1px solid var(--border)">📷</div>
+        </div>
+        <div style="font-size:16px;font-weight:600">项目讨论组</div>
+        <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px;cursor:pointer">✏ 点击编辑群名</div>
+      </div>
+
+      <div style="background:var(--surface);border-radius:10px;padding:12px;margin-bottom:12px">
+        <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">群公告</div>
+        <div style="font-size:13px;line-height:1.5;color:var(--text)">本周重点：完成 v2.0 架构评审，周五前提交技术方案。</div>
+        <div style="font-size:11px;color:var(--text-tertiary);margin-top:6px;cursor:pointer">✏ 编辑公告</div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <div style="flex:1;text-align:center;padding:8px;background:var(--surface);border-radius:8px;cursor:pointer">
+          <div style="font-size:18px;margin-bottom:2px">📋</div>
+          <div style="font-size:11px">切换到会议</div>
+        </div>
+        <div style="flex:1;text-align:center;padding:8px;background:rgba(108,92,231,0.1);border-radius:8px;cursor:pointer;border:1px solid rgba(108,92,231,0.3)">
+          <div style="font-size:18px;margin-bottom:2px">☕</div>
+          <div style="font-size:11px;font-weight:600">闲聊模式</div>
+        </div>
+      </div>
+
+      <div style="font-size:11px;color:var(--text-tertiary);display:flex;justify-content:space-between;padding:4px 0">
+        <span>创建时间：2026-05-28</span>
+        <span>消息：1,247 条</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>2. 成员列表</h3>
+  <p>显示角色标签、在线状态、禁言状态，支持管理操作</p>
+
+  <div class="mockup">
+    <div class="mockup-header">成员列表（群主视角）</div>
+    <div class="mockup-body" style="padding:8px;font-size:12px;max-width:360px">
+      <div style="padding:6px 0;border-bottom:1px solid var(--border);margin-bottom:4px;font-size:11px;color:var(--text-tertiary);font-weight:600">
+        成员 (5)
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-radius:8px;cursor:pointer" onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background='transparent'">
+        <div style="width:32px;height:32px;border-radius:50%;background:#10b981;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">你</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="font-weight:600">你</span>
+            <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(245,158,11,0.15);color:#f59e0b;font-weight:600">群主</span>
+          </div>
+          <div style="font-size:11px;color:var(--text-tertiary)">项目发起人</div>
+        </div>
+        <span style="font-size:10px;color:#10b981">● 在线</span>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-radius:8px;cursor:pointer" onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background='transparent'">
+        <div style="width:32px;height:32px;border-radius:50%;background:#3b82f6;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">架</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="font-weight:600">架构师</span>
+            <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(59,130,246,0.15);color:#3b82f6;font-weight:600">管理员</span>
+          </div>
+          <div style="font-size:11px;color:var(--text-tertiary)">技术架构设计</div>
+        </div>
+        <span style="font-size:10px;color:#10b981">● 在线</span>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-radius:8px;cursor:pointer" onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background='transparent'">
+        <div style="width:32px;height:32px;border-radius:50%;background:#8b5cf6;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">产</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="font-weight:600">产品经理</span>
+          </div>
+          <div style="font-size:11px;color:var(--text-tertiary)">需求分析 & 产品规划</div>
+        </div>
+        <span style="font-size:10px;color:#10b981">● 在线</span>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-radius:8px;cursor:pointer" onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background='transparent'">
+        <div style="width:32px;height:32px;border-radius:50%;background:#f59e0b;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">测</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="font-weight:600">测试工程师</span>
+            <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(239,68,68,0.15);color:#ef4444;font-weight:600">🔇 禁言</span>
+          </div>
+          <div style="font-size:11px;color:var(--text-tertiary)">质量保障 & 自动化测试</div>
+        </div>
+        <span style="font-size:10px;color:#10b981">● 在线</span>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-radius:8px;cursor:pointer" onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background='transparent'">
+        <div style="width:32px;height:32px;border-radius:50%;background:#ec4899;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">设</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="font-weight:600">设计师</span>
+          </div>
+          <div style="font-size:11px;color:var(--text-tertiary)">UI/UX 设计</div>
+        </div>
+        <span style="font-size:10px;color:var(--text-tertiary)">○ 离线</span>
+      </div>
+
+      <div style="margin-top:8px;padding:8px;background:var(--surface);border-radius:8px;display:flex;align-items:center;gap:8px;cursor:pointer;justify-content:center;color:var(--primary);font-weight:500" onmouseover="this.style.background='rgba(108,92,231,0.08)'" onmouseout="this.style.background='var(--surface)'">
+        ＋ 邀请成员
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>3. 成员管理操作</h3>
+  <p>点击成员后展开操作菜单（群主/管理员可见）</p>
+
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">普通成员操作菜单</div>
+      <div class="mockup-body" style="padding:8px;font-size:12px;max-width:260px">
+        <div style="background:var(--surface-elevated);border:1px solid var(--border);border-radius:10px;padding:4px">
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border);margin-bottom:4px">
+            <div style="width:28px;height:28px;border-radius:50%;background:#8b5cf6;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">产</div>
+            <span style="font-weight:600">产品经理</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer" onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background='transparent'">
+            <span>👑</span><span>设为管理员</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer" onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background='transparent'">
+            <span>🔇</span><span>禁言</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer;color:#ef4444" onmouseover="this.style.background='rgba(239,68,68,0.08)'" onmouseout="this.style.background='transparent'">
+            <span>🚪</span><span>移出群聊</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">禁言设置弹窗</div>
+      <div class="mockup-body" style="padding:16px;font-size:12px;max-width:280px">
+        <div style="font-size:14px;font-weight:600;margin-bottom:12px">禁言 测试工程师</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+          <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface);border-radius:8px;cursor:pointer;border:1px solid var(--border)">
+            <input type="radio" name="mute" checked style="accent-color:#6c5ce7"> 10 分钟
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface);border-radius:8px;cursor:pointer;border:1px solid var(--border)">
+            <input type="radio" name="mute" style="accent-color:#6c5ce7"> 1 小时
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface);border-radius:8px;cursor:pointer;border:1px solid var(--border)">
+            <input type="radio" name="mute" style="accent-color:#6c5ce7"> 自定义时间
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(239,68,68,0.05);border-radius:8px;cursor:pointer;border:1px solid rgba(239,68,68,0.2)">
+            <input type="radio" name="mute" style="accent-color:#ef4444"> 永久禁言
+          </label>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button style="padding:6px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);cursor:pointer;font-size:12px">取消</button>
+          <button style="padding:6px 14px;border:none;border-radius:8px;background:#ef4444;color:white;cursor:pointer;font-size:12px;font-weight:600">确认禁言</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>4. 全员禁言 & 权限矩阵</h3>
+
+  <div class="mockup">
+    <div class="mockup-header">群设置 - 发言控制</div>
+    <div class="mockup-body" style="padding:12px;font-size:12px;max-width:360px">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-weight:600">全员禁言</div>
+          <div style="font-size:11px;color:var(--text-tertiary)">只有群主和管理员可以发言</div>
+        </div>
+        <div style="width:40px;height:22px;border-radius:11px;background:var(--border);cursor:pointer;position:relative;transition:background 0.2s">
+          <div style="width:18px;height:18px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2)"></div>
+        </div>
+      </div>
+
+      <div style="padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="font-weight:600;margin-bottom:8px">权限矩阵</div>
+        <table style="width:100%;font-size:11px;border-collapse:collapse">
+          <thead>
+            <tr style="color:var(--text-tertiary)">
+              <th style="text-align:left;padding:4px 8px;font-weight:500">操作</th>
+              <th style="text-align:center;padding:4px 8px;font-weight:500">群主</th>
+              <th style="text-align:center;padding:4px 8px;font-weight:500">管理员</th>
+              <th style="text-align:center;padding:4px 8px;font-weight:500">群员</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td style="padding:4px 8px">发言</td><td style="text-align:center">✅</td><td style="text-align:center">✅</td><td style="text-align:center">✅</td></tr>
+            <tr style="background:var(--surface)"><td style="padding:4px 8px">@提及</td><td style="text-align:center">✅</td><td style="text-align:center">✅</td><td style="text-align:center">✅</td></tr>
+            <tr><td style="padding:4px 8px">发图/文件</td><td style="text-align:center">✅</td><td style="text-align:center">✅</td><td style="text-align:center">✅</td></tr>
+            <tr style="background:var(--surface)"><td style="padding:4px 8px">邀请成员</td><td style="text-align:center">✅</td><td style="text-align:center">✅</td><td style="text-align:center">❌</td></tr>
+            <tr><td style="padding:4px 8px">禁言他人</td><td style="text-align:center">✅</td><td style="text-align:center">✅</td><td style="text-align:center">❌</td></tr>
+            <tr style="background:var(--surface)"><td style="padding:4px 8px">踢出成员</td><td style="text-align:center">✅</td><td style="text-align:center">✅</td><td style="text-align:center">❌</td></tr>
+            <tr><td style="padding:4px 8px">设管理员</td><td style="text-align:center">✅</td><td style="text-align:center">❌</td><td style="text-align:center">❌</td></tr>
+            <tr style="background:var(--surface)"><td style="padding:4px 8px">编辑群信息</td><td style="text-align:center">✅</td><td style="text-align:center">✅</td><td style="text-align:center">❌</td></tr>
+            <tr><td style="padding:4px 8px">解散群</td><td style="text-align:center">✅</td><td style="text-align:center">❌</td><td style="text-align:center">❌</td></tr>
+            <tr style="background:var(--surface)"><td style="padding:4px 8px">转让群主</td><td style="text-align:center">✅</td><td style="text-align:center">❌</td><td style="text-align:center">❌</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="padding:8px 0">
+        <div style="font-weight:600;margin-bottom:8px;color:#ef4444">危险操作</div>
+        <div style="display:flex;gap:8px">
+          <button style="flex:1;padding:8px;border:1px solid rgba(239,68,68,0.3);border-radius:8px;background:rgba(239,68,68,0.05);color:#ef4444;cursor:pointer;font-size:12px">转让群主</button>
+          <button style="flex:1;padding:8px;border:1px solid rgba(239,68,68,0.3);border-radius:8px;background:rgba(239,68,68,0.05);color:#ef4444;cursor:pointer;font-size:12px">解散群聊</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

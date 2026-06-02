@@ -1,0 +1,117 @@
+<h2>群聊消息渲染优化方案</h2>
+<p class="subtitle">完全对齐单聊 AgentMessageBubble 的渲染能力</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">方案 A：增强 GroupMessageBubble</div>
+    <div class="mockup-body" style="background:#1a1a2e;padding:16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <div style="width:28px;height:28px;border-radius:50%;background:#3b82f6;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:12px;">历</div>
+        <span style="font-size:13px;font-weight:600;color:#3b82f6;">历史学者</span>
+      </div>
+      <div style="margin-left:36px;border-left:3px solid #3b82f6;border-radius:0 8px 8px 0;padding:6px 12px 6px 10px;backdrop-filter:blur(8px);max-width:85%;">
+        <div style="margin-bottom:6px;border-left:3px solid #3b82f6;padding-left:8px;">
+          <div style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.1);border-radius:6px;padding:6px 8px;margin-bottom:6px;">
+            <div style="color:#3b82f6;font-weight:600;font-size:12px;margin-bottom:4px;">💭 思考过程</div>
+            <div style="font-size:12px;color:#888;line-height:1.5;white-space:pre-wrap;">需要从历史角度分析三阶段论...</div>
+          </div>
+        </div>
+        <div style="font-size:13px;line-height:1.6;color:#e0e0e0;">
+          <p style="margin:4px 0;">关于这个问题，我认为从历史角度来看，这个文明的发展经历了三个阶段：</p>
+          <ol style="margin:4px 0;padding-left:20px;">
+            <li style="margin:2px 0;"><strong>初期形成阶段</strong> — 部落联盟时期</li>
+            <li style="margin:2px 0;"><strong>扩张与融合阶段</strong> — 帝国统一时期</li>
+            <li style="margin:2px 0;"><strong>衰落与转型阶段</strong> — 分裂与重建</li>
+          </ol>
+          <blockquote style="border-left:3px solid #3b82f6;margin:6px 0;padding:4px 12px;opacity:0.85;">
+            历史总是螺旋上升的
+          </blockquote>
+          <pre style="background:rgba(0,0,0,0.25);padding:10px 12px;border-radius:8px;overflow-x:auto;margin:8px 0;"><code style="font-size:12px;font-family:Consolas,Monaco,monospace;line-height:1.5;">文明.阶段 = ["形成", "扩张", "衰落"]</code></pre>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;margin-top:4px;opacity:0.6;height:20px;">
+          <button style="background:none;border:none;cursor:pointer;font-size:12px;padding:2px 4px;border-radius:4px;color:#aaa;">📋 复制</button>
+          <span style="font-size:11px;color:#666;margin-left:auto;">14:32</span>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:8px;margin-top:16px;margin-bottom:4px;">
+        <div style="width:28px;height:28px;border-radius:50%;background:#8b5cf6;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:12px;">魔</div>
+        <span style="font-size:13px;font-weight:600;color:#8b5cf6;">魔法导师</span>
+      </div>
+      <div style="margin-left:36px;border-left:3px solid #8b5cf6;border-radius:0 8px 8px 0;padding:6px 12px 6px 10px;max-width:85%;">
+        <div style="font-size:13px;line-height:1.6;color:#e0e0e0;">
+          <p style="margin:4px 0;">我推测这个文明的魔法体系属于<mark style="background:rgba(245,158,11,0.2);color:#f59e0b;padding:0 2px;border-radius:2px;">【待确认】</mark>元素派系，与历史学者的三阶段论可以对应。</p>
+          <span style="display:inline-block;margin-left:6px;padding:1px 6px;font-size:10px;background:rgba(245,158,11,0.15);color:#f59e0b;border-radius:4px;font-weight:600;">待确认</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;margin-top:4px;opacity:0.6;height:20px;">
+          <button style="background:none;border:none;cursor:pointer;font-size:12px;padding:2px 4px;border-radius:4px;color:#aaa;">📋 复制</button>
+          <span style="font-size:11px;color:#666;margin-left:auto;">14:33</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">方案 B：复用 AgentMessageBubble</div>
+    <div class="mockup-body" style="background:#1a1a2e;padding:16px;">
+      <div style="display:flex;align-items:flex-start;gap:8px;max-width:85%;animation:ws-msg-in 0.25s ease;">
+        <div style="width:24px;height:24px;border-radius:50%;background:#3b82f6;display:flex;align-items:center;justify-content:center;font-size:12px;box-shadow:0 0 6px rgba(59,130,246,0.3);color:white;font-weight:700;">历</div>
+        <div style="font-size:14px;line-height:1.6;color:#e0e0e0;word-break:break-word;">
+          <div style="font-size:11px;font-weight:600;color:#3b82f6;margin-bottom:2px;">历史学者</div>
+          <div style="border-left:2px solid #3b82f6;border-radius:0 8px 8px 0;padding:6px 12px 6px 10px;backdrop-filter:blur(8px);">
+            <div style="margin-bottom:6px;border-left:3px solid #3b82f6;padding-left:8px;">
+              <div style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.1);border-radius:6px;padding:6px 8px;">
+                <div style="color:#3b82f6;font-weight:600;font-size:12px;">💭 思考过程</div>
+                <div style="font-size:12px;color:#888;line-height:1.5;">需要从历史角度分析...</div>
+              </div>
+            </div>
+            <div>
+              <p style="margin:4px 0;">关于这个问题，我认为从历史角度来看...</p>
+              <ol style="margin:4px 0;padding-left:20px;">
+                <li style="margin:2px 0;"><strong>初期形成阶段</strong></li>
+                <li style="margin:2px 0;"><strong>扩张与融合阶段</strong></li>
+              </ol>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:4px;margin-top:2px;opacity:0.6;height:20px;">
+            <button style="background:none;border:none;cursor:pointer;font-size:12px;padding:2px 4px;">📋</button>
+            <span style="font-size:11px;color:#666;margin-left:auto;">14:32</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px;">
+  <h3>方案对比</h3>
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>方案 A：增强 GroupMessageBubble</h4>
+      <ul>
+        <li>✅ 保留群聊独有的头像+名称布局</li>
+        <li>✅ 独立演进，不受单聊变更影响</li>
+        <li>✅ 可针对群聊场景定制（如发言人颜色边框）</li>
+        <li>❌ 需要重写渲染逻辑（Marked/DOMPurify/折叠）</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>方案 B：复用 AgentMessageBubble</h4>
+      <ul>
+        <li>✅ 零成本获得所有单聊渲染能力</li>
+        <li>✅ 未来单聊改进自动同步</li>
+        <li>❌ 需要改造 AgentMessageBubble 接受发言人信息</li>
+        <li>❌ 群聊独有样式（头像位置、颜色边框）受限</li>
+        <li>❌ 两个场景耦合，改一处影响两处</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:16px;">
+  <h3>推荐：方案 A</h3>
+  <p style="font-size:14px;color:#ccc;line-height:1.6;">
+    群聊和单聊的视觉结构差异较大（头像+名称 vs 图标），强行复用会导致布局冲突。方案 A 虽然需要重写渲染逻辑，
+    但可以提取<strong>共享的渲染工具函数</strong>（Markdown 渲染、文本折叠、时间格式化）到 composable 中，避免代码重复。
+  </p>
+</div>

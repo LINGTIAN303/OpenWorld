@@ -1,0 +1,135 @@
+<h2>Agent 富输出 — 消息内嵌渲染模型</h2>
+<p class="subtitle">展示 collapsible block 和 inline block 在消息气泡中的视觉形态</p>
+
+<div class="section">
+  <h3>场景：Agent 展示角色表格 + 选择交互</h3>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Agent 消息气泡 — 渲染效果</div>
+  <div class="mockup-body" style="background: rgba(26,26,46,0.75); border-radius: 12px; padding: 12px 16px; font-family: sans-serif; color: #e0e0e0; max-width: 520px;">
+
+    <p style="margin:0 0 8px; font-size:14px; line-height:1.6;">以下是你的角色列表：</p>
+
+    <div style="margin: 6px 0; padding: 8px 12px; background: rgba(108,92,231,0.08); border: 1px solid rgba(108,92,231,0.2); border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.15s;" onmouseover="this.style.borderColor='rgba(108,92,231,0.5)'" onmouseout="this.style.borderColor='rgba(108,92,231,0.2)'">
+      <span style="font-size:16px;">📊</span>
+      <span style="font-size:13px; color: #b388ff; font-weight: 500;">表格: 角色列表</span>
+      <span style="font-size:11px; color: #888; margin-left: 2px;">3行 × 5列</span>
+      <span style="margin-left:auto; font-size:11px; color: #888;">▸ 点击展开</span>
+    </div>
+
+    <div style="margin: 6px 0;">
+      <div style="padding: 8px 12px; background: rgba(108,92,231,0.08); border: 1px solid rgba(108,92,231,0.3); border-radius: 8px 8px 0 0; cursor: pointer; display: flex; align-items: center; gap: 8px;" onmouseover="this.style.borderColor='rgba(108,92,231,0.5)'" onmouseout="this.style.borderColor='rgba(108,92,231,0.3)'">
+        <span style="font-size:16px;">📊</span>
+        <span style="font-size:13px; color: #b388ff; font-weight: 500;">表格: 角色列表</span>
+        <span style="font-size:11px; color: #888; margin-left: 2px;">3行 × 5列</span>
+        <span style="margin-left:auto; font-size:11px; color: #888;">▾ 点击收起</span>
+      </div>
+      <div style="padding: 10px 12px; background: rgba(0,0,0,0.15); border: 1px solid rgba(108,92,231,0.2); border-top: none; border-radius: 0 0 8px 8px; overflow-x: auto;">
+        <table style="width:100%; border-collapse: collapse; font-size: 12px;">
+          <thead>
+            <tr>
+              <th style="padding: 5px 10px; text-align: left; color: #888; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 11px; text-transform: uppercase;">名称</th>
+              <th style="padding: 5px 10px; text-align: left; color: #888; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 11px; text-transform: uppercase;">类型</th>
+              <th style="padding: 5px 10px; text-align: left; color: #888; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 11px; text-transform: uppercase;">阵营</th>
+              <th style="padding: 5px 10px; text-align: left; color: #888; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 11px; text-transform: uppercase;">等级</th>
+              <th style="padding: 5px 10px; text-align: left; color: #888; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 11px; text-transform: uppercase;">状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); color: #b388ff;">艾莉丝</td>
+              <td style="padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">法师</td>
+              <td style="padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">中立善良</td>
+              <td style="padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">12</td>
+              <td style="padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">活跃</td>
+            </tr>
+            <tr>
+              <td style="padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); color: #b388ff;">暗影猎手</td>
+              <td style="padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">游侠</td>
+              <td style="padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">混乱中立</td>
+              <td style="padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">8</td>
+              <td style="padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">活跃</td>
+            </tr>
+            <tr>
+              <td style="padding: 5px 10px; color: #b388ff;">铁匠格雷</td>
+              <td style="padding: 5px 10px;">NPC</td>
+              <td style="padding: 5px 10px;">守序中立</td>
+              <td style="padding: 5px 10px;">5</td>
+              <td style="padding: 5px 10px;">休眠</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <p style="margin: 10px 0 6px; font-size:14px; line-height:1.6;">你想对哪个角色进行编辑？请选择：</p>
+
+    <div style="margin: 6px 0; padding: 10px 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;">
+      <div style="font-size: 12px; color: #888; margin-bottom: 8px;">请选择角色</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+        <button style="padding: 5px 14px; border-radius: 16px; border: 1px solid rgba(108,92,231,0.3); background: transparent; color: #b388ff; font-size: 13px; cursor: pointer; transition: all 0.15s;" onmouseover="this.style.background='rgba(108,92,231,0.15)'; this.style.borderColor='rgba(108,92,231,0.6)'" onmouseout="this.style.background='transparent'; this.style.borderColor='rgba(108,92,231,0.3)'">艾莉丝</button>
+        <button style="padding: 5px 14px; border-radius: 16px; border: 1px solid rgba(108,92,231,0.3); background: transparent; color: #b388ff; font-size: 13px; cursor: pointer; transition: all 0.15s;" onmouseover="this.style.background='rgba(108,92,231,0.15)'; this.style.borderColor='rgba(108,92,231,0.6)'" onmouseout="this.style.background='transparent'; this.style.borderColor='rgba(108,92,231,0.3)'">暗影猎手</button>
+        <button style="padding: 5px 14px; border-radius: 16px; border: 1px solid rgba(108,92,231,0.3); background: transparent; color: #b388ff; font-size: 13px; cursor: pointer; transition: all 0.15s;" onmouseover="this.style.background='rgba(108,92,231,0.15)'; this.style.borderColor='rgba(108,92,231,0.6)'" onmouseout="this.style.background='transparent'; this.style.borderColor='rgba(108,92,231,0.3)'">铁匠格雷</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>其他 Block 类型预览</h3>
+</div>
+
+<div style="display: flex; gap: 16px; flex-wrap: wrap;">
+
+  <div class="mockup" style="flex: 1; min-width: 240px;">
+    <div class="mockup-header">代码块（折叠态）</div>
+    <div class="mockup-body" style="background: rgba(26,26,46,0.75); border-radius: 12px; padding: 12px 16px; font-family: sans-serif; color: #e0e0e0;">
+      <p style="margin:0 0 8px; font-size:14px; line-height:1.6;">这是生成的脚本：</p>
+      <div style="padding: 8px 12px; background: rgba(108,92,231,0.08); border: 1px solid rgba(108,92,231,0.2); border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px;" onmouseover="this.style.borderColor='rgba(108,92,231,0.5)'" onmouseout="this.style.borderColor='rgba(108,92,231,0.2)'">
+        <span style="font-size:16px;">💻</span>
+        <span style="font-size:13px; color: #b388ff; font-weight: 500;">代码: typescript</span>
+        <span style="font-size:11px; color: #888; margin-left: 2px;">18行</span>
+        <span style="margin-left:auto; font-size:11px; color: #888;">▸ 点击展开</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup" style="flex: 1; min-width: 240px;">
+    <div class="mockup-header">实体卡片（折叠态）</div>
+    <div class="mockup-body" style="background: rgba(26,26,46,0.75); border-radius: 12px; padding: 12px 16px; font-family: sans-serif; color: #e0e0e0;">
+      <p style="margin:0 0 8px; font-size:14px; line-height:1.6;">找到了这个实体：</p>
+      <div style="padding: 8px 12px; background: rgba(108,92,231,0.08); border: 1px solid rgba(108,92,231,0.2); border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px;" onmouseover="this.style.borderColor='rgba(108,92,231,0.5)'" onmouseout="this.style.borderColor='rgba(108,92,231,0.2)'">
+        <span style="font-size:16px;">👤</span>
+        <span style="font-size:13px; color: #b388ff; font-weight: 500;">角色: 艾莉丝</span>
+        <span style="font-size:11px; color: #888; margin-left: 2px;">法师 · Lv.12</span>
+        <span style="margin-left:auto; font-size:11px; color: #888;">▸ 点击展开</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>设计要点</h3>
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>✅ 优势</h4>
+      <ul>
+        <li><strong>折叠态</strong>保持聊天流整洁，不遮挡后续内容</li>
+        <li><strong>嵌入按钮</strong>有图标+标题+摘要，信息密度高</li>
+        <li><strong>选择交互</strong>始终内联，无需额外操作</li>
+        <li>视觉风格与现有 A2UI Surface 一致</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>⚠️ 注意</h4>
+      <ul>
+        <li>折叠/展开状态需要持久化（消息重渲染后保持）</li>
+        <li>流式输出时 block 可能延迟到达</li>
+        <li>CLI 端降级为纯文本摘要</li>
+      </ul>
+    </div>
+  </div>
+</div>

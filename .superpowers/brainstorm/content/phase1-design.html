@@ -1,0 +1,192 @@
+<h2>Phase 1 完整设计 — 结构层</h2>
+<p class="subtitle">所有决策汇总 + 架构设计 + 数据流 + 组件拆分</p>
+
+<div class="section">
+<h3>📋 决策汇总</h3>
+<table style="font-size:0.85em;">
+  <tr><th style="width:30%;">设计维度</th><th>选择</th></tr>
+  <tr><td>重构范围</td><td>🟢 分阶段演进 (Phase 1→2→3)</td></tr>
+  <tr><td>渲染引擎</td><td>🟢 混合方案 (Cytoscape + Canvas + Vue)</td></tr>
+  <tr><td>嵌套图</td><td>🟢 自动关系子图 + 自由画布共存</td></tr>
+  <tr><td>Section 创建</td><td>🟢 框选 + 选节点创建 两种并存</td></tr>
+  <tr><td>Section 数据</td><td>🟢 默认纯视觉，可升级为实体</td></tr>
+  <tr><td>详情侧栏交互</td><td>🟢 智能模式 (首次自动→跟随→可关)</td></tr>
+  <tr><td>详情侧栏内容</td><td>🟢 自适应 (可折叠分区，默认精简)</td></tr>
+  <tr><td>连线样式</td><td>🟢 关系类型默认 + 单条可覆盖</td></tr>
+  <tr><td>键盘流</td><td>🟢 单键基础 + 序列进阶</td></tr>
+</table>
+</div>
+
+<div class="section" style="margin-top:24px;">
+<h3>🏗️ 架构总览</h3>
+<div style="background:#161625;border:1px solid #333;border-radius:12px;padding:20px;font-size:0.8em;">
+<pre style="color:#ccc;line-height:1.8;">
+MindmapView.vue (主视图)
+├── MindmapToolbar.vue (工具栏 — 增强版)
+├── MindmapCanvas.vue (画布容器 — 新组件)
+│   ├── Cytoscape 图层 (节点/边/布局)
+│   ├── Canvas 叠加层 (框选矩形/涂鸦预留)
+│   └── Vue 叠加层 (Section 边框/拖拽手柄)
+├── MindmapBreadcrumb.vue (面包屑导航 — 新组件)
+├── MindmapDetailPanel.vue (详情侧栏 — 新组件)
+│   ├── 基础信息区 (名称/类型/标签)
+│   ├── 关系列表区 (可展开)
+│   ├── 字段详情区 (可折叠)
+│   └── 操作按钮区 (编辑/进入/删除)
+├── MindmapKeyHint.vue (按键提示条 — 新组件)
+├── MindmapContextMenu.vue (右键菜单 — 重构)
+└── 浮层集合 (内联编辑/类型选择/颜色选择等)
+</pre>
+</div>
+</div>
+
+<div class="section" style="margin-top:24px;">
+<h3>📊 数据模型扩展</h3>
+<div style="background:#161625;border:1px solid #333;border-radius:12px;padding:16px;font-size:0.8em;">
+<div style="color:#6c5ce7;font-weight:bold;margin-bottom:8px;">新增 Store: mindmapStore</div>
+<pre style="color:#ccc;line-height:1.6;">
+interface MindmapState {
+  // 嵌套图导航
+  navigationStack: string[]        // 实体ID栈 ["global", "char-123", ...]
+  currentRootId: string | null     // 当前根实体ID，null=全局图
+  
+  // Section 分组
+  sections: Map&lt;string, Section&gt;   // sectionId → Section
+  
+  // 画布状态
+  customNodes: Map&lt;string, CustomNode&gt;  // 自由画布上的自定义节点
+  edgeStyleOverrides: Map&lt;string, EdgeStyle&gt;  // 单条边样式覆盖
+  
+  // 键盘流
+  keySequence: string              // 当前按键序列缓冲
+  keySequenceTimer: number | null  // 序列超时定时器
+  
+  // 详情侧栏
+  detailPanelVisible: boolean
+  detailPanelAutoMode: boolean     // 是否处于自动跟随模式
+}
+
+interface Section {
+  id: string
+  name: string
+  color: string
+  childNodeIds: string[]
+  isEntity: boolean                // 是否已升级为实体
+  entityId?: string                // 关联的实体ID
+  bounds: { x: number; y: number; w: number; h: number }
+}
+
+interface CustomNode {
+  id: string
+  parentId: string                 // 所属实体画布 (嵌套图)
+  type: 'textbox' | 'image' | 'note' | 'link'
+  name: string
+  content: string
+  position: { x: number; y: number }
+  style: Record&lt;string, any&gt;
+}
+
+interface EdgeStyle {
+  lineStyle: 'bezier' | 'straight' | 'taxi' | 'orthogonal'
+}
+</pre>
+</div>
+</div>
+
+<div class="section" style="margin-top:24px;">
+<h3>🔄 嵌套图数据流</h3>
+<div style="background:#161625;border:1px solid #333;border-radius:12px;padding:16px;font-size:0.8em;">
+<pre style="color:#ccc;line-height:1.8;">
+用户 Ctrl+双击节点
+  → mindmapStore.navigationStack.push(nodeId)
+  → mindmapStore.currentRootId = nodeId
+  → buildElements() 重新计算:
+      - 从 relationStore 获取该实体的所有直接关系
+      - 生成以该实体为中心的子图节点和边
+      - 从 customNodes 加载该实体画布上的自由节点
+  → Cytoscape 重新渲染
+  → 面包屑更新: 全局图 > 张三
+
+用户 Esc / 面包屑点击
+  → mindmapStore.navigationStack.pop()
+  → mindmapStore.currentRootId = stack[top]
+  → buildElements() 重新计算 (回到上层或全局)
+  → Cytoscape 重新渲染
+</pre>
+</div>
+</div>
+
+<div class="section" style="margin-top:24px;">
+<h3>⌨️ 键盘流实现</h3>
+<div style="background:#161625;border:1px solid #333;border-radius:12px;padding:16px;font-size:0.8em;">
+<pre style="color:#ccc;line-height:1.8;">
+全局 keydown 监听 → 
+  if (单键基础操作):
+    Delete → 删除选中
+    Escape → 取消/返回上层
+    I → 切换详情侧栏
+    F → 适应视图
+    Space+拖拽 → 平移画布
+  
+  else (按键序列):
+    追加到 keySequence 缓冲
+    重置 500ms 超时定时器
+    if (匹配已知序列):
+      执行对应操作
+      清空缓冲
+    else if (超时):
+      清空缓冲
+      显示提示 "未知序列: xx"
+
+左下角 MindmapKeyHint 显示:
+  - 当前按键序列状态 (如 "n_" 等待第二键)
+  - 可用的后续键提示
+</pre>
+</div>
+</div>
+
+<div class="section" style="margin-top:24px;">
+<h3>📁 文件变更清单</h3>
+<table style="font-size:0.8em;">
+  <tr><th>文件</th><th>变更</th><th>说明</th></tr>
+  <tr><td>MindmapView.vue</td><td>🔧 重构</td><td>拆分子组件，精简为协调层</td></tr>
+  <tr><td>MindmapCanvas.vue</td><td>✨ 新增</td><td>画布容器：Cytoscape + Canvas + Vue 叠加</td></tr>
+  <tr><td>MindmapBreadcrumb.vue</td><td>✨ 新增</td><td>面包屑导航</td></tr>
+  <tr><td>MindmapDetailPanel.vue</td><td>✨ 新增</td><td>详情侧栏（自适应折叠分区）</td></tr>
+  <tr><td>MindmapKeyHint.vue</td><td>✨ 新增</td><td>按键序列提示条</td></tr>
+  <tr><td>MindmapToolbar.vue</td><td>🔧 增强</td><td>新增嵌套图导航按钮、侧栏开关</td></tr>
+  <tr><td>MindmapContextMenu.vue</td><td>🔧 重构</td><td>新增 Section/嵌套图/连线样式菜单</td></tr>
+  <tr><td>mindmapConfig.ts</td><td>🔧 扩展</td><td>新增连线样式映射、按键序列注册表</td></tr>
+  <tr><td>mindmapStyles.ts</td><td>🔧 扩展</td><td>新增 Section 样式、连线样式变体</td></tr>
+  <tr><td>mindmapStore.ts</td><td>✨ 新增</td><td>思维导图专用状态管理</td></tr>
+  <tr><td>useKeySequence.ts</td><td>✨ 新增</td><td>按键序列 composable</td></tr>
+  <tr><td>useNestedGraph.ts</td><td>✨ 新增</td><td>嵌套图导航 composable</td></tr>
+  <tr><td>useSection.ts</td><td>✨ 新增</td><td>Section 分组框 composable</td></tr>
+</table>
+</div>
+
+<div class="section" style="margin-top:24px;">
+<h3>🚀 Phase 2 & 3 预览</h3>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+  <div style="background:#161625;border:1px solid #333;border-radius:12px;padding:16px;">
+    <div style="color:#f59e0b;font-weight:bold;margin-bottom:8px;">Phase 2: 关联层</div>
+    <ul style="padding-left:16px;color:#aaa;font-size:0.85em;">
+      <li>双链引用 — [[实体名]] 语法</li>
+      <li>跨视图实体关联</li>
+      <li>引用块渲染 (静态截图)</li>
+      <li>引用管理器</li>
+      <li>键盘流扩展 (j i 进入, j o 跳转)</li>
+    </ul>
+  </div>
+  <div style="background:#161625;border:1px solid #333;border-radius:12px;padding:16px;">
+    <div style="color:#ef4444;font-weight:bold;margin-bottom:8px;">Phase 3: 增强层</div>
+    <ul style="padding-left:16px;color:#aaa;font-size:0.85em;">
+      <li>自动计算引擎</li>
+      <li>Canvas 涂鸦/批注层</li>
+      <li>节点属性聚合统计</li>
+      <li>导出为图片/PNG</li>
+      <li>迷你地图 (minimap)</li>
+    </ul>
+  </div>
+</div>
+</div>

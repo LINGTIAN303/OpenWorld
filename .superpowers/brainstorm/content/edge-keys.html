@@ -1,0 +1,114 @@
+<h2>连线样式 + 键盘流</h2>
+<p class="subtitle">Phase 1 最后两个核心组件</p>
+
+<div class="section">
+<h3>连线样式</h3>
+<p style="color:#aaa;margin-bottom:16px;">当前所有连线都是贝塞尔曲线。Project Graph 支持直线/曲线/折线三种。</p>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+  <div style="background:#161625;border:1px solid #333;border-radius:12px;padding:16px;text-align:center;">
+    <svg width="200" height="80" viewBox="0 0 200 80">
+      <circle cx="30" cy="40" r="12" fill="#6c5ce7"/>
+      <circle cx="170" cy="40" r="12" fill="#e74c3c"/>
+      <line x1="42" y1="40" x2="158" y2="40" stroke="#999" stroke-width="2"/>
+    </svg>
+    <div style="font-size:0.85em;color:#ccc;margin-top:4px;">直线 (straight)</div>
+  </div>
+  <div style="background:#161625;border:1px solid #333;border-radius:12px;padding:16px;text-align:center;">
+    <svg width="200" height="80" viewBox="0 0 200 80">
+      <circle cx="30" cy="60" r="12" fill="#6c5ce7"/>
+      <circle cx="170" cy="20" r="12" fill="#e74c3c"/>
+      <path d="M42,60 C100,60 100,20 158,20" stroke="#999" stroke-width="2" fill="none"/>
+    </svg>
+    <div style="font-size:0.85em;color:#ccc;margin-top:4px;">贝塞尔曲线 (bezier) — 当前默认</div>
+  </div>
+  <div style="background:#161625;border:1px solid #333;border-radius:12px;padding:16px;text-align:center;">
+    <svg width="200" height="80" viewBox="0 0 200 80">
+      <circle cx="30" cy="60" r="12" fill="#6c5ce7"/>
+      <circle cx="170" cy="20" r="12" fill="#e74c3c"/>
+      <path d="M42,60 L100,60 L100,20 L158,20" stroke="#999" stroke-width="2" fill="none"/>
+    </svg>
+    <div style="font-size:0.85em;color:#ccc;margin-top:4px;">折线 (折线/taxi)</div>
+  </div>
+  <div style="background:#161625;border:1px solid #333;border-radius:12px;padding:16px;text-align:center;">
+    <svg width="200" height="80" viewBox="0 0 200 80">
+      <circle cx="30" cy="60" r="12" fill="#6c5ce7"/>
+      <circle cx="170" cy="20" r="12" fill="#e74c3c"/>
+      <path d="M42,60 L70,60 L70,40 L130,40 L130,20 L158,20" stroke="#999" stroke-width="2" fill="none"/>
+    </svg>
+    <div style="font-size:0.85em;color:#ccc;margin-top:4px;">正交折线 (orthogonal)</div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="edge-per-relation" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>按关系类型设定连线样式</h3>
+      <p>每种关系类型有默认连线样式（如"隶属"用正交、"认识"用曲线），用户可在关系类型配置中修改。全局默认仍为贝塞尔。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="edge-per-edge" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>每条连线可独立设定样式</h3>
+      <p>右键连线 → 选择样式（直线/曲线/折线/正交），每条边独立控制。灵活但配置成本高。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="edge-hybrid" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>关系类型默认 + 单条可覆盖</h3>
+      <p>关系类型设定默认样式，单条连线可右键覆盖。两者兼顾：批量设定省心，特殊需求可调。</p>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="section" style="margin-top:32px;">
+<h3>键盘流 (Key Sequence Shortcuts)</h3>
+<p style="color:#aaa;margin-bottom:16px;">Project Graph 的标志性交互：按键序列组合操作，而非单键快捷键。</p>
+
+<div style="background:#161625;border:1px solid #333;border-radius:12px;padding:16px;margin-bottom:16px;">
+  <div style="font-size:0.85em;color:#6c5ce7;font-weight:bold;margin-bottom:8px;">按键序列设计（WorldSmith 适配版）</div>
+  <table style="font-size:0.8em;">
+    <tr><th style="width:120px;">序列</th><th>操作</th></tr>
+    <tr><td><code>n c</code></td><td>新建角色 (new character)</td></tr>
+    <tr><td><code>n r</code></td><td>新建区域 (new region)</td></tr>
+    <tr><td><code>n e</code></td><td>新建事件 (new event)</td></tr>
+    <tr><td><code>n t</code></td><td>新建文本框 (new textbox)</td></tr>
+    <tr><td><code>e n</code></td><td>编辑名称 (edit name)</td></tr>
+    <tr><td><code>e d</code></td><td>编辑描述 (edit description)</td></tr>
+    <tr><td><code>c l</code></td><td>连接节点 (connect link)</td></tr>
+    <tr><td><code>d n</code></td><td>删除节点 (delete node)</td></tr>
+    <tr><td><code>g s</code></td><td>创建分组框 (group section)</td></tr>
+    <tr><td><code>f n</code></td><td>聚焦节点 (focus node)</td></tr>
+    <tr><td><code>j i</code></td><td>进入子图 (jump into)</td></tr>
+    <tr><td><code>Esc</code></td><td>返回上层 / 取消操作</td></tr>
+  </table>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="keys-sequence" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>按键序列 — Project Graph 风格</h3>
+      <p>两键组合触发操作（如 n→c 创建角色），左下角显示当前按键状态。学习曲线稍高但操作效率极高。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="keys-single" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>单键快捷键 — 传统方式</h3>
+      <p>每个操作一个快捷键（如 N=新建、E=编辑、Delete=删除），配合 Ctrl/Shift 修饰键。直觉但快捷键容易冲突。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="keys-both" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>两者并存 — 序列为高级，单键为基础</h3>
+      <p>基础操作用单键（Delete删除、Escape取消），复合操作用按键序列（n c新建角色）。左下角显示按键提示。入门用单键，熟练后用序列。</p>
+    </div>
+  </div>
+</div>
+</div>

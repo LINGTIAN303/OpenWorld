@@ -1,0 +1,34 @@
+src/core/ModuleRuntime.ts(5,29): error TS6196: 'ModuleEntityType' is declared but never used.
+src/core/ModuleRuntime.ts(10,1): error TS6133: 'defineAsyncComponent' is declared but its value is never read.
+src/plugins/official/characters/components/FamilyTree.vue(99,21): error TS7006: Parameter 'ele' implicitly has an 'any' type.
+src/plugins/official/characters/components/FamilyTree.vue(118,21): error TS7006: Parameter 'ele' implicitly has an 'any' type.
+src/plugins/official/concepts/ConceptView.vue(5,23): error TS2339: Property 'searchQuery' does not exist on type '{ onSearch: () => void; typeFilter: string; viewMode: "grid" | "dict"; openNewForm: () => void; filteredConcepts: { id: string; type: string; name: string; description: string; properties: Record<string, unknown>; tags: string[]; avatar?: string | undefined; createdAt: string; updatedAt: string; }[]; ... 38 more ......'.
+src/plugins/official/concepts/ConceptView.vue(8,29): error TS2339: Property 'conceptTypes' does not exist on type '{ onSearch: () => void; typeFilter: string; viewMode: "grid" | "dict"; openNewForm: () => void; filteredConcepts: { id: string; type: string; name: string; description: string; properties: Record<string, unknown>; tags: string[]; avatar?: string | undefined; createdAt: string; updatedAt: string; }[]; ... 38 more ......'.
+src/plugins/official/concepts/ConceptView.vue(126,33): error TS2339: Property 'conceptTypes' does not exist on type '{ onSearch: () => void; typeFilter: string; viewMode: "grid" | "dict"; openNewForm: () => void; filteredConcepts: { id: string; type: string; name: string; description: string; properties: Record<string, unknown>; tags: string[]; avatar?: string | undefined; createdAt: string; updatedAt: string; }[]; ... 38 more ......'.
+src/plugins/official/concepts/ConceptView.vue(166,1): error TS6133: 'entitySchemaRegistry' is declared but its value is never read.
+src/plugins/official/concepts/ConceptView.vue(195,7): error TS2304: Cannot find name 'searchQuery'.
+src/plugins/official/concepts/ConceptView.vue(196,15): error TS2304: Cannot find name 'searchQuery'.
+src/plugins/official/items/ItemView.vue(253,3): error TS2322: Type '{ name: string; itemType: string; rarity: string; condition: string; material: string; origin: string; creator: string; era: string; currentOwner: string; powers: string; significance: string; description: string; tagsStr: string; }' is not assignable to type '{ name: string; itemType: string; rarity: string; condition: string; material: string; origin: string; creator: string; era: string; currentOwner: string; powers: string; significance: string; description: string; tagsStr: string; properties: Record<...>; } | { ...; }'.
+  Property 'properties' is missing in type '{ name: string; itemType: string; rarity: string; condition: string; material: string; origin: string; creator: string; era: string; currentOwner: string; powers: string; significance: string; description: string; tagsStr: string; }' but required in type '{ name: string; itemType: string; rarity: string; condition: string; material: string; origin: string; creator: string; era: string; currentOwner: string; powers: string; significance: string; description: string; tagsStr: string; properties: Record<...>; }'.
+src/plugins/official/mindmap/MindmapView.vue(81,7): error TS6133: 'uiStore' is declared but its value is never read.
+src/plugins/official/mindmap/MindmapView.vue(143,21): error TS7006: Parameter 'ele' implicitly has an 'any' type.
+src/plugins/official/mindmap/MindmapView.vue(168,21): error TS7006: Parameter 'ele' implicitly has an 'any' type.
+src/plugins/official/mindmap/MindmapView.vue(326,11): error TS6133: 'imp' is declared but its value is never read.
+src/plugins/official/module-builder/ModuleBuilder.vue(394,7): error TS6133: 'pluginStore' is declared but its value is never read.
+src/plugins/official/module-builder/ModuleBuilder.vue(395,7): error TS6133: 'uiStore' is declared but its value is never read.
+src/plugins/official/module-builder/ModuleBuilder.vue(396,7): error TS6133: 'entityStore' is declared but its value is never read.
+src/plugins/official/module-builder/ModuleBuilder.vue(416,5): error TS6133: 'dirty' is declared but its value is never read.
+src/plugins/official/organizations/OrganizationView.vue(70,49): error TS2339: Property 'id' does not exist on type '{ relation: { id: string; type: string; sourceId: string; targetId: string; label?: string | undefined; properties: Record<string, unknown>; createdAt: string; updatedAt: string; }; region: Entity | undefined; }'.
+src/plugins/official/timeline/TimelineView.vue(25,27): error TS6133: 'idx' is declared but its value is never read.
+src/plugins/official/timeline/TimelineView.vue(202,10): error TS6133: 'relatedEventName' is declared but its value is never read.
+src/stores/pluginStore.ts(4,1): error TS6133: 'Component' is declared but its value is never read.
+src/ui/DynamicEntityView.vue(94,1): error TS6133: 'entitySchemaRegistry' is declared but its value is never read.
+src/ui/DynamicEntityView.vue(96,29): error TS6196: 'ModuleEntityType' is declared but never used.
+src/ui/GlobalSearch.vue(62,25): error TS6133: 'watch' is declared but its value is never read.
+src/ui/GlobalSearch.vue(140,7): error TS6133: 'itemOffsets' is declared but its value is never read.
+src/ui/RichTextEditor.vue(23,15): error TS6133: 'onMounted' is declared but its value is never read.
+src/ui/RichTextEditor.vue(24,21): error TS6133: 'EditorContent' is declared but its value is never read.
+src/ui/RichTextEditor.vue(36,7): error TS6133: 'editorRef' is declared but its value is never read.
+src/ui/RichTextEditor.vue(73,49): error TS2559: Type 'false' has no properties in common with type 'SetContentOptions'.
+src/ui/Sidebar.vue(63,22): error TS6133: 'e' is declared but its value is never read.
+src/ui/Sidebar.vue(78,17): error TS6133: 'e' is declared but its value is never read.

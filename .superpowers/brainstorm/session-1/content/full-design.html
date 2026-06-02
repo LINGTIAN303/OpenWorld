@@ -1,0 +1,121 @@
+<h2>工作流编辑器 UX 优化 — 完整设计方案</h2>
+<p class="subtitle">整合所有已确认的设计决策，请审阅后确认</p>
+
+<div class="section">
+  <h3>📋 设计决策总览</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:12px;">
+    <tr style="background:#f1f5f9;">
+      <td style="padding:6px 10px;width:140px;font-weight:600;">目标用户</td>
+      <td style="padding:6px 10px;">两者兼顾 — 默认对非技术用户友好，提供高级模式</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 10px;font-weight:600;">模式切换</td>
+      <td style="padding:6px 10px;">全局开关 + 节点级可覆盖</td>
+    </tr>
+    <tr style="background:#f8fafc;">
+      <td style="padding:6px 10px;font-weight:600;">空白画布引导</td>
+      <td style="padding:6px 10px;">智能建议输入框 + 模板库</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 10px;font-weight:600;">属性面板</td>
+      <td style="padding:6px 10px;">简化模式（3-4 字段/中文标签/下拉）↔ 高级模式（全字段/原始键名）</td>
+    </tr>
+    <tr style="background:#f8fafc;">
+      <td style="padding:6px 10px;font-weight:600;">节点面板</td>
+      <td style="padding:6px 10px;">分组归类 + 搜索框 + 可折叠</td>
+    </tr>
+  </table>
+</div>
+
+<div style="margin-top:20px;">
+  <h3>🎨 改动清单（7 大模块）</h3>
+</div>
+
+<div style="margin-top:12px;padding:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;">
+  <h4 style="margin:0 0 8px;color:#166534;">1. 空白画布引导 — OnboardingOverlay</h4>
+  <ul style="margin:0;padding-left:16px;font-size:12px;color:#166534;">
+    <li>画布为空时显示引导覆盖层</li>
+    <li>中央「描述你想自动化的任务」输入框 → 触发 AI 生成骨架</li>
+    <li>底部模板卡片横排：邮件处理 / 内容创作 / 数据分析 / 定时任务</li>
+    <li>点击模板 → 加载预定义工作流到画布</li>
+    <li>添加第一个节点后引导自动消失</li>
+  </ul>
+</div>
+
+<div style="margin-top:8px;padding:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;">
+  <h4 style="margin:0 0 8px;color:#1e40af;">2. 全局模式切换 — EditorModeToggle</h4>
+  <ul style="margin:0;padding-left:16px;font-size:12px;color:#1e40af;">
+    <li>工具栏右侧添加 🌙/⚙️ 切换按钮</li>
+    <li>简化模式：所有属性面板显示简化表单</li>
+    <li>高级模式：所有属性面板显示完整字段</li>
+    <li>状态持久化到 localStorage</li>
+  </ul>
+</div>
+
+<div style="margin-top:8px;padding:12px;background:#fdf2f8;border:1px solid #fbcfe8;border-radius:8px;">
+  <h4 style="margin:0 0 8px;color:#9d174d;">3. 属性面板双模式 — PropertyPanel 重构</h4>
+  <ul style="margin:0;padding-left:16px;font-size:12px;color:#9d174d;">
+    <li>每个节点类型定义 simplifiedFields 列表（3-4 个最常用字段）</li>
+    <li>简化模式：中文标签 + 下拉/输入 + 占位提示 + 隐藏可选字段</li>
+    <li>高级模式：原始键名 + 完整类型控件 + 全部字段</li>
+    <li>节点级覆盖：面板右上角「高级 ▸」/「◂ 简化」按钮</li>
+    <li>错误提示人性化：「请填写条件表达式」而非「缺少 config.expression」</li>
+  </ul>
+</div>
+
+<div style="margin-top:8px;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;">
+  <h4 style="margin:0 0 8px;color:#92400e;">4. 节点面板重构 — NodePanel 分组</h4>
+  <ul style="margin:0;padding-left:16px;font-size:12px;color:#92400e;">
+    <li>顶部搜索框，实时过滤节点</li>
+    <li>4 个可折叠分组：流程控制 / 智能节点 / 循环与并行 / 高级</li>
+    <li>每个节点卡片：彩色左边框 + 中文名 + 图标 + 一句话描述</li>
+    <li>拖拽到画布添加节点（保留现有功能）</li>
+  </ul>
+</div>
+
+<div style="margin-top:8px;padding:12px;background:#f5f3ff;border:1px solid #c4b5fd;border-radius:8px;">
+  <h4 style="margin:0 0 8px;color:#5b21b6;">5. 画布节点视觉升级 — WorkflowNode 重设计</h4>
+  <ul style="margin:0;padding-left:16px;font-size:12px;color:#5b21b6;">
+    <li>节点显示中文名（简化模式）或英文类型名（高级模式）</li>
+    <li>节点状态指示：运行中（脉冲动画）、成功（✓ 绿色边框）、失败（✕ 红色边框）</li>
+    <li>连接线标签中文化：「是/否」而非「true/false」</li>
+    <li>悬停节点显示简短描述 tooltip</li>
+  </ul>
+</div>
+
+<div style="margin-top:8px;padding:12px;background:#ecfeff;border:1px solid #a5f3fc;border-radius:8px;">
+  <h4 style="margin:0 0 8px;color:#155e75;">6. 连接交互优化</h4>
+  <ul style="margin:0;padding-left:16px;font-size:12px;color:#155e75;">
+    <li>连接时显示语义标签建议（条件节点 → 「是」/「否」端口）</li>
+    <li>无效连接实时提示（如 start→start）</li>
+    <li>选中连接线高亮 + 显示删除按钮</li>
+  </ul>
+</div>
+
+<div style="margin-top:8px;padding:12px;background:#f7fee7;border:1px solid #bef264;border-radius:8px;">
+  <h4 style="margin:0 0 8px;color:#3f6212;">7. 校验与反馈人性化</h4>
+  <ul style="margin:0;padding-left:16px;font-size:12px;color:#3f6212;">
+    <li>校验错误用中文 + 图标提示：「⚠️ 工作流需要一个开始节点」</li>
+    <li>保存成功提示：「✅ 工作流已保存」</li>
+    <li>运行前自动校验，错误高亮对应节点</li>
+  </ul>
+</div>
+
+<div style="margin-top:20px;padding:16px;background:#f8fafc;border:2px solid #e2e8f0;border-radius:8px;">
+  <h4 style="margin:0 0 8px;">📁 涉及文件</h4>
+  <div style="font-size:12px;color:#475569;line-height:1.8;">
+    <strong>新增：</strong><br>
+    • <code>OnboardingOverlay.vue</code> — 空白画布引导组件<br>
+    • <code>EditorModeToggle.vue</code> — 全局模式切换按钮<br>
+    • <code>TemplateLibrary.vue</code> — 模板库组件<br>
+    • <code>node-simplified-config.ts</code> — 每种节点的简化字段定义<br>
+    • <code>workflow-templates.ts</code> — 预置工作流模板数据<br><br>
+    <strong>重构：</strong><br>
+    • <code>PropertyPanel.vue</code> — 双模式表单<br>
+    • <code>NodePanel.vue</code> — 分组 + 搜索<br>
+    • <code>WorkflowNode.vue</code> — 视觉升级 + 状态指示<br>
+    • <code>WorkflowEditor.vue</code> — 集成引导 + 模式切换 + 连接优化<br>
+    • <code>node-metadata.ts</code> — 添加分组/简化字段/中文标签<br>
+    • <code>useWorkflowEditor.ts</code> — 模式状态管理
+  </div>
+</div>

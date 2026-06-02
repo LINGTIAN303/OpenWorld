@@ -1,0 +1,117 @@
+<h2>多模型参与者：可行性分析</h2>
+<p class="subtitle">好消息：基础设施已经就绪，风险可控</p>
+
+<div class="section" style="margin-bottom:24px;">
+  <h3>✅ 已有的基础设施</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px;">
+    <div style="padding:10px 14px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;">
+      <strong style="color:#22c55e;">数据层</strong>
+      <ul style="margin:6px 0;padding-left:16px;color:#ccc;line-height:1.8;">
+        <li><code>GroupParticipant.providerConfig?</code> 已定义</li>
+        <li>Coordinator 已用 <code>p.providerConfig || providerConfig</code></li>
+        <li>Per-agent cost tracking 已实现</li>
+      </ul>
+    </div>
+    <div style="padding:10px 14px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;">
+      <strong style="color:#22c55e;">模型层</strong>
+      <ul style="margin:6px 0;padding-left:16px;color:#ccc;line-height:1.8;">
+        <li>MODEL_REGISTRY 40+ 模型含价格</li>
+        <li><code>getModelPresets()</code> 按 provider 分组</li>
+        <li><code>calculateCost()</code> 支持多币种</li>
+      </ul>
+    </div>
+    <div style="padding:10px 14px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;">
+      <strong style="color:#22c55e;">配置层</strong>
+      <ul style="margin:6px 0;padding-left:16px;color:#ccc;line-height:1.8;">
+        <li><code>buildProviderConfig()</code> 可复用</li>
+        <li><code>loadApiKey()</code> 支持 10 个 provider</li>
+        <li>Cloud/Local/Custom 三种模式</li>
+      </ul>
+    </div>
+    <div style="padding:10px 14px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;">
+      <strong style="color:#22c55e;">Agent层</strong>
+      <ul style="margin:6px 0;padding-left:16px;color:#ccc;line-height:1.8;">
+        <li><code>createWorldSmithAgent()</code> 接受任意 ProviderConfig</li>
+        <li>每个 agent 独立 subscribe/dispose</li>
+        <li>错误隔离：单个 agent 失败不影响循环</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-bottom:24px;">
+  <h3>⚠️ 风险分析与对策</h3>
+  <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;">
+    <div style="padding:10px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <strong style="color:#f59e0b;">多模型计费复杂</strong>
+        <span style="font-size:11px;padding:2px 8px;background:rgba(34,197,94,0.15);color:#22c55e;border-radius:4px;">已解决</span>
+      </div>
+      <p style="margin:6px 0;color:#ccc;line-height:1.6;">
+        CostTracker 已按 agentId 独立追踪，<code>calculateCost()</code> 已支持不同模型不同币种。
+        只需在 recordUsage 时传入 modelId，用对应价格计算即可。
+      </p>
+    </div>
+    <div style="padding:10px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <strong style="color:#f59e0b;">不同 API 密钥</strong>
+        <span style="font-size:11px;padding:2px 8px;background:rgba(245,158,11,0.15);color:#f59e0b;border-radius:4px;">需处理</span>
+      </div>
+      <p style="margin:6px 0;color:#ccc;line-height:1.6;">
+        用户可能只配置了一个 provider 的 API key。选择其他 provider 时需要提示"未配置 API Key"。
+        方案：模型列表只显示已配置 API key 的 provider 的模型，未配置的灰显并提示。
+      </p>
+    </div>
+    <div style="padding:10px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <strong style="color:#f59e0b;">并行 vs 异步</strong>
+        <span style="font-size:11px;padding:2px 8px;background:rgba(34,197,94,0.15);color:#22c55e;border-radius:4px;">无需改动</span>
+      </div>
+      <p style="margin:6px 0;color:#ccc;line-height:1.6;">
+        当前设计是顺序发言（轮次制），每个 agent 独立 await。多模型不影响执行模式。
+        未来如需并行发言（多个 agent 同时思考），只需改为 Promise.allSettled()，与模型选择无关。
+      </p>
+    </div>
+    <div style="padding:10px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <strong style="color:#f59e0b;">单模型失败风险</strong>
+        <span style="font-size:11px;padding:2px 8px;background:rgba(245,158,11,0.15);color:#f59e0b;border-radius:4px;">需增强</span>
+      </div>
+      <p style="margin:6px 0;color:#ccc;line-height:1.6;">
+        当前 catch 块已处理单个 agent 失败（显示"发言失败"系统消息），但缺少重试和降级。
+        方案：失败后自动跳过该 agent 继续，3次连续失败则提示用户是否终止。
+      </p>
+    </div>
+    <div style="padding:10px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <strong style="color:#f59e0b;">上下文窗口差异</strong>
+        <span style="font-size:11px;padding:2px 8px;background:rgba(245,158,11,0.15);color:#f59e0b;border-radius:4px;">需处理</span>
+      </div>
+      <p style="margin:6px 0;color:#ccc;line-height:1.6;">
+        不同模型上下文窗口差异巨大（8K vs 1M）。ContextManager 需要按当前发言者的模型动态调整策略。
+        当前使用固定 contextWindow=32768，需改为从 participant.providerConfig 读取。
+      </p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>🎯 推荐方案：渐进式多模型支持</h3>
+  <div style="padding:14px;background:rgba(108,92,231,0.08);border:1px solid rgba(108,92,231,0.2);border-radius:10px;font-size:13px;color:#e0e0e0;line-height:1.8;">
+    <strong style="color:#6c5ce7;">Phase 1（本轮实现）：</strong>
+    <ul style="margin:6px 0;padding-left:16px;">
+      <li>配置页：每个参与者添加模型选择下拉框</li>
+      <li>模型列表：只显示已配置 API key 的 provider 的模型</li>
+      <li>默认模型：使用全局设置的当前模型</li>
+      <li>CostTracker：recordUsage 传入 modelId，用 calculateCost() 精确计费</li>
+      <li>ContextManager：按发言者模型动态调整上下文窗口</li>
+      <li>错误增强：连续失败自动跳过 + 提示</li>
+    </ul>
+    <strong style="color:#6c5ce7;margin-top:8px;display:block;">Phase 2（未来可选）：</strong>
+    <ul style="margin:6px 0;padding-left:16px;">
+      <li>并行发言模式（多 agent 同时思考）</li>
+      <li>模型健康检测（启动前验证 API 可达性）</li>
+      <li>自动降级（主模型失败时切换备用模型）</li>
+    </ul>
+  </div>
+</div>

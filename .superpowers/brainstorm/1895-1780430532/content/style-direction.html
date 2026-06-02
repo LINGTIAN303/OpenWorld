@@ -1,0 +1,97 @@
+<h2>工作流插件的气质方向</h2>
+<p class="subtitle">同一个"空状态"在四种调性下的样子。点选最贴近你心意的那个,会决定后续的色板/字体/插画/动效全部走向。</p>
+
+<div class="cards">
+
+  <!-- A: 克制工具感 -->
+  <div class="card" data-choice="A" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#fafafa;padding:18px;border-radius:8px;border:1px solid #e5e5e5">
+      <div style="display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid #e5e5e5;padding-bottom:8px">
+        <span style="font:500 12px/1 system-ui;color:#111;padding-bottom:6px;border-bottom:2px solid #111">工作流</span>
+        <span style="font:400 12px/1 system-ui;color:#888;margin-left:10px">编辑器</span>
+        <span style="font:400 12px/1 system-ui;color:#888;margin-left:10px">进度</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px">
+        <div style="width:14px;height:14px;border:1.5px solid #111;border-radius:3px"></div>
+        <div style="font:600 13px/1 system-ui;color:#111">工作流</div>
+        <div style="margin-left:auto;width:90px;height:22px;border:1px solid #e5e5e5;border-radius:4px"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;padding:32px 0;border:1px dashed #d4d4d4;border-radius:6px;background:#fff">
+        <div style="width:28px;height:32px;border:1.5px solid #111;border-radius:2px;position:relative;margin-bottom:10px">
+          <div style="position:absolute;top:-2px;left:6px;width:3px;height:8px;background:#111"></div>
+        </div>
+        <div style="font:500 12px/1 system-ui;color:#111;margin-bottom:4px">暂无工作流</div>
+        <div style="font:400 11px/1 system-ui;color:#888">告诉 AI Agent 创建一个工作流</div>
+        <div style="margin-top:14px;display:flex;gap:6px">
+          <div style="padding:5px 12px;border:1px solid #111;border-radius:4px;font:500 11px/1 system-ui;color:#111">+ 新建空白</div>
+          <div style="padding:5px 12px;background:#111;border-radius:4px;font:500 11px/1 system-ui;color:#fff">从模板开始</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. 克制 · 工具感</h3>
+      <p>近 Notion / Linear / Cron。1px 细线、纯中性色、单色强调、低饱和度、信息密度高、留白克制。给人"专业、可控、不打扰"的工具气质。</p>
+    </div>
+  </div>
+
+  <!-- B: 亲和品牌感 -->
+  <div class="card" data-choice="B" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:linear-gradient(160deg,#fef3ec 0%,#f3eaff 100%);padding:18px;border-radius:12px">
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <span style="font:600 12px/1 system-ui;color:#ff6b4a;padding:6px 12px;background:#fff;border-radius:99px;box-shadow:0 1px 3px rgba(0,0,0,.05)">✦ 工作流</span>
+        <span style="font:500 12px/1 system-ui;color:#666;padding:6px 12px">编辑器</span>
+        <span style="font:500 12px/1 system-ui;color:#666;padding:6px 12px">进度</span>
+      </div>
+      <div style="background:#fff;border-radius:14px;padding:16px;box-shadow:0 4px 16px rgba(255,107,74,.08)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <div style="font:700 14px/1 system-ui;background:linear-gradient(135deg,#ff6b4a,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent">工作流</div>
+          <div style="margin-left:auto;width:90px;height:24px;background:#f5f5f5;border-radius:99px"></div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;padding:36px 0">
+          <div style="width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#ffd5c8,#e0c8ff);display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:12px">✨</div>
+          <div style="font:700 13px/1 system-ui;color:#1a1a1a;margin-bottom:4px">开始你的第一个工作流</div>
+          <div style="font:400 11px/1 system-ui;color:#888;text-align:center;max-width:200px">一句话描述需求,AI 帮你搭。也可以从模板起步。</div>
+          <div style="margin-top:16px;display:flex;gap:8px">
+            <div style="padding:7px 14px;background:#fff;border:1px solid #eee;border-radius:99px;font:600 11px/1 system-ui;color:#666">+ 空白</div>
+            <div style="padding:7px 14px;background:linear-gradient(135deg,#ff6b4a,#a855f7);border-radius:99px;font:600 11px/1 system-ui;color:#fff;box-shadow:0 4px 12px rgba(168,85,247,.3)">从模板开始 →</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. 亲和 · 品牌感</h3>
+      <p>近 Figma / Vercel / Framer。圆角 12-16px、暖色 + 紫色渐变强调色、卡片浮起阴影、彩色徽章、品牌色插画 emoji。给人"现代、有温度、被照顾到"的产品气质。</p>
+    </div>
+  </div>
+
+  <!-- C: 暗黑技术感 -->
+  <div class="card" data-choice="C" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0a0a0b;padding:18px;border-radius:8px;border:1px solid #1f1f23">
+      <div style="display:flex;gap:4px;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #1f1f23">
+        <span style="font:500 11px/1 'JetBrains Mono',monospace;color:#00d9ff;padding:5px 10px;background:rgba(0,217,255,.08);border-radius:3px">&gt;_ workflow</span>
+        <span style="font:400 11px/1 'JetBrains Mono',monospace;color:#555;padding:5px 10px">editor</span>
+        <span style="font:400 11px/1 'JetBrains Mono',monospace;color:#555;padding:5px 10px">runs</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <div style="font:600 12px/1 'JetBrains Mono',monospace;color:#e5e5e5">// workflows</div>
+        <div style="margin-left:auto;width:100px;height:22px;background:#141417;border:1px solid #2a2a30;border-radius:3px"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;padding:36px 0;border:1px dashed #2a2a30;border-radius:4px;background:#0f0f12">
+        <div style="font:600 18px/1 'JetBrains Mono',monospace;color:#00d9ff;margin-bottom:10px">{ }</div>
+        <div style="font:600 12px/1 'JetBrains Mono',monospace;color:#e5e5e5;margin-bottom:4px">no_workflows.found()</div>
+        <div style="font:400 11px/1 'JetBrains Mono',monospace;color:#666">// ask agent to create one, or ↓</div>
+        <div style="margin-top:14px;display:flex;gap:6px">
+          <div style="padding:5px 12px;border:1px solid #2a2a30;border-radius:3px;font:500 11px/1 'JetBrains Mono',monospace;color:#888">+ blank</div>
+          <div style="padding:5px 12px;background:#00d9ff;color:#0a0a0b;border-radius:3px;font:600 11px/1 'JetBrains Mono',monospace;box-shadow:0 0 16px rgba(0,217,255,.4)">$ init --template</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. 暗黑 · 技术感</h3>
+      <p>近 VSCode / Linear Dark / Raycast。深底高对比、霓虹蓝/绿强调、JetBrains Mono、终端感命令式按钮、发光描边。给人"硬核、面向开发者、可深度控制"的气质。</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:24px">💡 后面所有组件(节点面板 / 画布 / 进度视图 / 模板库 / 手动创建向导)都会延续你选的这个语言。</p>

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工具结果 UI 化 — 方案 C 中文化版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'Segoe UI', sans-serif;
+    background: #0d0d1a;
+    color: #e0e0e0;
+    padding: 32px;
+    line-height: 1.6;
+  }
+  h1 { font-size: 22px; margin-bottom: 8px; color: #fff; }
+  .subtitle { color: #888; font-size: 14px; margin-bottom: 32px; }
+
+  .split {
+    display: flex; gap: 32px; align-items: flex-start;
+  }
+  .col { flex: 1; max-width: 400px; }
+  h2 { font-size: 15px; margin-bottom: 12px; color: #888; }
+
+  .preview-area {
+    background: rgba(26,26,46,0.75);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(58,58,106,0.4);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .preview-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(58,58,106,0.3);
+    font-size: 13px;
+  }
+  .status-dot { font-size: 10px; color: #4caf50; }
+  .preview-body { padding: 12px 14px; }
+
+  .tool-item {
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(58,58,106,0.15);
+  }
+  .tool-item:last-child { margin-bottom: 0; }
+  .tool-head {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 13px; margin-bottom: 6px;
+  }
+  .tool-name { font-weight: 500; color: #e0e0e0; flex: 1; }
+  .tool-time { color: #888; font-size: 11px; }
+
+  .entity-card {
+    background: rgba(108,92,231,0.06);
+    border: 1px solid rgba(108,92,231,0.15);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+  }
+  .ec-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .ec-icon { font-size: 16px; }
+  .ec-name { font-weight: 600; font-size: 14px; color: #fff; }
+  .ec-type {
+    font-size: 10px;
+    background: rgba(108,92,231,0.2);
+    color: #b388ff;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: auto;
+  }
+  .ec-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .ec-tag {
+    font-size: 11px;
+    background: rgba(255,255,255,0.06);
+    padding: 2px 8px;
+    border-radius: 4px;
+    color: #aaa;
+  }
+  .ec-desc { font-size: 12px; color: #888; margin-top: 6px; line-height: 1.4; }
+
+  .summary-card {
+    background: rgba(76,175,80,0.06);
+    border-left: 3px solid #4caf50;
+    border-radius: 0 8px 8px 0;
+    padding: 10px 12px;
+  }
+  .summary-title { font-size: 14px; font-weight: 600; color: #4caf50; margin-bottom: 4px; }
+  .summary-detail { font-size: 12px; color: #aaa; }
+  .summary-id { font-size: 10px; color: #666; margin-top: 4px; font-family: monospace; }
+
+  .struct-list { list-style: none; }
+  .struct-list li {
+    padding: 4px 0;
+    font-size: 12px;
+    border-bottom: 1px solid rgba(58,58,106,0.1);
+    display: flex; gap: 6px;
+  }
+  .struct-list li:last-child { border-bottom: none; }
+  .struct-key { color: #b388ff; min-width: 50px; font-weight: 500; }
+  .struct-val { color: #ccc; }
+
+  .error-card {
+    background: rgba(255,107,107,0.06);
+    border-left: 3px solid #ff6b6b;
+    border-radius: 0 8px 8px 0;
+    padding: 10px 12px;
+  }
+  .error-title { font-size: 13px; color: #ff6b6b; font-weight: 500; }
+  .error-hint { font-size: 12px; color: #888; margin-top: 4px; }
+
+  .report-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(58,58,106,0.15);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .report-date { font-size: 11px; color: #888; margin-bottom: 8px; }
+  .report-stats { display: flex; gap: 12px; margin-bottom: 8px; }
+  .report-stat {
+    text-align: center; flex: 1;
+    background: rgba(108,92,231,0.08);
+    border-radius: 6px; padding: 6px;
+  }
+  .stat-num { font-size: 18px; font-weight: 700; color: #b388ff; }
+  .stat-label { font-size: 10px; color: #888; }
+  .report-dist { display: flex; flex-wrap: wrap; gap: 4px; }
+  .dist-tag {
+    font-size: 11px; padding: 2px 8px; border-radius: 4px;
+    background: rgba(255,255,255,0.06); color: #aaa;
+  }
+
+  .warn-card {
+    background: rgba(255,193,7,0.06);
+    border-left: 3px solid #ffc107;
+    border-radius: 0 8px 8px 0;
+    padding: 10px 12px;
+  }
+  .warn-title { font-size: 13px; color: #ffc107; font-weight: 500; }
+  .warn-hint { font-size: 12px; color: #888; margin-top: 4px; }
+
+  .mapping-table {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(58,58,106,0.2);
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 24px;
+  }
+  .mapping-table h3 { font-size: 14px; color: #b388ff; margin-bottom: 12px; }
+  .mapping-row {
+    display: flex; gap: 12px; padding: 4px 0;
+    font-size: 13px; border-bottom: 1px solid rgba(58,58,106,0.1);
+  }
+  .mapping-row:last-child { border-bottom: none; }
+  .mapping-from { color: #888; font-family: monospace; min-width: 140px; }
+  .mapping-arrow { color: #666; }
+  .mapping-to { color: #e0e0e0; font-weight: 500; }
+</style>
+</head>
+<body>
+
+<h1>🔧 方案 C — 中文化版</h1>
+<p class="subtitle">工具名 + JSON 键名全部中文化，预览窗真正可读</p>
+
+<div class="split">
+  <!-- Left: Before (English) -->
+  <div class="col">
+    <h2>❌ 之前：英文工具名 + 英文键名</h2>
+    <div class="preview-area">
+      <div class="preview-header">
+        <span class="status-dot">●</span>
+        <span>已完成</span>
+        <span style="flex:1;text-align:right;color:#888;font-size:11px">6 项调用</span>
+      </div>
+      <div class="preview-body">
+        <div class="tool-item">
+          <div class="tool-head"><span>✅</span><span class="tool-name">daily_report</span><span class="tool-time">1.2s</span></div>
+          <div class="summary-card">
+            <div class="summary-title">✓ 操作成功</div>
+            <ul class="struct-list">
+              <li><span class="struct-key">date</span><span class="struct-val">2026-05-20</span></li>
+              <li><span class="struct-key">totalEntities</span><span class="struct-val">14</span></li>
+              <li><span class="struct-key">totalRelations</span><span class="struct-val">18</span></li>
+            </ul>
+          </div>
+        </div>
+        <div class="tool-item">
+          <div class="tool-head"><span>✅</span><span class="tool-name">entity_create</span><span class="tool-time">0.3s</span></div>
+          <div class="summary-card">
+            <div class="summary-title">✓ 天陨山脉 & 灵流之渊</div>
+            <ul class="struct-list">
+              <li><span class="struct-key">id</span><span class="struct-val">783cb46d…</span></li>
+            </ul>
+          </div>
+        </div>
+        <div class="tool-item">
+          <div class="tool-head"><span>✅</span><span class="tool-name">entity_list</span><span class="tool-time">0.8s</span></div>
+          <div style="font-size:11px;color:#888;margin-bottom:6px">共 3 个实体</div>
+          <div class="entity-card">
+            <div class="ec-header"><span class="ec-icon">⚔️</span><span class="ec-name">艾尔文</span><span class="ec-type">character</span></div>
+            <div class="ec-tags"><span class="ec-tag">约42岁</span><span class="ec-tag">流光剑圣</span></div>
+          </div>
+        </div>
+        <div class="tool-item">
+          <div class="tool-head"><span>❌</span><span class="tool-name">entity_get</span><span class="tool-time">0.1s</span></div>
+          <div class="error-card"><div class="error-title">实体未找到</div></div>
+        </div>
+        <div class="tool-item">
+          <div class="tool-head"><span>✅</span><span class="tool-name">web_search</span><span class="tool-time">2.1s</span></div>
+          <div class="summary-card">
+            <div class="summary-title">✓ 操作成功</div>
+            <ul class="struct-list">
+              <li><span class="struct-key">results</span><span class="struct-val">5 条结果</span></li>
+              <li><span class="struct-key">query</span><span class="struct-val">"仙侠世界观设定"</span></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: After (Chinese) -->
+  <div class="col">
+    <h2>✅ 之后：中文工具名 + 中文键名</h2>
+    <div class="preview-area">
+      <div class="preview-header">
+        <span class="status-dot">●</span>
+        <span>已完成</span>
+        <span style="flex:1;text-align:right;color:#888;font-size:11px">6 项调用</span>
+      </div>
+      <div class="preview-body">
+        <div class="tool-item">
+          <div class="tool-head"><span>✅</span><span class="tool-name">📊 每日报告</span><span class="tool-time">1.2s</span></div>
+          <div class="report-card">
+            <div class="report-date">📅 2026-05-20</div>
+            <div class="report-stats">
+              <div class="report-stat"><div class="stat-num">14</div><div class="stat-label">实体</div></div>
+              <div class="report-stat"><div class="stat-num">18</div><div class="stat-label">关系</div></div>
+            </div>
+            <div class="report-dist">
+              <span class="dist-tag">角色 ×3</span>
+              <span class="dist-tag">概念 ×2</span>
+              <span class="dist-tag">区域 ×3</span>
+            </div>
+          </div>
+        </div>
+        <div class="tool-item">
+          <div class="tool-head"><span>✅</span><span class="tool-name">➕ 创建实体</span><span class="tool-time">0.3s</span></div>
+          <div class="summary-card">
+            <div class="summary-title">✓ 天陨山脉 & 灵流之渊</div>
+            <div class="summary-id">ID: 783cb46d…</div>
+          </div>
+        </div>
+        <div class="tool-item">
+          <div class="tool-head"><span>✅</span><span class="tool-name">📋 实体列表</span><span class="tool-time">0.8s</span></div>
+          <div style="font-size:11px;color:#888;margin-bottom:6px">共 3 个实体</div>
+          <div class="entity-card">
+            <div class="ec-header"><span class="ec-icon">⚔️</span><span class="ec-name">艾尔文</span><span class="ec-type">角色</span></div>
+            <div class="ec-tags"><span class="ec-tag">约42岁</span><span class="ec-tag">流光剑圣</span></div>
+          </div>
+        </div>
+        <div class="tool-item">
+          <div class="tool-head"><span>❌</span><span class="tool-name">🔍 获取实体</span><span class="tool-time">0.1s</span></div>
+          <div class="error-card"><div class="error-title">实体未找到</div></div>
+        </div>
+        <div class="tool-item">
+          <div class="tool-head"><span>✅</span><span class="tool-name">🌐 联网搜索</span><span class="tool-time">2.1s</span></div>
+          <div class="summary-card">
+            <div class="summary-title">✓ 搜索完成</div>
+            <ul class="struct-list">
+              <li><span class="struct-key">结果数</span><span class="struct-val">5 条</span></li>
+              <li><span class="struct-key">查询词</span><span class="struct-val">"仙侠世界观设定"</span></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Mapping tables -->
+<div style="display:flex;gap:24px;margin-top:32px;flex-wrap:wrap">
+  <div class="mapping-table" style="flex:1;min-width:280px">
+    <h3>🔧 工具名映射</h3>
+    <div class="mapping-row"><span class="mapping-from">entity_create</span><span class="mapping-arrow">→</span><span class="mapping-to">➕ 创建实体</span></div>
+    <div class="mapping-row"><span class="mapping-from">entity_get</span><span class="mapping-arrow">→</span><span class="mapping-to">🔍 获取实体</span></div>
+    <div class="mapping-row"><span class="mapping-from">entity_update</span><span class="mapping-arrow">→</span><span class="mapping-to">✏️ 更新实体</span></div>
+    <div class="mapping-row"><span class="mapping-from">entity_delete</span><span class="mapping-arrow">→</span><span class="mapping-to">🗑️ 删除实体</span></div>
+    <div class="mapping-row"><span class="mapping-from">entity_list</span><span class="mapping-arrow">→</span><span class="mapping-to">📋 实体列表</span></div>
+    <div class="mapping-row"><span class="mapping-from">relation_create</span><span class="mapping-arrow">→</span><span class="mapping-to">🔗 创建关系</span></div>
+    <div class="mapping-row"><span class="mapping-from">relation_delete</span><span class="mapping-arrow">→</span><span class="mapping-to">🔗 删除关系</span></div>
+    <div class="mapping-row"><span class="mapping-from">daily_report</span><span class="mapping-arrow">→</span><span class="mapping-to">📊 每日报告</span></div>
+    <div class="mapping-row"><span class="mapping-from">web_search</span><span class="mapping-arrow">→</span><span class="mapping-to">🌐 联网搜索</span></div>
+    <div class="mapping-row"><span class="mapping-from">*（未知）</span><span class="mapping-arrow">→</span><span class="mapping-to">🔧 {原名}</span></div>
+  </div>
+
+  <div class="mapping-table" style="flex:1;min-width:280px">
+    <h3>🏷️ 类型名映射</h3>
+    <div class="mapping-row"><span class="mapping-from">character</span><span class="mapping-arrow">→</span><span class="mapping-to">⚔️ 角色</span></div>
+    <div class="mapping-row"><span class="mapping-from">region</span><span class="mapping-arrow">→</span><span class="mapping-to">🗺️ 区域</span></div>
+    <div class="mapping-row"><span class="mapping-from">organization</span><span class="mapping-arrow">→</span><span class="mapping-to">🏛️ 组织</span></div>
+    <div class="mapping-row"><span class="mapping-from">concept</span><span class="mapping-arrow">→</span><span class="mapping-to">💡 概念</span></div>
+    <div class="mapping-row"><span class="mapping-from">event</span><span class="mapping-arrow">→</span><span class="mapping-to">⚡ 事件</span></div>
+    <div class="mapping-row"><span class="mapping-from">item</span><span class="mapping-arrow">→</span><span class="mapping-to">🎒 物品</span></div>
+    <div class="mapping-row"><span class="mapping-from">*（未知）</span><span class="mapping-arrow">→</span><span class="mapping-to">📌 {原名}</span></div>
+  </div>
+
+  <div class="mapping-table" style="flex:1;min-width:280px">
+    <h3>🔑 通用键名映射</h3>
+    <div class="mapping-row"><span class="mapping-from">id</span><span class="mapping-arrow">→</span><span class="mapping-to">标识</span></div>
+    <div class="mapping-row"><span class="mapping-from">name</span><span class="mapping-arrow">→</span><span class="mapping-to">名称</span></div>
+    <div class="mapping-row"><span class="mapping-from">type</span><span class="mapping-arrow">→</span><span class="mapping-to">类型</span></div>
+    <div class="mapping-row"><span class="mapping-from">description</span><span class="mapping-arrow">→</span><span class="mapping-to">描述</span></div>
+    <div class="mapping-row"><span class="mapping-from">results</span><span class="mapping-arrow">→</span><span class="mapping-to">结果数</span></div>
+    <div class="mapping-row"><span class="mapping-from">query</span><span class="mapping-arrow">→</span><span class="mapping-to">查询词</span></div>
+    <div class="mapping-row"><span class="mapping-from">total</span><span class="mapping-arrow">→</span><span class="mapping-to">总计</span></div>
+    <div class="mapping-row"><span class="mapping-from">success</span><span class="mapping-arrow">→</span><span class="mapping-to">成功</span></div>
+    <div class="mapping-row"><span class="mapping-from">error</span><span class="mapping-arrow">→</span><span class="mapping-to">错误</span></div>
+    <div class="mapping-row"><span class="mapping-from">hint</span><span class="mapping-arrow">→</span><span class="mapping-to">提示</span></div>
+    <div class="mapping-row"><span class="mapping-from">*（未知）</span><span class="mapping-arrow">→</span><span class="mapping-to">{原键名}</span></div>
+  </div>
+</div>
+
+</body>
+</html>

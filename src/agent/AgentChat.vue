@@ -1,0 +1,996 @@
+<template>
+  <div
+    class="agent-panel agent-chat"
+    :class="{ minimized: isMinimized, pinned: isPinned }"
+    :style="panelStyle"
+    @mousedown="onPanelMouseDown"
+  >
+    <div class="chat-header" @mousedown.left="onDragStart">
+      <span class="header-title" :style="{ fontFamily: fontFamily }" @click.stop="sessionDrawerOpen = !sessionDrawerOpen"><WsIcon name="profile" size="sm" /> AI 助手</span>
+      <div class="context-bar" :title="`上下文窗口: ${contextUsage.used.toLocaleString()} / ${contextUsage.total.toLocaleString()} tokens (${Math.round(contextUsage.pct)}%)`">
+        <div class="context-bar-fill" :style="{ width: contextUsage.pct + '%', background: profile.accentColor }" :class="{ warn: contextUsage.pct > 70, danger: contextUsage.pct > 90 }"></div>
+        <span class="context-bar-text">{{ Math.round(contextUsage.pct) }}%</span>
+      </div>
+      <div class="header-actions">
+        <button class="header-btn" :class="{ active: isPinned }" @click.stop="togglePin" :title="isPinned ? '聚焦模式' : '穿透模式'"><WsIcon :name="isPinned ? 'pin' : 'unlock'" size="xs" /></button>
+        <button class="header-btn" @click.stop="toggleMinimize" title="最小化"><WsIcon :name="isMinimized ? 'arrow-up' : 'chevron-down'" size="xs" /></button>
+        <button class="header-btn" @click.stop="hide" title="关闭"><WsIcon name="close" size="xs" /></button>
+      </div>
+    </div>
+
+    <template v-if="!isMinimized">
+      <AgentSessionDrawer
+        :visible="sessionDrawerOpen"
+        :sessions="sessions"
+        :current-session-id="currentSessionId"
+        @close="sessionDrawerOpen = false"
+        @select="onDrawerSelect"
+        @delete="onDrawerDelete"
+        @new-session="onDrawerNewSession"
+      />
+      <AgentMessageList
+        ref="messageListRef"
+        :messages="messages"
+        :is-streaming="isStreaming"
+        :last-assistant-has-content="lastAssistantHasContent"
+        :last-assistant-has-thinking="lastAssistantHasThinking"
+        :a2ui-surfaces="a2uiSurfaces"
+        :resolve-data-binding="resolveDataBinding"
+        @a2ui-action="onA2UIAction"
+        @copy="copyMessage"
+        @retry="retryMessage"
+        @block-action="onBlockAction"
+      />
+
+      <div v-if="subAgentList.length > 0" class="sub-agent-section">
+        <div class="sub-agent-toggle" role="button" tabindex="0" @click="subAgentExpanded = !subAgentExpanded" @keydown.enter="subAgentExpanded = !subAgentExpanded" @keydown.space.prevent="subAgentExpanded = !subAgentExpanded">
+          <span class="toggle-icon"><WsIcon :name="subAgentExpanded ? 'chevron-down' : 'chevron-right'" size="xs" /></span>
+          <span class="toggle-label">子 Agent ({{ subAgentList.length }})</span>
+          <span v-if="activeSubAgentCount > 0" class="active-badge">{{ activeSubAgentCount }} 运行中</span>
+        </div>
+        <Transition name="ws-slide-down">
+          <div v-if="subAgentExpanded" class="sub-agent-panels">
+            <SubAgentPanel
+              v-for="agent in subAgentList"
+              :key="agent.id"
+              :agent="agent"
+              @toggle-visible="toggleSubAgentVisible"
+              @remove="removeSubAgent"
+            />
+          </div>
+        </Transition>
+      </div>
+
+      <div class="resize-handle" @mousedown.left="onResizeStart"></div>
+    </template>
+  </div>
+
+  <AgentInputBar
+    ref="inputBarRef"
+    :is-streaming="isStreaming"
+    :input-bar-width="inputBarWidth"
+    :filtered-commands="filteredCommands"
+    :slash-mode="slashMode"
+    :slash-index="slashIndex"
+    :current-model-id="currentModelId"
+    :has-vision-sub-agent="hasVisionSubAgent"
+    @send="onInputSend"
+    @abort="onAbort"
+    @toggle-menu="onToggleSettings"
+    @select-slash="selectSlashCommand"
+    @slash-up="slashUp"
+    @slash-down="slashDown"
+  />
+
+  <AgentSettingsPanel
+    :visible="settingsOpen"
+    :position="settingsPos"
+    :dragged="settingsDragged"
+    :current-provider="currentProvider"
+    :current-model-id="currentModelId"
+    :temperature="temperature"
+    :max-tokens="maxTokens"
+    :context-length="contextLength"
+    :max-context-length="maxContextLengthForModel"
+    :max-output-tokens="maxOutputTokensForModel"
+    :max-temperature="maxTemperatureForModel"
+    :persona-preset="personaPreset"
+    :thinking-level="thinkingLevel"
+    :thinking-levels="THINKING_LEVELS"
+    :chat-mode="activeChatMode"
+    :chat-modes="CHAT_MODES"
+    :locked-chat-mode="lockedChatMode"
+    :total-usage="totalUsage"
+    :calculated-cost="calculatedCost"
+    :cumulative-usage="cumulativeUsage"
+    :cache-hit-rate="cacheHitRate"
+    :search-engine="searchEngine"
+    :search-api-key="searchApiKey"
+    :skills="skills"
+    :mcp-connections="mcpConnections"
+    @close="closeSettings"
+    @dragstart="onSettingsDragStart"
+    @update:temperature="onTemperatureChange"
+    @update:max-tokens="onMaxTokensChange"
+    @update:context-length="(v: number) => { contextLength = v; saveAgentSettings() }"
+    @update:persona-preset="onPersonaChange"
+    @model-change="onModelChange"
+    @thinking-level-change="onThinkingLevelChange"
+    @chat-mode-change="onChatModeChange"
+    @search-engine-change="onSearchEngineChange"
+    @search-apikey-change="onSearchApiKeyChange"
+    @toggle-skill="onToggleSkill"
+    @toggle-mcp="onToggleMcp"
+    @add-mcp="onAddMcp"
+    @remove-mcp="onRemoveMcp"
+    @reset-position="resetPosition"
+    @open-terminal="openTerminal"
+    @api-key-change="onApiKeyChange"
+    @provider-change="onProviderChange"
+  />
+
+  <TerminalPanel
+    :visible="terminalVisible"
+    :pty-id="ptyId"
+    :log-bridge="logBridge"
+    @close="closeTerminal"
+    @pty-input="writePtyInput"
+    @pty-resize="resizePty"
+  />
+</template>
+
+<script setup lang="ts">
+import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
+import { useAgent } from './composables/useAgent'
+import type { ChatMode } from './composables/useAgent'
+import { useAgentCommands } from './composables/useAgentCommands'
+import { usePanelDrag, usePanelResize } from './composables/usePanelDrag'
+import type { AgentCommand } from './composables/useAgentCommands'
+import type { ImageAttachment, FileAttachment, SkillMeta, ThinkingLevel, MCPConnectionConfig } from '@agent/index'
+import WsIcon from '../ui/WsIcon.vue'
+import { useFileStore } from '@worldsmith/entity-core'
+import { useSettingsStore } from '../stores/settingsStore'
+import { getAllSkills, toggleSkill, storeApiKey, loadApiKey, removeApiKey, hasApiKey } from '@agent/index'
+import { useMcpConnections } from './composables/useMcpConnections'
+import { getModelInfo, calculateCost, getThinkingLevels, modelSupportsVision, getVisionModels } from './modelRegistry'
+import { storeImages as storeImagesToBackend } from '@agent/index'
+import AgentMessageList from './AgentMessageList.vue'
+import AgentInputBar from './AgentInputBar.vue'
+import AgentSettingsPanel from './AgentSettingsPanel.vue'
+import AgentSessionDrawer from './AgentSessionDrawer.vue'
+import TerminalPanel from './TerminalPanel.vue'
+import SubAgentPanel from './SubAgentPanel.vue'
+import { listSessions, deleteSession } from '@agent/index'
+import { useOrchestrator } from './composables/useOrchestrator'
+import { usePersonaFont } from '../space/composables/usePersonaFont'
+const { fontFamily, profile } = usePersonaFont()
+
+const {
+  messages, isStreaming, sendMessage, steer, sendBlockAction, abort, hide, newSession,
+  isPinned, totalUsage, lastRequestUsage, cumulativeUsage, cacheHitRate, updateThinkingLevel, updateModel, refreshSearchConfig,
+  a2uiSurfaces, resolveDataBinding, switchSession, currentSessionId, isInitialized,
+  terminalVisible, ptyId, logBridge, openTerminal, closeTerminal, writePtyInput, resizePty,
+  ensureInitialized, createSubBackend,
+  activeChatMode, lockedChatMode, setChatMode,
+} = useAgent()
+const settingsStore = useSettingsStore()
+const { connections: mcpConnections, addConnection, removeConnection, toggleConnection, ensureLoaded: ensureMcpLoaded } = useMcpConnections()
+const { commands, settingsOpen, closeSettings, openSettings } = useAgentCommands()
+const { subAgents, toggleSubAgentVisible: toggleSubAgentVisible, removeSubAgent: removeSubAgent, registerExecutor } = useOrchestrator()
+
+const subAgentList = computed(() => Array.from(subAgents.values()))
+const activeSubAgentCount = computed(() => subAgentList.value.filter(a => a.status === 'running').length)
+const subAgentExpanded = ref(true)
+
+const messageListRef = ref<InstanceType<typeof AgentMessageList>>()
+const inputBarRef = ref<InstanceType<typeof AgentInputBar>>()
+
+const isMinimized = ref(false)
+const sessionDrawerOpen = ref(false)
+const sessions = ref<Array<{ id: string; name: string; updatedAt: string; modelId?: string }>>([])
+const panelX = ref((window.innerWidth - 420) / 2)
+const panelY = ref((window.innerHeight - 500 - 80) / 2)
+const panelW = ref(420)
+const panelH = ref(500)
+const INPUT_BAR_HEIGHT = 80
+
+const currentProvider = ref(settingsStore.aiCloudProvider)
+const currentModelId = ref(settingsStore.aiCloudModel)
+
+const hasVisionSubAgent = computed(() => {
+  const vProvider = settingsStore.visionSubAgentProvider
+  const vModel = settingsStore.visionSubAgentModel
+  if (vProvider && vModel) return true
+  return getVisionModels().length > 0
+})
+
+function clampPanelY(y: number) { return Math.max(0, Math.min(window.innerHeight - INPUT_BAR_HEIGHT - 36, y)) }
+function clampPanelX(x: number) { return x }
+function maxPanelH() { return window.innerHeight - panelY.value - INPUT_BAR_HEIGHT - 36 }
+
+const { onDragStart } = usePanelDrag({
+  x: panelX, y: panelY, clampX: clampPanelX, clampY: clampPanelY, onDragEnd: savePanelState,
+  excludeSelector: '.header-actions,.header-title'
+})
+const { onResizeStart } = usePanelResize({
+  w: panelW, h: panelH, minW: 320, maxW: 800, minH: 200, maxH: maxPanelH, onResizeEnd: savePanelState
+})
+
+const settingsPos = ref({ x: 0, y: 0 })
+const settingsDragged = ref(false)
+const { onDragStart: onSettingsDragStart } = usePanelDrag({
+  x: computed({ get: () => settingsPos.value.x, set: v => settingsPos.value = { ...settingsPos.value, x: v } }),
+  y: computed({ get: () => settingsPos.value.y, set: v => settingsPos.value = { ...settingsPos.value, y: v } }),
+  onDragEnd: () => { settingsDragged.value = true },
+  excludeSelector: '.settings-body,.menu-close-btn'
+})
+
+const temperature = ref(70)
+const maxTokens = ref(8192)
+const contextLength = ref(128000)
+const personaPreset = ref('default')
+const thinkingLevel = ref<ThinkingLevel>('off')
+const searchEngine = ref('tavily')
+const searchApiKey = ref('')
+const skills = ref<SkillMeta[]>(getAllSkills())
+const inputBarWidth = ref(520)
+const slashMode = ref(false)
+const slashIndex = ref(0)
+
+const THINKING_LEVELS = computed(() => getThinkingLevels(currentModelId.value))
+
+const CHAT_MODES = [
+  { value: 'normal', icon: 'chat', label: '快问快答', desc: '不思考，不调用工具，直接回答' },
+  { value: 'deep', icon: 'brain', label: '深度思考', desc: '深度推理 + 工具验证 + 结构化推理链' },
+  { value: 'explore', icon: 'search', label: '知识探索', desc: '知识库 → 联网搜索 → 项目数据 → 模型知识' },
+]
+
+function onChatModeChange(mode: string): void {
+  if (lockedChatMode.value !== null) return
+  setChatMode(mode as ChatMode)
+}
+
+const maxOutputTokensForModel = computed(() => {
+  const info = getModelInfo(currentModelId.value)
+  if (info) return info.maxOutputTokens
+  const isCustom = ['openai-compatible', 'anthropic-compatible'].includes(currentProvider.value)
+  return isCustom ? 65536 : 8192
+})
+const maxContextLengthForModel = computed(() => {
+  const info = getModelInfo(currentModelId.value)
+  if (info) return info.contextLength
+  const isCustom = ['openai-compatible', 'anthropic-compatible'].includes(currentProvider.value)
+  return isCustom ? 1048576 : 128000
+})
+const maxTemperatureForModel = computed(() => {
+  const provider = currentProvider.value
+  return ['anthropic', 'zhipu', 'minimax'].includes(provider) ? 100 : 200
+})
+
+const panelStyle = computed(() => ({
+  left: `${panelX.value}px`,
+  top: `${panelY.value}px`,
+  width: `${panelW.value}px`,
+  height: isMinimized.value ? 'auto' : `${panelH.value}px`,
+}))
+
+const lastAssistantHasContent = computed(() => {
+  const msgs = messages.value
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].role === 'assistant') return (msgs[i].content || '').length > 0
+  }
+  return false
+})
+
+const lastAssistantHasThinking = computed(() => {
+  const msgs = messages.value
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].role === 'assistant') return (msgs[i].thinking || '').length > 0
+  }
+  return false
+})
+
+const filteredCommands = computed(() => {
+  return commands.value
+})
+
+const calculatedCost = computed(() => {
+  const breakdown = calculateCost(
+    currentModelId.value,
+    totalUsage.value.inputTokens,
+    totalUsage.value.outputTokens,
+    totalUsage.value.cacheReadTokens,
+    totalUsage.value.cacheWriteTokens,
+  )
+  return breakdown
+})
+
+const contextUsage = computed(() => {
+  const total = contextLength.value
+  const used = lastRequestUsage.value.inputTokens + lastRequestUsage.value.cacheReadTokens + lastRequestUsage.value.cacheWriteTokens
+  const pct = total > 0 ? Math.min(100, (used / total) * 100) : 0
+  return { used, total, pct }
+})
+
+function onA2UIAction(surfaceId: string, action: { name: string; data?: any }): void {
+  const dataStr = action.data ? JSON.stringify(action.data) : ''
+  const steerText = dataStr
+    ? `[A2UI Action] surface=${surfaceId} action=${action.name} data=${dataStr}`
+    : `[A2UI Action] surface=${surfaceId} action=${action.name}`
+  sendBlockAction(steerText, action.name)
+}
+
+function onBlockAction(event: { blockId: string; action: string; data?: Record<string, unknown> }): void {
+  const dataStr = event.data ? JSON.stringify(event.data) : ''
+  const steerText = dataStr
+    ? `[Block Action] block=${event.blockId} action=${event.action} data=${dataStr}`
+    : `[Block Action] block=${event.blockId} action=${event.action}`
+  const displayText = formatBlockActionDisplay(event)
+  sendBlockAction(steerText, displayText)
+}
+
+function formatBlockActionDisplay(event: { blockId: string; action: string; data?: Record<string, unknown> }): string {
+  if (event.action === 'choice_select' && event.data) {
+    const mode = event.data.mode as string
+    if (mode === 'multi' && event.data.labels) {
+      return `选择了: ${(event.data.labels as string[]).join(', ')}`
+    }
+    if (mode === 'multi' && event.data.values) {
+      return `选择了: ${(event.data.values as string[]).join(', ')}`
+    }
+    const displayVal = (event.data.label as string) || (event.data.value as string) || ''
+    return `选择了: ${displayVal}`
+  }
+  return event.action
+}
+
+function copyMessage(msg: { content?: string }): void {
+  navigator.clipboard.writeText(msg.content || '').catch(() => {})
+}
+
+async function retryMessage(msg: { content?: string }): Promise<void> {
+  if (isStreaming.value) return
+  await sendMessage(msg.content || '')
+  await nextTick()
+  messageListRef.value?.scrollToBottom()
+}
+
+async function onInputSend(text: string, rawAttachments: any[]): Promise<void> {
+  if (isStreaming.value) return
+  const images: ImageAttachment[] = []
+  const files: FileAttachment[] = []
+  const fileStore = useFileStore()
+
+  for (const att of rawAttachments) {
+    if (att.type === 'image') {
+      images.push({ data: att.data, mimeType: att.mimeType })
+    } else if (att.textContent) {
+      const path = `/uploads/${att.name}`
+      const content = att.textContent
+      const size = new Blob([content]).size
+      await fileStore.add(att.name, path, att.mimeType || 'text/plain', size, content)
+      files.push({ name: att.name, content })
+    }
+  }
+
+  if (images.length > 0 && !modelSupportsVision(currentModelId.value)) {
+    const imageId = storeImagesToBackend(images.map(img => ({ data: img.data, mimeType: img.mimeType })))
+    const userText = text || '请分析这些图片'
+    const visionHint = `用户发送了 ${images.length} 张图片（图片批次 ID: ${imageId}，30分钟内有效）。请使用 vision_analyze 工具来查看和分析这些图片，然后根据分析结果回答用户的问题。\n\n用户消息：${userText}`
+    await sendMessage(visionHint, images, files.length ? files : undefined)
+    await nextTick()
+    messageListRef.value?.scrollToBottom()
+    return
+  }
+
+  await sendMessage(text || (images.length ? '请描述这张图片' : ''), images.length ? images : undefined, files.length ? files : undefined, activeChatMode.value)
+  await nextTick()
+  messageListRef.value?.scrollToBottom()
+}
+
+async function onAbort(): Promise<void> { await abort() }
+
+function selectSlashCommand(cmd: AgentCommand): void {
+  slashMode.value = false
+  cmd.handler()
+}
+
+function slashUp(): void {
+  if (!slashMode.value) return
+  slashIndex.value = Math.max(0, slashIndex.value - 1)
+}
+
+function slashDown(): void {
+  if (!slashMode.value) return
+  slashIndex.value = Math.min(filteredCommands.value.length - 1, slashIndex.value + 1)
+}
+
+function togglePin(): void { isPinned.value = !isPinned.value }
+
+function toggleMinimize(): void {
+  const wasMinimized = isMinimized.value
+  isMinimized.value = !isMinimized.value
+
+  if (wasMinimized && !isMinimized.value) {
+    const midY = window.innerHeight / 2
+    if (panelY.value > midY) {
+      const newTop = panelY.value - panelH.value
+      panelY.value = clampPanelY(Math.max(0, newTop))
+    }
+  }
+
+  if (!isMinimized.value) {
+    panelY.value = clampPanelY(panelY.value)
+  }
+}
+
+function onPanelMouseDown(e: MouseEvent): void {
+  const target = e.target as HTMLElement
+  if (target.closest('.chat-header') || target.closest('.resize-handle')) return
+}
+
+function onTemperatureChange(val: number) {
+  temperature.value = val
+  updateModel(currentProvider.value, currentModelId.value, undefined, undefined, val, maxTokens.value, contextLength.value)
+  saveAgentSettings()
+}
+function onMaxTokensChange(val: number) {
+  maxTokens.value = val
+  updateModel(currentProvider.value, currentModelId.value, undefined, undefined, temperature.value, val, contextLength.value)
+  saveAgentSettings()
+}
+function onPersonaChange(val: string) { personaPreset.value = val; saveAgentSettings() }
+
+async function onModelChange(provider: string, modelId: string): Promise<void> {
+  currentProvider.value = provider
+  currentModelId.value = modelId
+  settingsStore.aiCloudProvider = provider as any
+  settingsStore.aiCloudModel = modelId
+  if (settingsStore.aiProviderMode !== 'cloud') {
+    settingsStore.aiProviderMode = 'cloud'
+  }
+  const info = getModelInfo(modelId)
+  const isCustom = ['openai-compatible', 'anthropic-compatible'].includes(provider)
+  let contextWindow = isCustom ? 1048576 : 128000
+  let maxOut = isCustom ? 65536 : 8192
+  if (info) {
+    contextWindow = info.contextLength
+    maxOut = info.maxOutputTokens
+    contextLength.value = Math.min(contextLength.value, info.contextLength)
+    maxTokens.value = Math.min(maxTokens.value, info.maxOutputTokens)
+    const maxTemp = ['anthropic', 'zhipu', 'minimax'].includes(provider) ? 100 : 200
+    temperature.value = Math.min(temperature.value, maxTemp)
+    const validLevels = getThinkingLevels(modelId)
+    if (!validLevels.some(l => l.value === thinkingLevel.value)) {
+      thinkingLevel.value = 'off'
+      updateThinkingLevel('off')
+      try { localStorage.setItem('agent_thinking_level', 'off') } catch {}
+    }
+  }
+  const apiKey = await loadApiKey(provider)
+  if (!apiKey) {
+    const { toastWarn } = await import('../composables/useToast')
+    const providerNames: Record<string, string> = {
+      anthropic: 'Anthropic', openai: 'OpenAI', google: 'Google',
+      deepseek: 'DeepSeek', groq: 'Groq', openrouter: 'OpenRouter',
+      zhipu: '智谱', qwen: '通义千问', minimax: 'MiniMax', kimi: 'Kimi',
+    }
+    toastWarn(`${providerNames[provider] || provider} 尚未配置 API Key，请在供应商面板中填入`)
+  }
+  await updateModel(provider, modelId, undefined, apiKey || undefined, temperature.value, maxTokens.value, contextWindow, maxOut)
+  try {
+    localStorage.setItem('agent_current_model', JSON.stringify({ provider, modelId, contextLength: contextLength.value }))
+  } catch {}
+  saveAgentSettings()
+}
+
+function onThinkingLevelChange(level: string): void {
+  thinkingLevel.value = level as ThinkingLevel
+  updateThinkingLevel(level as ThinkingLevel)
+  try {
+    localStorage.setItem('agent_thinking_level', level)
+  } catch {}
+}
+
+async function onSearchEngineChange(engine: string): Promise<void> {
+  const oldEngine = searchEngine.value
+
+  if (searchApiKey.value) {
+    await storeApiKey('search_' + oldEngine, searchApiKey.value)
+  } else {
+    removeApiKey('search_' + oldEngine)
+  }
+
+  searchEngine.value = engine
+
+  const newKey = await loadApiKey('search_' + engine)
+  searchApiKey.value = newKey || ''
+
+  try {
+    localStorage.setItem('agent_search_config', JSON.stringify({ engine }))
+  } catch {}
+
+  await refreshSearchConfig()
+}
+
+function onSearchApiKeyChange(key: string): void {
+  searchApiKey.value = key
+  saveSearchConfig()
+}
+
+async function onApiKeyChange(provider: string, apiKey: string): Promise<void> {
+  if (provider === 'custom') {
+    if (settingsStore.aiProviderMode === 'custom') {
+      await updateModel(
+        settingsStore.aiCustomType,
+        settingsStore.aiCustomModel,
+        settingsStore.aiCustomBaseUrl,
+        apiKey || undefined,
+        temperature.value,
+        maxTokens.value,
+        contextLength.value,
+      )
+    }
+  } else {
+    if (settingsStore.aiProviderMode === 'cloud' && settingsStore.aiCloudProvider === provider) {
+      await updateModel(
+        provider,
+        currentModelId.value,
+        undefined,
+        apiKey || undefined,
+        temperature.value,
+        maxTokens.value,
+      )
+    }
+  }
+}
+
+async function onProviderChange(provider: string, modelId: string): Promise<void> {
+  await onModelChange(provider, modelId)
+}
+
+function onToggleSkill(skillId: string): void {
+  toggleSkill(skillId)
+  skills.value = getAllSkills()
+}
+
+async function onAddMcp(config: MCPConnectionConfig): Promise<void> {
+  try {
+    await addConnection(config)
+    const conn = mcpConnections.value.find(c => c.id === config.id)
+    if (conn?.status === 'error') {
+      const { toastWarn } = await import('../composables/useToast')
+      toastWarn(`MCP 连接失败: ${conn.error || '未知错误'}`)
+    }
+  } catch (err) {
+    const { toastWarn } = await import('../composables/useToast')
+    toastWarn(`MCP 添加失败: ${err instanceof Error ? err.message : String(err)}`)
+  }
+}
+
+async function onToggleMcp(serverId: string): Promise<void> {
+  await toggleConnection(serverId)
+}
+
+async function onRemoveMcp(serverId: string): Promise<void> {
+  await removeConnection(serverId)
+}
+
+async function saveSearchConfig(): Promise<void> {
+  try {
+    localStorage.setItem('agent_search_config', JSON.stringify({
+      engine: searchEngine.value,
+    }))
+  } catch {}
+  if (searchApiKey.value) {
+    await storeApiKey('search_' + searchEngine.value, searchApiKey.value)
+  } else {
+    removeApiKey('search_' + searchEngine.value)
+  }
+  await refreshSearchConfig()
+}
+
+async function loadSearchConfig(): Promise<void> {
+  try {
+    const raw = localStorage.getItem('agent_search_config')
+    if (raw) {
+      const cfg = JSON.parse(raw)
+      searchEngine.value = cfg.engine || 'tavily'
+    }
+    const key = await loadApiKey('search_' + searchEngine.value)
+    searchApiKey.value = key || ''
+  } catch {}
+}
+
+function loadThinkingLevel(): void {
+  try {
+    const saved = localStorage.getItem('agent_thinking_level') as ThinkingLevel | null
+    if (saved && getThinkingLevels(currentModelId.value).some(l => l.value === saved)) {
+      thinkingLevel.value = saved
+      updateThinkingLevel(saved)
+    }
+  } catch {}
+}
+
+function saveAgentSettings(): void {
+  try {
+    localStorage.setItem('agent_settings', JSON.stringify({
+      temperature: temperature.value,
+      maxTokens: maxTokens.value,
+      contextLength: contextLength.value,
+      personaPreset: personaPreset.value,
+    }))
+  } catch {}
+}
+
+function loadAgentSettings(): void {
+  try {
+    const raw = localStorage.getItem('agent_settings')
+    if (raw) {
+      const s = JSON.parse(raw)
+      if (s.temperature !== undefined) temperature.value = s.temperature
+      if (s.maxTokens !== undefined) maxTokens.value = s.maxTokens
+      if (s.contextLength !== undefined) contextLength.value = s.contextLength
+      if (s.personaPreset !== undefined) personaPreset.value = s.personaPreset
+    }
+  } catch {}
+}
+
+async function loadCurrentModel(): Promise<void> {
+  try {
+    const raw = localStorage.getItem('agent_current_model')
+    if (raw) {
+      const cfg = JSON.parse(raw)
+      currentProvider.value = cfg.provider || 'deepseek'
+      currentModelId.value = cfg.modelId || 'deepseek-chat'
+      if (cfg.contextLength) contextLength.value = cfg.contextLength
+    }
+    const info = getModelInfo(currentModelId.value)
+    if (info && !localStorage.getItem('agent_current_model')) {
+      contextLength.value = info.contextLength
+    }
+  } catch {}
+}
+
+function savePanelState(): void {
+  try {
+    localStorage.setItem('agent_panel', JSON.stringify({
+      x: panelX.value, y: panelY.value, w: panelW.value, h: panelH.value,
+    }))
+  } catch {}
+}
+
+function loadPanelState(): void {
+  try {
+    const raw = localStorage.getItem('agent_panel')
+    if (raw) {
+      const s = JSON.parse(raw)
+      panelX.value = s.x ?? window.innerWidth - 440
+      panelY.value = s.y ?? 60
+      panelW.value = s.w ?? 420
+      panelH.value = s.h ?? 500
+    }
+  } catch {}
+}
+
+function resetPosition(): void {
+  panelW.value = 420
+  panelH.value = 500
+  panelX.value = (window.innerWidth - panelW.value) / 2
+  panelY.value = (window.innerHeight - panelH.value - INPUT_BAR_HEIGHT) / 2
+  isMinimized.value = false
+  savePanelState()
+}
+
+function updateSettingsPosition(): void {
+  const bar = inputBarRef.value
+  if (!bar) return
+  const btn = bar.menuBtnRef
+  if (!btn) return
+  const rect = btn.getBoundingClientRect()
+  settingsPos.value = {
+    x: rect.left,
+    y: window.innerHeight - rect.top + 8,
+  }
+  settingsDragged.value = false
+}
+
+function onToggleSettings(): void {
+  if (settingsOpen.value) {
+    closeSettings()
+  } else {
+    openSettings()
+    nextTick(updateSettingsPosition)
+  }
+}
+
+async function loadDrawerSessions(): Promise<void> {
+  try {
+    sessions.value = await listSessions()
+  } catch {}
+}
+
+async function onDrawerSelect(sessionId: string): Promise<void> {
+  sessionDrawerOpen.value = false
+  await switchSession(sessionId)
+}
+
+async function onDrawerDelete(sessionId: string): Promise<void> {
+  try {
+    const isCurrent = sessionId === currentSessionId.value
+    await deleteSession(sessionId)
+    await loadDrawerSessions()
+    if (isCurrent) {
+      await newSession()
+      await loadDrawerSessions()
+    }
+  } catch {}
+}
+
+async function onDrawerNewSession(): Promise<void> {
+  sessionDrawerOpen.value = false
+  await newSession()
+  await loadDrawerSessions()
+}
+
+watch(settingsOpen, (open) => { if (open) nextTick(updateSettingsPosition) })
+watch(sessionDrawerOpen, (open) => { if (open) loadDrawerSessions() })
+watch(() => isInitialized.value, async (v) => {
+  if (v) await ensureMcpLoaded()
+})
+
+function onSessionTitleUpdated(): void {
+  loadDrawerSessions()
+}
+
+onMounted(async () => {
+  loadPanelState()
+  await loadSearchConfig()
+  loadThinkingLevel()
+  await loadCurrentModel()
+  loadAgentSettings()
+  window.addEventListener('ws-session-title-updated', onSessionTitleUpdated)
+
+  registerExecutor(async (task) => {
+    const ok = await ensureInitialized()
+    if (!ok) {
+      return { success: false, output: '主 Agent 未初始化，无法创建子 Agent', duration: 0 }
+    }
+
+    try {
+      let visionProviderConfig: any = undefined
+      if (task.images && task.images.length > 0 && !modelSupportsVision(currentModelId.value)) {
+        const vProvider = settingsStore.visionSubAgentProvider
+        const vModel = settingsStore.visionSubAgentModel
+        let provider = vProvider
+        let modelId = vModel
+        if (!provider || !modelId) {
+          const visionModels = getVisionModels()
+          if (visionModels.length > 0) {
+            provider = visionModels[0].provider
+            modelId = visionModels[0].id
+          }
+        }
+        if (provider && modelId) {
+          const apiKey = await loadApiKey(provider)
+          if (apiKey) {
+            const info = getModelInfo(modelId)
+            visionProviderConfig = {
+              mode: 'cloud',
+              provider,
+              modelId,
+              apiKey,
+              supportsVision: true,
+              contextWindow: info?.contextLength,
+              maxTokens: info ? Math.min(info.maxOutputTokens, 4096) : 4096,
+            }
+          }
+        }
+      }
+
+      const subBackend = await createSubBackend(task.skillIds, visionProviderConfig)
+
+      const startTime = Date.now()
+      const promptOptions: any = {}
+      if (task.images && task.images.length > 0) {
+        promptOptions.images = task.images
+      }
+      const result = await subBackend.prompt(task.prompt, promptOptions)
+      const duration = Date.now() - startTime
+
+      subBackend.dispose()
+
+      return {
+        success: true,
+        output: typeof result === 'string' ? result : JSON.stringify(result),
+        duration,
+      }
+    } catch (err) {
+      return {
+        success: false,
+        output: err instanceof Error ? err.message : String(err),
+        duration: 0,
+      }
+    }
+  })
+})
+
+onUnmounted(() => {
+  window.removeEventListener('ws-session-title-updated', onSessionTitleUpdated)
+})
+</script>
+
+<style scoped>
+.agent-chat {
+  position: fixed;
+  z-index: 9998;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--agent-radius, 14px);
+  background: transparent;
+  border: none;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 2px 12px rgba(0,0,0,0.2);
+  overflow: clip;
+  transition: box-shadow var(--agent-transition, 0.2s);
+  pointer-events: auto;
+}
+
+.agent-chat:hover {
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.1), 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: grab;
+  user-select: none;
+  border-bottom: 1px solid var(--agent-border, rgba(58, 58, 106, 0.3));
+  background: var(--agent-bg, rgba(26, 26, 46, 0.75));
+  backdrop-filter: blur(var(--agent-blur, 16px));
+  flex-shrink: 0;
+}
+
+.chat-header:active { cursor: grabbing }
+
+.header-title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--agent-text, #e0e0e0);
+  font-family: var(--agent-font, sans-serif);
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s;
+}
+
+.header-title:hover {
+  color: var(--agent-primary, #6c5ce7);
+}
+
+.header-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.header-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  padding: 2px 6px;
+  border-radius: 6px;
+  color: var(--agent-text-secondary, #888);
+  transition: background 0.15s, color 0.15s;
+}
+
+.header-btn:hover {
+  background: var(--agent-hover-bg, rgba(255,255,255,0.06));
+  color: var(--agent-text, #e0e0e0);
+}
+
+.header-btn.active {
+  color: var(--agent-primary, #6c5ce7);
+}
+
+.resize-handle {
+  position: absolute;
+  right: 0; bottom: 0;
+  width: 16px; height: 16px;
+  cursor: nwse-resize;
+  opacity: 0.3;
+  z-index: 1;
+}
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  right: 3px; bottom: 3px;
+  width: 8px; height: 8px;
+  border-right: 2px solid var(--agent-text-secondary, #888);
+  border-bottom: 2px solid var(--agent-text-secondary, #888);
+}
+
+.minimized .chat-header { border-bottom: none }
+
+.context-bar {
+  flex: 1;
+  max-width: 120px;
+  height: 4px;
+  background: var(--agent-bg-tertiary, rgba(255,255,255,0.08));
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+  align-self: center;
+  margin: 0 8px;
+}
+.context-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--agent-primary, #6c5ce7);
+  transition: width 0.3s ease, background 0.3s ease;
+}
+.context-bar-fill.warn {
+  background: var(--color-warning);
+}
+.context-bar-fill.danger {
+  background: var(--color-danger);
+}
+.context-bar-text {
+  position: absolute;
+  top: -14px;
+  right: 0;
+  font-size: var(--text-micro-font-size);
+  color: var(--agent-text-tertiary, #888);
+  line-height: 1;
+}
+
+.sub-agent-section {
+  flex-shrink: 0;
+  border-top: 1px solid var(--agent-border, rgba(58, 58, 106, 0.3));
+  background: var(--agent-bg, rgba(26, 26, 46, 0.75));
+}
+
+.sub-agent-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  user-select: none;
+  font-size: var(--font-size-sm);
+  color: var(--agent-text-secondary, #888);
+  transition: color 0.15s, background 0.15s;
+}
+
+.sub-agent-toggle:hover {
+  color: var(--agent-text, #e0e0e0);
+  background: var(--agent-hover-bg, rgba(255,255,255,0.04));
+}
+
+.toggle-icon {
+  font-size: var(--font-size-xs);
+  transition: transform 0.2s;
+}
+
+.toggle-label {
+  font-weight: var(--font-weight-medium);
+  font-family: var(--agent-font, sans-serif);
+}
+
+.active-badge {
+  font-size: var(--font-size-xs);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(99, 102, 241, 0.15);
+  color: #6366f1;
+  animation: ws-pulse 1.5s infinite;
+}
+
+.sub-agent-panels {
+  max-height: 300px;
+  overflow-y: auto;
+  border-top: 1px solid var(--agent-border, rgba(58, 58, 106, 0.2));
+}
+
+
+</style>

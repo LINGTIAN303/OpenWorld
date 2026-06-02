@@ -1,0 +1,96 @@
+<h2>渲染引擎选择</h2>
+<p class="subtitle">这是整个重构的地基决策，影响所有后续设计</p>
+
+<div class="section">
+<h3>当前状态</h3>
+<p style="color:#aaa;margin-bottom:16px;">现有思维导图使用 <code>Cytoscape.js</code> 渲染，它是一个成熟的图可视化库，但在自定义交互（嵌套图、分组框、涂鸦层）方面存在局限。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="engine-cytoscape" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>继续 Cytoscape.js — 增量扩展</h3>
+      <p>在现有 Cytoscape 基础上扩展，利用其复合节点(compound nodes)实现分组框，用事件系统实现嵌套导航。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="engine-canvas" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Canvas 2D 自研引擎 — Project Graph 同款路线</h3>
+      <p>完全自研 Canvas 2D 渲染层，像 Graphif 一样获得完全控制权，但开发量最大。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="engine-hybrid" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>混合方案 — Cytoscape 核心 + Canvas 叠加层</h3>
+      <p>保留 Cytoscape 处理图布局和节点渲染，在其上叠加 Canvas 层处理涂鸦/批注，用 Vue 组件实现分组框和详情侧栏。</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px;">
+<div class="pros-cons">
+  <div class="pros">
+    <h4>方案 A: 继续Cytoscape</h4>
+    <ul>
+      <li>改动最小，现有代码可复用</li>
+      <li>复合节点原生支持分组框</li>
+      <li>布局算法成熟</li>
+      <li>事件系统完善</li>
+    </ul>
+  </div>
+  <div class="cons">
+    <h4>方案 A 的局限</h4>
+    <ul>
+      <li>嵌套图需自行实现（Cytoscape 无原生支持）</li>
+      <li>涂鸦层无法在 Cytoscape 内实现</li>
+      <li>自定义渲染受限于 Cytoscape API</li>
+      <li>性能受 SVG/Canvas 切换影响</li>
+    </ul>
+  </div>
+</div>
+
+<div class="pros-cons" style="margin-top:12px;">
+  <div class="pros">
+    <h4>方案 B: Canvas 自研</h4>
+    <ul>
+      <li>完全控制渲染和交互</li>
+      <li>性能最优（Graphif 验证过）</li>
+      <li>嵌套图/涂鸦/分组框无限制</li>
+      <li>可实现任意视觉效果</li>
+    </ul>
+  </div>
+  <div class="cons">
+    <h4>方案 B 的代价</h4>
+    <ul>
+      <li>开发量极大（需自研布局算法）</li>
+      <li>需重写所有现有功能</li>
+      <li>文本渲染/交互需手动处理</li>
+      <li>无障碍访问难以实现</li>
+    </ul>
+  </div>
+</div>
+
+<div class="pros-cons" style="margin-top:12px;">
+  <div class="pros">
+    <h4>方案 C: 混合方案 (推荐)</h4>
+    <ul>
+      <li>保留 Cytoscape 的布局和图算法优势</li>
+      <li>Canvas 叠加层实现涂鸦/批注</li>
+      <li>Vue 组件实现复杂 UI（详情栏/分组框）</li>
+      <li>渐进式迁移，风险可控</li>
+      <li>嵌套图用路由+状态管理实现</li>
+    </ul>
+  </div>
+  <div class="cons">
+    <h4>方案 C 的挑战</h4>
+    <ul>
+      <li>多层渲染需要坐标同步</li>
+      <li>Cytoscape 与外部组件的交互桥接</li>
+      <li>分组框需要复合节点+CSS叠加</li>
+    </ul>
+  </div>
+</div>
+</div>

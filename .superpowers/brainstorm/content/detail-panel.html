@@ -1,0 +1,110 @@
+<h2>详情侧栏 — 节点信息面板</h2>
+<p class="subtitle">选中节点时展示完整信息，替代当前的简陋浮层面板</p>
+
+<div class="section">
+<h3>当前状态 vs 目标</h3>
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">当前 nodeInfoPanel</div>
+    <div class="mockup-body" style="font-size:0.85em;">
+      <div style="background:#222;border:1px solid #333;border-radius:8px;padding:12px;width:200px;">
+        <div style="font-weight:bold;margin-bottom:8px;">张三</div>
+        <div style="color:#999;font-size:0.85em;">类型：角色</div>
+        <div style="color:#999;font-size:0.85em;">标签：主角, 武士</div>
+        <div style="color:#999;font-size:0.85em;">描述：...</div>
+        <button style="position:absolute;top:4px;right:4px;background:none;border:none;color:#666;cursor:pointer;">✕</button>
+      </div>
+      <p style="color:#ef4444;font-size:0.8em;margin-top:12px;">❌ 信息有限，无法编辑</p>
+      <p style="color:#ef4444;font-size:0.8em;">❌ 遮挡画布，无法固定</p>
+      <p style="color:#ef4444;font-size:0.8em;">❌ 无关系列表</p>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">目标详情侧栏</div>
+    <div class="mockup-body" style="font-size:0.85em;">
+      <div style="display:flex;height:100%;">
+        <div style="flex:1;color:#666;font-size:0.8em;">← 画布区域 →</div>
+        <div style="width:220px;background:#1a1a2e;border-left:1px solid #333;border-radius:0 8px 8px 0;padding:12px;overflow-y:auto;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span style="font-weight:bold;">👤 张三</span>
+            <span style="color:#666;cursor:pointer;">✕</span>
+          </div>
+          <div style="font-size:0.8em;color:#999;margin-bottom:4px;">类型：角色</div>
+          <div style="font-size:0.8em;color:#999;margin-bottom:8px;">标签：主角 · 武士</div>
+          <div style="height:1px;background:#333;margin:8px 0;"></div>
+          <div style="font-size:0.75em;color:#6c5ce7;font-weight:bold;margin-bottom:4px;">关系 (5)</div>
+          <div style="font-size:0.75em;color:#aaa;margin-bottom:2px;">→ 李四 (师徒)</div>
+          <div style="font-size:0.75em;color:#aaa;margin-bottom:2px;">→ 暗影军团 (隶属)</div>
+          <div style="font-size:0.75em;color:#aaa;margin-bottom:2px;">→ 火焰剑 (持有)</div>
+          <div style="font-size:0.75em;color:#aaa;margin-bottom:2px;">→ 京都 (居住)</div>
+          <div style="font-size:0.75em;color:#aaa;margin-bottom:2px;">→ 暗杀事件 (参与)</div>
+          <div style="height:1px;background:#333;margin:8px 0;"></div>
+          <div style="font-size:0.75em;color:#999;">描述：来自东方的神秘武士...</div>
+          <div style="margin-top:8px;">
+            <button style="font-size:0.75em;padding:2px 8px;background:#6c5ce7;color:white;border:none;border-radius:4px;cursor:pointer;">编辑</button>
+            <button style="font-size:0.75em;padding:2px 8px;background:#333;color:#aaa;border:none;border-radius:4px;cursor:pointer;margin-left:4px;">进入</button>
+          </div>
+        </div>
+      </div>
+      <p style="color:#22c55e;font-size:0.8em;margin-top:12px;">✅ 完整信息 + 关系列表</p>
+      <p style="color:#22c55e;font-size:0.8em;">✅ 不遮挡画布主体</p>
+      <p style="color:#22c55e;font-size:0.8em;">✅ 可编辑 + 可进入子图</p>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="section" style="margin-top:24px;">
+<h3>侧栏交互模式</h3>
+<div class="options">
+  <div class="option" data-choice="panel-auto" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>自动弹出 — 选中即显示</h3>
+      <p>点击节点时侧栏自动滑出，点击空白处自动收起。最直觉的交互，但频繁切换时可能干扰。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="panel-toggle" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>手动切换 — 快捷键/按钮控制</h3>
+      <p>按 I 键或点击工具栏按钮切换侧栏显隐。选中节点时侧栏内容更新但不自动弹出。用户掌控节奏。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="panel-smart" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>智能模式 — 首次自动，之后跟随</h3>
+      <p>首次选中节点时自动弹出侧栏，之后切换节点时内容跟随更新。用户可手动关闭，关闭后不再自动弹出直到再次按 I 键开启。</p>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="section" style="margin-top:24px;">
+<h3>侧栏内容范围</h3>
+<p style="color:#aaa;margin-bottom:12px;">侧栏应该展示多少信息？</p>
+<div class="options">
+  <div class="option" data-choice="content-essential" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>精简模式 — 名称+类型+关系列表</h3>
+      <p>只展示核心信息，点击"编辑"打开完整表单。侧栏窄（240px），画布空间最大化。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="content-full" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>完整模式 — 所有字段+关系+内联编辑</h3>
+      <p>展示实体的所有字段、描述、标签、关系列表，支持直接在侧栏内编辑。侧栏较宽（320px），类似 VS Code 的侧栏。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="content-adaptive" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>自适应 — 可折叠分区，默认精简可展开</h3>
+      <p>默认展示名称+类型+关系列表（240px），各分区可展开查看详情/编辑。用户按需展开，兼顾空间和信息量。</p>
+    </div>
+  </div>
+</div>
+</div>

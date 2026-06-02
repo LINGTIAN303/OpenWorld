@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>视频模式 V2 · 全链路逻辑</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #0a0e17;
+  --bg2: #111827;
+  --bg3: #1a2236;
+  --border: #1e2d4a;
+  --text: #e2e8f0;
+  --text2: #94a3b8;
+  --text3: #64748b;
+  --accent: #38bdf8;
+  --accent2: #818cf8;
+  --green: #34d399;
+  --orange: #fb923c;
+  --red: #f87171;
+  --pink: #f472b6;
+  --yellow: #fbbf24;
+  --purple: #a78bfa;
+  --cyan: #22d3ee;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Sans SC', sans-serif;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+.page {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 60px 32px 120px;
+}
+
+h1 {
+  font-size: 42px;
+  font-weight: 700;
+  letter-spacing: -1px;
+  margin-bottom: 8px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--text3);
+  margin-bottom: 56px;
+  font-weight: 300;
+}
+
+/* ─── Architecture Overview ─── */
+.arch-overview {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 56px;
+  position: relative;
+  overflow: hidden;
+}
+
+.arch-overview::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2), var(--pink));
+}
+
+.arch-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 24px;
+  color: var(--accent);
+}
+
+.arch-layers {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.arch-layer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg3);
+  transition: border-color 0.2s;
+}
+
+.arch-layer:hover {
+  border-color: var(--accent);
+}
+
+.arch-layer-num {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.arch-layer-info {
+  flex: 1;
+}
+
+.arch-layer-name {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.arch-layer-desc {
+  font-size: 12px;
+  color: var(--text2);
+}
+
+.arch-layer-file {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text3);
+  background: var(--bg);
+  padding: 3px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+/* ─── Phase Section ─── */
+.phase {
+  position: relative;
+  margin-bottom: 48px;
+}
+
+.phase-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.phase-num {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 15px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.phase-title {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.phase-file {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text3);
+  margin-left: auto;
+  background: var(--bg3);
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+/* ─── Flow Row ─── */
+.flow-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+
+/* ─── Node ─── */
+.node {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  position: relative;
+  flex: 1;
+  min-width: 200px;
+  transition: border-color 0.2s, transform 0.2s;
+}
+
+.node:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.node-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.node-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.node-desc {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.5;
+}
+
+.node-code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--green);
+  margin-top: 6px;
+  background: var(--bg);
+  padding: 6px 10px;
+  border-radius: 6px;
+  word-break: break-all;
+}
+
+/* ─── Arrow ─── */
+.arrow-row {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
+  color: var(--text3);
+  font-size: 20px;
+}
+
+/* ─── Color Variants ─── */
+.c-accent { color: var(--accent); }
+.c-accent2 { color: var(--accent2); }
+.c-green { color: var(--green); }
+.c-orange { color: var(--orange); }
+.c-red { color: var(--red); }
+.c-pink { color: var(--pink); }
+.c-yellow { color: var(--yellow); }
+.c-purple { color: var(--purple); }
+.c-cyan { color: var(--cyan); }
+
+.bg-accent { background: rgba(56,189,248,0.12); border-color: rgba(56,189,248,0.3); }
+.bg-accent2 { background: rgba(129,140,248,0.12); border-color: rgba(129,140,248,0.3); }
+.bg-green { background: rgba(52,211,153,0.12); border-color: rgba(52,211,153,0.3); }
+.bg-orange { background: rgba(251,146,60,0.12); border-color: rgba(251,146,60,0.3); }
+.bg-red { background: rgba(248,113,113,0.12); border-color: rgba(248,113,113,0.3); }
+.bg-pink { background: rgba(244,114,182,0.12); border-color: rgba(244,114,182,0.3); }
+.bg-yellow { background: rgba(251,191,36,0.12); border-color: rgba(251,191,36,0.3); }
+.bg-purple { background: rgba(167,139,250,0.12); border-color: rgba(167,139,250,0.3); }
+.bg-cyan { background: rgba(34,211,238,0.12); border-color: rgba(34,211,238,0.3); }
+
+/* ─── Grid ─── */
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+
+@media (max-width: 900px) {
+  .grid-3, .grid-4 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+  .grid-3, .grid-4, .grid-2 { grid-template-columns: 1fr; }
+}
+
+/* ─── Formula Box ─── */
+.formula-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin: 16px 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  color: var(--accent);
+  text-align: center;
+  line-height: 2;
+}
+
+.formula-box .op {
+  color: var(--orange);
+  font-weight: 600;
+}
+
+.formula-box .var {
+  color: var(--green);
+}
+
+.formula-box .comment {
+  color: var(--text3);
+  font-size: 12px;
+}
+
+/* ─── Table ─── */
+.scene-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 16px 0;
+}
+
+.scene-table th {
+  text-align: left;
+  padding: 10px 14px;
+  background: var(--bg3);
+  border-bottom: 2px solid var(--border);
+  color: var(--text2);
+  font-weight: 500;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.scene-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.scene-table tr:hover td {
+  background: rgba(56,189,248,0.04);
+}
+
+.scene-table .prob-bar {
+  display: inline-block;
+  height: 6px;
+  border-radius: 3px;
+  min-width: 4px;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+/* ─── Position Map ─── */
+.position-map {
+  position: relative;
+  width: 100%;
+  max-width: 600px;
+  height: 300px;
+  margin: 20px auto;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.pos-dot {
+  position: absolute;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.pos-dot.top-right { top: 16px; right: 16px; }
+.pos-dot.bottom-right { bottom: 16px; right: 16px; }
+.pos-dot.bottom-left { bottom: 16px; left: 16px; }
+.pos-dot.top-center { top: 16px; left: 50%; transform: translateX(-50%); }
+
+/* ─── Divider ─── */
+.divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+  margin: 48px 0;
+}
+
+/* ─── Tag ─── */
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  margin: 2px;
+}
+
+/* ─── Luck Gauge ─── */
+.luck-gauge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.luck-bar {
+  flex: 1;
+  height: 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.luck-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+
+.luck-label {
+  font-size: 12px;
+  font-weight: 500;
+  min-width: 60px;
+  text-align: right;
+}
+
+/* ─── Sequence Diagram ─── */
+.seq-diagram {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 16px 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+
+.seq-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: var(--bg);
+  border: 1px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.seq-step:hover {
+  border-color: var(--border);
+}
+
+.seq-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.seq-arrow {
+  color: var(--text3);
+  font-size: 14px;
+}
+
+.seq-text {
+  flex: 1;
+}
+
+.seq-detail {
+  font-size: 11px;
+  color: var(--text3);
+  margin-left: auto;
+}
+
+/* ─── Prompt Preview ─── */
+.prompt-preview {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin: 16px 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  color: var(--text2);
+}
+
+.prompt-preview .p-persona { color: var(--accent); }
+.prompt-preview .p-change { color: var(--orange); }
+.prompt-preview .p-context { color: var(--green); }
+.prompt-preview .p-instruction { color: var(--pink); }
+.prompt-preview .p-memory { color: var(--purple); }
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>视频模式 V2 · 全链路逻辑</h1>
+<p class="subtitle">三层触发架构 · 动态概率体系 · 场景化弹窗 · 增强Prompt</p>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- 架构总览 -->
+<!-- ════════════════════════════════════════════════════ -->
+<div class="arch-overview">
+  <div class="arch-title">🏗 三层触发架构总览</div>
+  <div class="arch-layers">
+    <div class="arch-layer">
+      <div class="arch-layer-num bg-accent c-accent">1</div>
+      <div class="arch-layer-info">
+        <div class="arch-layer-name c-accent">场景识别层</div>
+        <div class="arch-layer-desc">9种操作场景 → 识别事件类型 → 映射到 SceneConfig（概率 + 位置 + 推荐方式）</div>
+      </div>
+      <div class="arch-layer-file">videoModeScene.ts</div>
+    </div>
+    <div class="arch-layer">
+      <div class="arch-layer-num bg-accent2 c-accent2">2</div>
+      <div class="arch-layer-info">
+        <div class="arch-layer-name c-accent2">概率门控层</div>
+        <div class="arch-layer-desc">动态概率 = 基础概率 × 场景系数 × 亲密度 × 时间衰减 × 全局运气(G) → 是否触发</div>
+      </div>
+      <div class="arch-layer-file">videoModeTrigger.ts</div>
+    </div>
+    <div class="arch-layer">
+      <div class="arch-layer-num bg-pink c-pink">3</div>
+      <div class="arch-layer-info">
+        <div class="arch-layer-name c-pink">方式选择层</div>
+        <div class="arch-layer-desc">概率链选择触发方式（即时/停顿/断句/字数）→ 执行触发 → 构建Prompt → 调用LLM</div>
+      </div>
+      <div class="arch-layer-file">useVideoMode.ts</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- Phase 1: 事件源 -->
+<!-- ════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-header">
+    <div class="phase-num bg-accent c-accent">1</div>
+    <div class="phase-title">事件源 · EventBus</div>
+    <div class="phase-file">events.ts + entityStore + relationStore + EntityFormModal + BatchEditModal</div>
+  </div>
+
+  <div class="grid-3">
+    <div class="node bg-accent">
+      <div class="node-label c-accent">实体事件</div>
+      <div class="node-title">entity:create / update / delete</div>
+      <div class="node-desc">entityStore.add()/update()/remove() 中发射<br>source: 'user' | 'agent' | 'import'</div>
+      <div class="node-code">eventBus.emit('entity:create', { entityId, source })</div>
+    </div>
+    <div class="node bg-green">
+      <div class="node-label c-green">字段事件</div>
+      <div class="node-title">field:change</div>
+      <div class="node-desc">SchemaRenderer 中字段值变更时发射<br>携带 field, oldValue, newValue</div>
+      <div class="node-code">eventBus.emit('field:change', { entityId, field, oldValue, newValue })</div>
+    </div>
+    <div class="node bg-accent2">
+      <div class="node-label c-accent2">关系事件</div>
+      <div class="node-title">relation:create / delete</div>
+      <div class="node-desc">relationStore.add()/remove() 中发射<br>携带 sourceId, targetId, type</div>
+      <div class="node-code">eventBus.emit('relation:create', { relationId, sourceId, targetId, source })</div>
+    </div>
+    <div class="node bg-orange">
+      <div class="node-label c-orange">输入事件</div>
+      <div class="node-title">name:input / text:input</div>
+      <div class="node-desc">EntityFormModal 中 name 输入框和 textarea/richtext 变更时发射<br>text:input 传递增量文本(delta)</div>
+      <div class="node-code">eventBus.emit('name:input', { entityId, text })<br>eventBus.emit('text:input', { entityId, field, text: delta })</div>
+    </div>
+    <div class="node bg-purple">
+      <div class="node-label c-purple">批量事件</div>
+      <div class="node-title">batch:edit</div>
+      <div class="node-desc">BatchEditModal 中批量删除/改标签/改名后发射<br>携带 entityIds[] 和 action</div>
+      <div class="node-code">eventBus.emit('batch:edit', { entityIds, action: 'delete'|'tags'|'rename' })</div>
+    </div>
+    <div class="node bg-cyan">
+      <div class="node-label c-cyan">视图事件</div>
+      <div class="node-title">view:switch</div>
+      <div class="node-desc">Shell.vue watch uiStore.currentView 变化时<br>调用 notifyViewSwitch()</div>
+      <div class="node-code">watch(() => uiStore.currentView, (v) => notifyViewSwitch(v))</div>
+    </div>
+  </div>
+</div>
+
+<div class="arrow-row">▼</div>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- Phase 2: 场景识别 -->
+<!-- ════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-header">
+    <div class="phase-num bg-accent c-accent">2</div>
+    <div class="phase-title">场景识别 · Scene Identification</div>
+    <div class="phase-file">videoModeScene.ts</div>
+  </div>
+
+  <table class="scene-table">
+    <thead>
+      <tr>
+        <th>场景 ID</th>
+        <th>标签</th>
+        <th>触发源</th>
+        <th>基础概率</th>
+        <th>推荐方式</th>
+        <th>弹窗位置</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="tag bg-accent c-accent">entity_create</span></td>
+        <td>实体创建</td>
+        <td>entity:create</td>
+        <td><span class="prob-bar" style="width:80px;background:var(--accent)"></span>80%</td>
+        <td><span class="tag bg-green c-green">即时</span></td>
+        <td>↗ 右上</td>
+      </tr>
+      <tr>
+        <td><span class="tag bg-red c-red">entity_delete</span></td>
+        <td>实体删除</td>
+        <td>entity:delete</td>
+        <td><span class="prob-bar" style="width:90px;background:var(--red)"></span>90%</td>
+        <td><span class="tag bg-green c-green">即时</span></td>
+        <td>↑ 中上</td>
+      </tr>
+      <tr>
+        <td><span class="tag bg-orange c-orange">field_short</span></td>
+        <td>短文本编辑</td>
+        <td>field:change</td>
+        <td><span class="prob-bar" style="width:50px;background:var(--orange)"></span>50%</td>
+        <td><span class="tag bg-yellow c-yellow">停顿</span></td>
+        <td>↘ 右下</td>
+      </tr>
+      <tr>
+        <td><span class="tag bg-orange c-orange">field_long</span></td>
+        <td>长文本编辑</td>
+        <td>field:change (≥50字)</td>
+        <td><span class="prob-bar" style="width:40px;background:var(--orange)"></span>40%</td>
+        <td><span class="tag bg-purple c-purple">断句</span></td>
+        <td>↘ 右下</td>
+      </tr>
+      <tr>
+        <td><span class="tag bg-cyan c-cyan">name_input</span></td>
+        <td>名称输入</td>
+        <td>name:input</td>
+        <td><span class="prob-bar" style="width:60px;background:var(--cyan)"></span>60%</td>
+        <td><span class="tag bg-yellow c-yellow">停顿</span></td>
+        <td>↗ 右上</td>
+      </tr>
+      <tr>
+        <td><span class="tag bg-accent2 c-accent2">relation_create</span></td>
+        <td>关系创建</td>
+        <td>relation:create</td>
+        <td><span class="prob-bar" style="width:30px;background:var(--accent2)"></span>30%</td>
+        <td><span class="tag bg-green c-green">即时</span></td>
+        <td>↙ 左下</td>
+      </tr>
+      <tr>
+        <td><span class="tag bg-accent2 c-accent2">relation_delete</span></td>
+        <td>关系删除</td>
+        <td>relation:delete</td>
+        <td><span class="prob-bar" style="width:40px;background:var(--accent2)"></span>40%</td>
+        <td><span class="tag bg-green c-green">即时</span></td>
+        <td>↙ 左下</td>
+      </tr>
+      <tr>
+        <td><span class="tag bg-pink c-pink">view_switch</span></td>
+        <td>视图切换</td>
+        <td>view:switch</td>
+        <td><span class="prob-bar" style="width:20px;background:var(--pink)"></span>20%</td>
+        <td><span class="tag bg-yellow c-yellow">停顿</span></td>
+        <td>↑ 中上</td>
+      </tr>
+      <tr>
+        <td><span class="tag bg-purple c-purple">batch_edit</span></td>
+        <td>批量编辑</td>
+        <td>batch:edit</td>
+        <td><span class="prob-bar" style="width:25px;background:var(--purple)"></span>25%</td>
+        <td><span class="tag bg-green c-green">即时</span></td>
+        <td>↑ 中上</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="node" style="margin-top:16px">
+    <div class="node-label c-orange">智能映射</div>
+    <div class="node-desc">
+      <strong>entity:update</strong> 事件根据 changedFields 智能映射场景：<br>
+      • 仅 name 变更 → <span class="c-cyan">name_input</span><br>
+      • 有 description/properties → 根据描述长度 ≥50 字选 <span class="c-orange">field_long</span>，否则 <span class="c-orange">field_short</span><br>
+      • source !== 'user' 的事件被过滤（agent/import 操作不触发）
+    </div>
+  </div>
+</div>
+
+<div class="arrow-row">▼</div>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- Phase 3: 概率门控 -->
+<!-- ════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-header">
+    <div class="phase-num bg-accent2 c-accent2">2</div>
+    <div class="phase-title">概率门控 · Probability Gate</div>
+    <div class="phase-file">videoModeTrigger.ts → calculateProbability()</div>
+  </div>
+
+  <div class="formula-box">
+    <span class="var">最终概率</span> <span class="op">=</span>
+    <span class="var">基础概率</span> <span class="op">×</span>
+    <span class="var">场景系数</span> <span class="op">×</span>
+    <span class="var">亲密度</span> <span class="op">×</span>
+    <span class="var">时间衰减</span> <span class="op">×</span>
+    <span class="var">运气(G)</span>
+    <br>
+    <span class="comment">P = base × scene(editDuration) × intimacy(memoryCount) × decay(sinceLastPopup) × luck(coefficient)</span>
+  </div>
+
+  <div class="grid-4">
+    <div class="node bg-accent">
+      <div class="node-label c-accent">基础概率</div>
+      <div class="node-title">base</div>
+      <div class="node-desc">由场景配置决定<br>用户可在设置中调整每个场景的概率</div>
+      <div class="node-code">sceneProbs[id] / 100</div>
+    </div>
+    <div class="node bg-green">
+      <div class="node-label c-green">场景系数</div>
+      <div class="node-title">scene</div>
+      <div class="node-desc">即时场景 = 1.0<br>编辑场景 = min(1.0, 编辑秒数/60)<br>编辑越久越可能触发</div>
+      <div class="node-code">isImmediate ? 1.0 : min(1.0, sec/60)</div>
+    </div>
+    <div class="node bg-orange">
+      <div class="node-label c-orange">亲密度</div>
+      <div class="node-title">intimacy</div>
+      <div class="node-desc">min(1.5, 1.0 + 记忆条数×0.1)<br>交互越多，越可能触发<br>上限 1.5</div>
+      <div class="node-code">min(1.5, 1.0 + memory×0.1)</div>
+    </div>
+    <div class="node bg-red">
+      <div class="node-label c-red">时间衰减</div>
+      <div class="node-title">decay</div>
+      <div class="node-desc">max(0.3, 1.0 - (距上次弹窗秒数/30)×0.7)<br>刚弹过则不易再弹<br>下限 0.3</div>
+      <div class="node-code">max(0.3, 1.0 - (sec/30)×0.7)</div>
+    </div>
+  </div>
+
+  <div style="margin-top:20px">
+    <div class="node bg-purple">
+      <div class="node-label c-purple">大概率层 · 全局运气 G</div>
+      <div class="node-title">Luck State</div>
+      <div class="node-desc">
+        G ∈ [0.5, 1.5]，每次重置时随机分配<br>
+        重置条件（满足任一）：经过 N 分钟 或 累计 M 次操作<br>
+        运气标签：G &gt; 1.2 → 🟢 活跃期 | G &lt; 0.8 → 🔴 沉默期 | 其他 → ⚪ 正常期
+      </div>
+      <div class="luck-gauge">
+        <span style="font-size:12px;color:var(--red)">沉默</span>
+        <div class="luck-bar">
+          <div class="luck-fill" style="width:33%;background:linear-gradient(90deg,var(--red),var(--yellow),var(--green))"></div>
+        </div>
+        <span style="font-size:12px;color:var(--green)">活跃</span>
+      </div>
+      <div class="node-code">luckState.coefficient ∈ [0.5, 1.5]  |  reset: 5分钟 或 10次操作</div>
+    </div>
+  </div>
+</div>
+
+<div class="arrow-row">▼</div>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- Phase 4: 方式选择 -->
+<!-- ════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-header">
+    <div class="phase-num bg-pink c-pink">3</div>
+    <div class="phase-title">方式选择 · Trigger Method Selection</div>
+    <div class="phase-file">videoModeTrigger.ts → selectTriggerMethod()</div>
+  </div>
+
+  <div class="formula-box">
+    <span class="comment">概率链选择：</span><br>
+    <span class="var">场景推荐方式</span> <span class="op">→ 60%</span> 概率<br>
+    <span class="var">其余方式</span> <span class="op">→ 均分 40%</span> 概率
+  </div>
+
+  <div class="grid-4">
+    <div class="node bg-green">
+      <div class="node-label c-green">即时触发</div>
+      <div class="node-title">immediate</div>
+      <div class="node-desc">概率通过后立即触发<br>适用于：创建、删除、关系变更、批量操作</div>
+    </div>
+    <div class="node bg-yellow">
+      <div class="node-label c-yellow">停顿触发</div>
+      <div class="node-title">pause</div>
+      <div class="node-desc">用户停止输入 N 秒后触发<br>PauseDetector：每次输入重置计时器<br>默认阈值：2秒</div>
+    </div>
+    <div class="node bg-purple">
+      <div class="node-label c-purple">断句触发</div>
+      <div class="node-title">sentence</div>
+      <div class="node-desc">检测到句号/感叹号/问号/换行时触发<br>正则：/[。！？\n]/<br>仅在 text:input 事件中检测</div>
+    </div>
+    <div class="node bg-cyan">
+      <div class="node-label c-cyan">字数触发</div>
+      <div class="node-title">charCount</div>
+      <div class="node-desc">累计输入字符达到阈值时触发<br>CharCountDetector：feed(delta) 累加<br>默认阈值：20字</div>
+    </div>
+  </div>
+</div>
+
+<div class="arrow-row">▼</div>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- Phase 5: 人格选择 -->
+<!-- ════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-header">
+    <div class="phase-num bg-orange c-orange">4</div>
+    <div class="phase-title">人格选择 · Persona Selection</div>
+    <div class="phase-file">useVideoMode.ts → pickPersonaForEntity()</div>
+  </div>
+
+  <div class="grid-2">
+    <div class="node bg-accent">
+      <div class="node-label c-accent">直接人格</div>
+      <div class="node-title">同实体人格</div>
+      <div class="node-desc">
+        默认行为：以被编辑实体自身作为人格<br>
+        生命体类型（character, species, organization）始终使用直接人格
+      </div>
+      <div class="node-code">LIFELIKE_TYPES = {'character','species','organization'}</div>
+    </div>
+    <div class="node bg-pink">
+      <div class="node-label c-pink">跨插件人格附体</div>
+      <div class="node-title">Cross-Plugin Persona</div>
+      <div class="node-desc">
+        非生命体实体编辑时，按概率切换为生命体人格<br>
+        概率由 videoModePersonaSwitchChance 控制（默认30%）<br>
+        从所有生命体实体中随机选择一个
+      </div>
+      <div class="node-code">roll = random() × 100<br>if roll < switchChance → pick lifelike entity</div>
+    </div>
+  </div>
+</div>
+
+<div class="arrow-row">▼</div>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- Phase 6: Prompt 合成 -->
+<!-- ════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-header">
+    <div class="phase-num bg-green c-green">5</div>
+    <div class="phase-title">Prompt 合成 · Enhanced Prompt</div>
+    <div class="phase-file">personaPrompt.ts</div>
+  </div>
+
+  <div class="prompt-preview"><span class="p-persona">[人格描述]
+你的名字是「艾琳」。
+你是这个角色本身。用第一人称说话，仿佛你就是这个角色。
+关于你的描述：来自北境的寒冰法师
+你的性格：冷静而坚定
+你与「洛恩」(师徒)、「冰霜学院」(隶属)有关联。</span>
+
+<span class="p-change">[变更描述]
+你的寒霜之刃从「普通铁剑」变成了「附魔冰晶剑」。</span>
+
+<span class="p-context">[上下文增强]
+用户正在人物志中工作。
+用户已经编辑了你120秒。
+这是你第3次被修改。
+这个世界有5个角色、3个地区、2个事件。
+你心情很好，很想说话。</span>
+
+<span class="p-instruction">[指令]
+用你的身份对上述变化做出简短评论或反应。
+回复不超过50个字。只输出你的台词，不要加引号或括号。</span>
+
+<span class="p-memory">[记忆]
+你之前说过的话（保持风格一致）：
+- "哼，又来打扰我修炼。"
+- "这把剑...似乎有了新的灵魂。"</span></div>
+
+  <div class="grid-4" style="margin-top:16px">
+    <div class="node bg-accent">
+      <div class="node-label c-accent">人格描述</div>
+      <div class="node-desc">名字 + 类型指令 + 描述 + 性格提取 + 关联实体</div>
+    </div>
+    <div class="node bg-orange">
+      <div class="node-label c-orange">变更描述</div>
+      <div class="node-desc">create/update/delete 三种变更类型<br>智能处理 name/description/properties</div>
+    </div>
+    <div class="node bg-green">
+      <div class="node-label c-green">上下文增强</div>
+      <div class="node-desc">当前视图 + 编辑时长 + 修改次数 + 项目统计 + 运气状态</div>
+    </div>
+    <div class="node bg-purple">
+      <div class="node-label c-purple">会话记忆</div>
+      <div class="node-desc">最近5条历史回复<br>保持风格一致性</div>
+    </div>
+  </div>
+</div>
+
+<div class="arrow-row">▼</div>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- Phase 7: LLM 调用 -->
+<!-- ════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-header">
+    <div class="phase-num bg-red c-red">6</div>
+    <div class="phase-title">LLM 调用 · AI Response</div>
+    <div class="phase-file">useVideoMode.ts → callLLM()</div>
+  </div>
+
+  <div class="seq-diagram">
+    <div class="seq-step">
+      <div class="seq-num bg-accent c-accent">1</div>
+      <span class="seq-text">构建 ProviderConfig</span>
+      <span class="seq-detail">cloud / local / custom 三种模式</span>
+    </div>
+    <div class="seq-step">
+      <div class="seq-num bg-accent c-accent">2</div>
+      <span class="seq-text">resolveEndpoint(cfg) → url + headers + model</span>
+      <span class="seq-detail">适配 OpenAI / Anthropic / Google 格式</span>
+    </div>
+    <div class="seq-step">
+      <div class="seq-num bg-accent c-accent">3</div>
+      <span class="seq-text">fetch(url, { signal: AbortController })</span>
+      <span class="seq-detail">requestId 防竞态 + timeout 超时中断</span>
+    </div>
+    <div class="seq-step">
+      <div class="seq-num bg-accent c-accent">4</div>
+      <span class="seq-text">extractTitle(cfg, json) → 提取回复文本</span>
+      <span class="seq-detail">适配不同 API 响应格式</span>
+    </div>
+  </div>
+
+  <div class="grid-3" style="margin-top:16px">
+    <div class="node bg-red">
+      <div class="node-label c-red">竞态保护</div>
+      <div class="node-desc">requestId 标识当前请求<br>finally 中只有 currentRequestId === requestId 才清空 controller</div>
+    </div>
+    <div class="node bg-orange">
+      <div class="node-label c-orange">超时中断</div>
+      <div class="node-desc">AbortController + setTimeout<br>超时自动 abort，默认 5 秒</div>
+    </div>
+    <div class="node bg-yellow">
+      <div class="node-label c-yellow">失败熔断</div>
+      <div class="node-desc">consecutiveFailures 计数<br>达到 maxFailures 上限后自动暂停</div>
+    </div>
+  </div>
+</div>
+
+<div class="arrow-row">▼</div>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- Phase 8: 弹窗渲染 -->
+<!-- ════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-header">
+    <div class="phase-num bg-purple c-purple">7</div>
+    <div class="phase-title">弹窗渲染 · Notification Display</div>
+    <div class="phase-file">VideoNotification.vue</div>
+  </div>
+
+  <div class="position-map">
+    <div class="pos-dot top-right bg-accent c-accent">↗ 右上<br><small>创建 / 名称输入</small></div>
+    <div class="pos-dot bottom-right bg-orange c-orange">↘ 右下<br><small>短文本 / 长文本编辑</small></div>
+    <div class="pos-dot bottom-left bg-accent2 c-accent2">↙ 左下<br><small>关系创建 / 删除</small></div>
+    <div class="pos-dot top-center bg-pink c-pink">↑ 中上<br><small>删除 / 视图切换 / 批量</small></div>
+  </div>
+
+  <div class="grid-3" style="margin-top:20px">
+    <div class="node bg-green">
+      <div class="node-label c-green">自动消失</div>
+      <div class="node-desc">默认行为，duration 秒后自动消失<br>dismissTimers Map 管理定时器</div>
+    </div>
+    <div class="node bg-yellow">
+      <div class="node-label c-yellow">点击停驻</div>
+      <div class="node-desc">点击弹窗 → pinNotification()<br>取消自动消失定时器<br>显示📌标记</div>
+    </div>
+    <div class="node bg-purple">
+      <div class="node-label c-purple">历史列表</div>
+      <div class="node-desc">停驻后显示 sessionMemory 中的历史消息<br>最多显示5条过往回复</div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- 完整时序 -->
+<!-- ════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-header">
+    <div class="phase-num bg-accent2 c-accent2">⟳</div>
+    <div class="phase-title">完整时序 · End-to-End Flow</div>
+  </div>
+
+  <div class="seq-diagram">
+    <div class="seq-step">
+      <div class="seq-num bg-accent c-accent">1</div>
+      <span class="seq-text">用户操作 → eventBus.emit('entity:update', ...)</span>
+      <span class="seq-detail">entityStore / EntityFormModal</span>
+    </div>
+    <div class="seq-step">
+      <div class="seq-num bg-accent c-accent">2</div>
+      <span class="seq-text">useVideoMode.onEntityUpdate() → identifySceneFromEntityUpdate()</span>
+      <span class="seq-detail">映射到 field_short / field_long / name_input</span>
+    </div>
+    <div class="seq-step">
+      <div class="seq-num bg-accent c-accent">3</div>
+      <span class="seq-text">防抖等待 debounceMs → processScene(ctx)</span>
+      <span class="seq-detail">每实体独立防抖 debounceTimers Map</span>
+    </div>
+    <div class="seq-step">
+      <div class="seq-num bg-accent2 c-accent2">4</div>
+      <span class="seq-text">runProbabilityGate() → 计算动态概率 → 是否触发？</span>
+      <span class="seq-detail">base × scene × intimacy × decay × luck</span>
+    </div>
+    <div class="seq-step">
+      <div class="seq-num bg-pink c-pink">5</div>
+      <span class="seq-text">selectTriggerMethod() → 选择触发方式</span>
+      <span class="seq-detail">60% 推荐 + 40% 均分其他</span>
+    </div>
+    <div class="seq-step">
+      <div class="seq-num bg-pink c-pink">6</div>
+      <span class="seq-text">applyTriggerMethod() → 即时/停顿/断句/字数</span>
+      <span class="seq-detail">PauseDetector / CharCountDetector</span>
+    </div>
+    <div class="seq-step">
+      <div class="seq-num bg-orange c-orange">7</div>
+      <span class="seq-text">triggerVideoModeFromContext() → pickPersonaForEntity()</span>
+      <span class="seq-detail">直接人格 或 跨插件附体</span>
+    </div>
+    <div class="seq-step">
+      <div class="seq-num bg-green c-green">8</div>
+      <span class="seq-text">buildVideoModePrompt() → 合成增强 Prompt</span>
+      <span class="seq-detail">人格 + 变更 + 上下文 + 记忆</span>
+    </div>
+    <div class="seq-step">
+      <div class="seq-num bg-red c-red">9</div>
+      <span class="seq-text">callLLM() → fetch → extractTitle → 回复文本</span>
+      <span class="seq-detail">AbortController + requestId 防竞态</span>
+    </div>
+    <div class="seq-step">
+      <div class="seq-num bg-purple c-purple">10</div>
+      <span class="seq-text">创建 Notification → 场景化位置 → 渲染弹窗</span>
+      <span class="seq-detail">4种位置 + 点击停驻 + 历史列表</span>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- 设置面板 -->
+<!-- ════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-header">
+    <div class="phase-num bg-yellow c-yellow">⚙</div>
+    <div class="phase-title">设置面板 · Configuration</div>
+    <div class="phase-file">settingsStore.ts + SettingsDialog.vue</div>
+  </div>
+
+  <div class="grid-3">
+    <div class="node bg-accent">
+      <div class="node-label c-accent">触发与弹窗</div>
+      <div class="node-desc">
+        • 弹窗持续时间 (3-15s)<br>
+        • 防抖等待 (2-15s)<br>
+        • LLM 超时 (1-10s)<br>
+        • 连续失败上限 (1-10次)<br>
+        • 停顿触发阈值 (1-5s)<br>
+        • 断句触发开关<br>
+        • 字数触发阈值 (5-50字)
+      </div>
+    </div>
+    <div class="node bg-accent2">
+      <div class="node-label c-accent2">概率体系</div>
+      <div class="node-desc">
+        • 全局运气开关<br>
+        • 运气重置周期 (3-15分)<br>
+        • 运气重置操作数 (5-30次)<br>
+        • 9种场景独立概率 (0-100%)<br>
+        <br>
+        <span style="color:var(--text3)">场景概率可单独调节，<br>0% = 永不触发，100% = 必触发</span>
+      </div>
+    </div>
+    <div class="node bg-pink">
+      <div class="node-label c-pink">弹窗交互</div>
+      <div class="node-desc">
+        • 弹窗位置场景化开关<br>
+        • 点击停驻开关<br>
+        • 人格过渡动画<br>
+        • 跨插件人格附体<br>
+        • 人格切换概率 (0-100%)
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>

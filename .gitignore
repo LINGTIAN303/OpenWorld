@@ -1,0 +1,77 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+**/dist/
+*.local
+
+*.map
+*.tmp
+*.bak
+*.orig
+Thumbs.db
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ── Secrets & credentials (added at git init) ──────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+*.jks
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+secrets/
+api-keys/
+apiKeys/
+*.credentials.json
+
+# ── User / runtime data (never commit) ─────────────────────────────────
+My-Data-Project/
+*.sqlite
+*.sqlite3
+*.db
+*.ldb
+coverage/
+.nyc_output/
+storybook-static/
+.vite/
+.turbo/
+.cache/
+test-results/
+playwright-report/
+
+# ── Rust / cargo / wasm (added at git init) ─────────────────────────────
+**/target/
+**/Cargo.lock.bak
+# wasm-pack 输出 — package.json 用 file: 引用,但实际产物按需重建
+**/pkg/
+**/pkg/.gitignore
+
+# ── Brainstorming skill runtime state (added at git init) ──────────────
+.superpowers/brainstorm/*/state/
+.superpowers/brainstorm/*/*.pid
+.superpowers/brainstorm/*/server-*

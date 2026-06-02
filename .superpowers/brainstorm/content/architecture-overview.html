@@ -1,0 +1,145 @@
+<h2>WorldSmith 主题引擎架构全景</h2>
+<p class="subtitle">设计令牌三层体系 + 自研组件库 + 用户主题引擎</p>
+
+<div class="section" style="margin-bottom: 24px;">
+  <h3>🏗️ 三层令牌架构</h3>
+  <div class="mockup">
+    <div class="mockup-header">Design Token Architecture</div>
+    <div class="mockup-body" style="padding: 20px; font-family: 'Consolas', 'Monaco', monospace; font-size: 13px; line-height: 1.7;">
+      <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 220px; background: rgba(120,80,255,0.08); border: 1px solid rgba(120,80,255,0.2); border-radius: 10px; padding: 16px;">
+          <div style="font-weight: 700; color: #b388ff; margin-bottom: 8px;">第1层：原始令牌</div>
+          <div style="color: #888; font-size: 12px;">Primitive Tokens</div>
+          <div style="margin-top: 10px; color: #aaa;">
+            --blue-500: #4a6cf7<br>
+            --purple-400: #b388ff<br>
+            --teal-500: #00c8b4<br>
+            --amber-500: #e8a050<br>
+            --space-1: 4px<br>
+            --space-2: 8px<br>
+            --space-4: 16px<br>
+            --radius-sm: 4px<br>
+            --radius-md: 8px<br>
+            --radius-lg: 14px<br>
+            --font-size-sm: 12px<br>
+            --font-size-base: 14px<br>
+            --font-size-lg: 16px
+          </div>
+          <div style="margin-top: 8px; padding: 6px 8px; background: rgba(120,80,255,0.1); border-radius: 4px; font-size: 11px; color: #b388ff;">永不随主题变化</div>
+        </div>
+        <div style="display: flex; align-items: center; font-size: 24px; color: #555;">→</div>
+        <div style="flex: 1; min-width: 220px; background: rgba(0,200,180,0.08); border: 1px solid rgba(0,200,180,0.2); border-radius: 10px; padding: 16px;">
+          <div style="font-weight: 700; color: #00c8b4; margin-bottom: 8px;">第2层：语义令牌</div>
+          <div style="color: #888; font-size: 12px;">Semantic Tokens ← 主题替换此层</div>
+          <div style="margin-top: 10px; color: #aaa;">
+            --color-primary: var(--blue-500)<br>
+            --color-accent: var(--purple-400)<br>
+            --color-bg-base: var(--gray-900)<br>
+            --color-bg-surface: var(--gray-800)<br>
+            --color-text-primary: var(--gray-50)<br>
+            --color-text-secondary: var(--gray-400)<br>
+            --color-border: var(--gray-700)<br>
+            --color-success: var(--teal-500)<br>
+            --color-danger: var(--red-500)<br>
+            --spacing-card: var(--space-4)<br>
+            --radius-card: var(--radius-lg)
+          </div>
+          <div style="margin-top: 8px; padding: 6px 8px; background: rgba(0,200,180,0.1); border-radius: 4px; font-size: 11px; color: #00c8b4;">主题 = 语义令牌映射表</div>
+        </div>
+        <div style="display: flex; align-items: center; font-size: 24px; color: #555;">→</div>
+        <div style="flex: 1; min-width: 220px; background: rgba(255,140,50,0.08); border: 1px solid rgba(255,140,50,0.2); border-radius: 10px; padding: 16px;">
+          <div style="font-weight: 700; color: #e8a050; margin-bottom: 8px;">第3层：组件令牌</div>
+          <div style="color: #888; font-size: 12px;">Component Tokens ← UI-Kit 绑定</div>
+          <div style="margin-top: 10px; color: #aaa;">
+            --button-bg: var(--color-primary)<br>
+            --button-radius: var(--radius-md)<br>
+            --button-padding: var(--space-2)<br>
+            --card-bg: var(--color-bg-surface)<br>
+            --card-radius: var(--radius-card)<br>
+            --card-padding: var(--spacing-card)<br>
+            --input-border: var(--color-border)<br>
+            --input-focus: var(--color-primary)<br>
+            --modal-overlay: var(--color-overlay)<br>
+            --toast-success: var(--color-success)
+          </div>
+          <div style="margin-top: 8px; padding: 6px 8px; background: rgba(255,140,50,0.1); border-radius: 4px; font-size: 11px; color: #e8a050;">组件只认这一层</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-bottom: 24px;">
+  <h3>🎨 主题引擎运行机制</h3>
+  <div class="mockup">
+    <div class="mockup-header">Theme Engine Data Flow</div>
+    <div class="mockup-body" style="padding: 20px;">
+      <div style="display: flex; flex-direction: column; gap: 12px; align-items: center;">
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;">
+          <div style="background: rgba(120,80,255,0.1); border: 1px solid rgba(120,80,255,0.3); border-radius: 8px; padding: 10px 16px; text-align: center;">
+            <div style="font-size: 20px;">🌌</div>
+            <div style="font-size: 12px; color: #b388ff; margin-top: 4px;">极光深渊</div>
+          </div>
+          <div style="background: rgba(200,120,48,0.1); border: 1px solid rgba(200,120,48,0.3); border-radius: 8px; padding: 10px 16px; text-align: center;">
+            <div style="font-size: 20px;">🔥</div>
+            <div style="font-size: 12px; color: #e8a050; margin-top: 4px;">锻造炉</div>
+          </div>
+          <div style="background: rgba(60,40,20,0.15); border: 1px solid rgba(60,40,20,0.3); border-radius: 8px; padding: 10px 16px; text-align: center;">
+            <div style="font-size: 20px;">📖</div>
+            <div style="font-size: 12px; color: #9a8a70; margin-top: 4px;">水墨卷轴</div>
+          </div>
+          <div style="background: rgba(100,180,255,0.1); border: 1px solid rgba(100,180,255,0.3); border-radius: 8px; padding: 10px 16px; text-align: center;">
+            <div style="font-size: 20px;">💎</div>
+            <div style="font-size: 12px; color: #64b4ff; margin-top: 4px;">晶体棱镜</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.05); border: 1px dashed rgba(255,255,255,0.2); border-radius: 8px; padding: 10px 16px; text-align: center;">
+            <div style="font-size: 20px;">✨</div>
+            <div style="font-size: 12px; color: #888; margin-top: 4px;">用户自建</div>
+          </div>
+        </div>
+        <div style="font-size: 20px; color: #555;">↓</div>
+        <div style="background: rgba(0,200,180,0.08); border: 1px solid rgba(0,200,180,0.2); border-radius: 10px; padding: 12px 24px; text-align: center;">
+          <div style="font-weight: 700; color: #00c8b4;">Theme Resolver</div>
+          <div style="font-size: 12px; color: #888; margin-top: 4px;">JSON → CSS Variables → DOM</div>
+        </div>
+        <div style="font-size: 20px; color: #555;">↓</div>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;">
+          <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 14px; font-size: 12px; color: #aaa;">WsButton</div>
+          <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 14px; font-size: 12px; color: #aaa;">WsCard</div>
+          <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 14px; font-size: 12px; color: #aaa;">WsInput</div>
+          <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 14px; font-size: 12px; color: #aaa;">WsModal</div>
+          <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 14px; font-size: 12px; color: #aaa;">WsSelect</div>
+          <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 14px; font-size: 12px; color: #aaa;">WsToast</div>
+          <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 14px; font-size: 12px; color: #aaa;">...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>📦 主题包格式（JSON）</h3>
+  <div class="mockup">
+    <div class="mockup-header">theme-aurora-abyss.json</div>
+    <div class="mockup-body" style="padding: 16px; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; line-height: 1.6; color: #aaa;">
+      <div>{</div>
+      <div>&nbsp;&nbsp;"name": "极光深渊",</div>
+      <div>&nbsp;&nbsp;"id": "aurora-abyss",</div>
+      <div>&nbsp;&nbsp;"author": "WorldSmith",</div>
+      <div>&nbsp;&nbsp;"version": "1.0.0",</div>
+      <div>&nbsp;&nbsp;"mode": "dark",</div>
+      <div>&nbsp;&nbsp;"tokens": {</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;"color-primary": "#7850ff",</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;"color-accent": "#00c8b4",</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;"color-bg-base": "#0f0f23",</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;"color-bg-surface": "#1a1a2e",</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;"color-text-primary": "#e8e0ff",</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;"color-border": "rgba(120,80,255,0.2)",</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;"radius-card": "10px",</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;"font-family": "'Inter', system-ui, sans-serif",</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;"shadow-card": "0 2px 8px rgba(0,0,0,0.3)"</div>
+      <div>&nbsp;&nbsp;}</div>
+      <div>}</div>
+    </div>
+  </div>
+</div>

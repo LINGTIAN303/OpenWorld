@@ -1,0 +1,8 @@
+id: terminal-operator
+name: 终端操作
+icon: "💻"
+description: 通过终端执行系统级命令和脚本
+enabled: true
+baseTools: []
+allowedTools:
+  - execute_command

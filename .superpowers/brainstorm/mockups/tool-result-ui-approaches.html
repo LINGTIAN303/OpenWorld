@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工具结果 UI 化方案对比</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'Segoe UI', sans-serif;
+    background: #0d0d1a;
+    color: #e0e0e0;
+    padding: 32px;
+    line-height: 1.6;
+  }
+  h1 { font-size: 22px; margin-bottom: 8px; color: #fff; }
+  .subtitle { color: #888; font-size: 14px; margin-bottom: 32px; }
+  h2 { font-size: 16px; margin-bottom: 16px; color: #b388ff; }
+
+  .approach {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(108,92,231,0.25);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 28px;
+  }
+  .approach-header {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+  }
+  .approach-label {
+    background: rgba(108,92,231,0.2);
+    color: #b388ff;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .approach-title { font-size: 17px; font-weight: 600; color: #fff; }
+  .approach-desc { font-size: 13px; color: #aaa; margin-bottom: 20px; }
+
+  .preview-area {
+    background: rgba(26,26,46,0.75);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(58,58,106,0.4);
+    border-radius: 14px;
+    overflow: hidden;
+    max-width: 380px;
+  }
+  .preview-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(58,58,106,0.3);
+    font-size: 13px;
+  }
+  .status-dot { font-size: 10px; color: #4caf50; }
+  .preview-body { padding: 12px 14px; }
+
+  /* Tool result cards */
+  .tool-item {
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(58,58,106,0.15);
+  }
+  .tool-item:last-child { margin-bottom: 0; }
+  .tool-head {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 13px; margin-bottom: 6px;
+  }
+  .tool-name { font-weight: 500; color: #e0e0e0; flex: 1; }
+  .tool-time { color: #888; font-size: 11px; }
+
+  /* Approach A: EntityCard style */
+  .entity-card {
+    background: rgba(108,92,231,0.06);
+    border: 1px solid rgba(108,92,231,0.15);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+  }
+  .ec-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .ec-icon { font-size: 16px; }
+  .ec-name { font-weight: 600; font-size: 14px; color: #fff; }
+  .ec-type {
+    font-size: 10px;
+    background: rgba(108,92,231,0.2);
+    color: #b388ff;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: auto;
+  }
+  .ec-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .ec-tag {
+    font-size: 11px;
+    background: rgba(255,255,255,0.06);
+    padding: 2px 8px;
+    border-radius: 4px;
+    color: #aaa;
+  }
+  .ec-desc { font-size: 12px; color: #888; margin-top: 6px; line-height: 1.4; }
+
+  /* Approach B: Summary card */
+  .summary-card {
+    background: rgba(76,175,80,0.06);
+    border-left: 3px solid #4caf50;
+    border-radius: 0 8px 8px 0;
+    padding: 10px 12px;
+  }
+  .summary-title { font-size: 14px; font-weight: 600; color: #4caf50; margin-bottom: 4px; }
+  .summary-detail { font-size: 12px; color: #aaa; }
+  .summary-id { font-size: 10px; color: #666; margin-top: 4px; font-family: monospace; }
+
+  /* Approach C: Structured list */
+  .struct-list { list-style: none; }
+  .struct-list li {
+    padding: 4px 0;
+    font-size: 12px;
+    border-bottom: 1px solid rgba(58,58,106,0.1);
+    display: flex; gap: 6px;
+  }
+  .struct-list li:last-child { border-bottom: none; }
+  .struct-key { color: #b388ff; min-width: 50px; font-weight: 500; }
+  .struct-val { color: #ccc; }
+
+  /* Error style */
+  .error-card {
+    background: rgba(255,107,107,0.06);
+    border-left: 3px solid #ff6b6b;
+    border-radius: 0 8px 8px 0;
+    padding: 10px 12px;
+  }
+  .error-title { font-size: 13px; color: #ff6b6b; font-weight: 500; }
+  .error-hint { font-size: 12px; color: #888; margin-top: 4px; }
+
+  /* Daily report */
+  .report-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(58,58,106,0.15);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .report-date { font-size: 11px; color: #888; margin-bottom: 8px; }
+  .report-stats { display: flex; gap: 12px; margin-bottom: 8px; }
+  .report-stat {
+    text-align: center;
+    flex: 1;
+    background: rgba(108,92,231,0.08);
+    border-radius: 6px;
+    padding: 6px;
+  }
+  .stat-num { font-size: 18px; font-weight: 700; color: #b388ff; }
+  .stat-label { font-size: 10px; color: #888; }
+  .report-dist { display: flex; flex-wrap: wrap; gap: 4px; }
+  .dist-tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.06);
+    color: #aaa;
+  }
+
+  .pros-cons {
+    display: flex; gap: 16px; margin-top: 12px;
+  }
+  .pros, .cons { flex: 1; }
+  .pros h4 { color: #4caf50; font-size: 13px; margin-bottom: 4px; }
+  .cons h4 { color: #ff6b6b; font-size: 13px; margin-bottom: 4px; }
+  .pros li, .cons li { font-size: 12px; color: #aaa; margin-left: 16px; }
+
+  .recommend {
+    background: rgba(108,92,231,0.1);
+    border: 1px solid rgba(108,92,231,0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-top: 16px;
+    font-size: 13px;
+  }
+  .recommend strong { color: #b388ff; }
+</style>
+</head>
+<body>
+
+<h1>🔧 工具结果 UI 化 — 三种方案对比</h1>
+<p class="subtitle">把预览窗中的 JSON 文本转为可视化 UI 组件</p>
+
+<!-- ===== Approach A ===== -->
+<div class="approach">
+  <div class="approach-header">
+    <span class="approach-label">方案 A</span>
+    <span class="approach-title">智能映射：JSON → A2UI 组件</span>
+  </div>
+  <p class="approach-desc">根据工具名称和 JSON 结构，自动选择最合适的 A2UI 组件渲染。entity_list → EntityCard 列表，entity_create → 成功卡片，daily_report → 统计面板，error → 错误卡片。</p>
+
+  <div class="preview-area">
+    <div class="preview-header">
+      <span class="status-dot">●</span>
+      <span>已完成</span>
+      <span style="flex:1;text-align:right;color:#888;font-size:11px">5 项调用</span>
+    </div>
+    <div class="preview-body">
+
+      <!-- daily_report -->
+      <div class="tool-item">
+        <div class="tool-head">
+          <span>✅</span>
+          <span class="tool-name">daily_report</span>
+          <span class="tool-time">1.2s</span>
+        </div>
+        <div class="report-card">
+          <div class="report-date">📅 2026-05-20</div>
+          <div class="report-stats">
+            <div class="report-stat"><div class="stat-num">14</div><div class="stat-label">实体</div></div>
+            <div class="report-stat"><div class="stat-num">18</div><div class="stat-label">关系</div></div>
+          </div>
+          <div class="report-dist">
+            <span class="dist-tag">character ×3</span>
+            <span class="dist-tag">concept ×2</span>
+            <span class="dist-tag">region ×3</span>
+            <span class="dist-tag">organization ×2</span>
+            <span class="dist-tag">event ×2</span>
+            <span class="dist-tag">item ×2</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- entity_create success -->
+      <div class="tool-item">
+        <div class="tool-head">
+          <span>✅</span>
+          <span class="tool-name">entity_create</span>
+          <span class="tool-time">0.3s</span>
+        </div>
+        <div class="summary-card">
+          <div class="summary-title">✓ 天陨山脉 & 灵流之渊</div>
+          <div class="summary-id">ID: 783cb46d…</div>
+        </div>
+      </div>
+
+      <!-- entity_list -->
+      <div class="tool-item">
+        <div class="tool-head">
+          <span>✅</span>
+          <span class="tool-name">entity_list</span>
+          <span class="tool-time">0.8s</span>
+        </div>
+        <div style="font-size:11px;color:#888;margin-bottom:6px">共 3 个实体</div>
+        <div class="entity-card">
+          <div class="ec-header">
+            <span class="ec-icon">⚔️</span>
+            <span class="ec-name">艾尔文</span>
+            <span class="ec-type">character</span>
+          </div>
+          <div class="ec-tags">
+            <span class="ec-tag">约42岁</span>
+            <span class="ec-tag">男</span>
+            <span class="ec-tag">流光剑圣</span>
+          </div>
+          <div class="ec-desc">传奇剑术大师，以「流光剑法」闻名于世…</div>
+        </div>
+        <div class="entity-card">
+          <div class="ec-header">
+            <span class="ec-icon">🌟</span>
+            <span class="ec-name">苏晴川</span>
+            <span class="ec-type">character</span>
+          </div>
+          <div class="ec-tags">
+            <span class="ec-tag">19岁</span>
+            <span class="ec-tag">女</span>
+            <span class="ec-tag">光属性</span>
+          </div>
+        </div>
+        <div class="entity-card">
+          <div class="ec-header">
+            <span class="ec-icon">🎋</span>
+            <span class="ec-name">白镜秋</span>
+            <span class="ec-type">character</span>
+          </div>
+          <div class="ec-tags">
+            <span class="ec-tag">约50岁</span>
+            <span class="ec-tag">男</span>
+            <span class="ec-tag">竹剑先生</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- error -->
+      <div class="tool-item">
+        <div class="tool-head">
+          <span>❌</span>
+          <span class="tool-name">entity_get</span>
+          <span class="tool-time">0.1s</span>
+        </div>
+        <div class="error-card">
+          <div class="error-title">实体未找到</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="pros-cons">
+    <div class="pros"><h4>✅ 优点</h4><ul>
+      <li>视觉效果最好，信息密度高</li>
+      <li>每种结果都有专属 UI</li>
+      <li>利用现有 A2UI 组件</li>
+    </ul></div>
+    <div class="cons"><h4>❌ 缺点</h4><ul>
+      <li>需要为每种工具写映射规则</li>
+      <li>新工具需要新增映射</li>
+      <li>实现复杂度较高</li>
+    </ul></div>
+  </div>
+</div>
+
+<!-- ===== Approach B ===== -->
+<div class="approach">
+  <div class="approach-header">
+    <span class="approach-label">方案 B</span>
+    <span class="approach-title">通用结构化：JSON → 键值对卡片</span>
+  </div>
+  <p class="approach-desc">不区分工具类型，统一将 JSON 解析为键值对列表。成功/错误用颜色区分，嵌套对象递归展开。通用但信息密度较低。</p>
+
+  <div class="preview-area">
+    <div class="preview-header">
+      <span class="status-dot">●</span>
+      <span>已完成</span>
+      <span style="flex:1;text-align:right;color:#888;font-size:11px">5 项调用</span>
+    </div>
+    <div class="preview-body">
+
+      <div class="tool-item">
+        <div class="tool-head">
+          <span>✅</span>
+          <span class="tool-name">daily_report</span>
+          <span class="tool-time">1.2s</span>
+        </div>
+        <div class="summary-card">
+          <div class="summary-title">✓ 操作成功</div>
+          <ul class="struct-list">
+            <li><span class="struct-key">date</span><span class="struct-val">2026-05-20</span></li>
+            <li><span class="struct-key">entities</span><span class="struct-val">14</span></li>
+            <li><span class="struct-key">relations</span><span class="struct-val">18</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="tool-item">
+        <div class="tool-head">
+          <span>✅</span>
+          <span class="tool-name">entity_create</span>
+          <span class="tool-time">0.3s</span>
+        </div>
+        <div class="summary-card">
+          <div class="summary-title">✓ 天陨山脉 & 灵流之渊</div>
+          <ul class="struct-list">
+            <li><span class="struct-key">id</span><span class="struct-val">783cb46d…</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="tool-item">
+        <div class="tool-head">
+          <span>✅</span>
+          <span class="tool-name">entity_list</span>
+          <span class="tool-time">0.8s</span>
+        </div>
+        <div class="summary-card">
+          <div class="summary-title">共 3 个实体</div>
+          <ul class="struct-list">
+            <li><span class="struct-key">▸</span><span class="struct-val">[character] 艾尔文</span></li>
+            <li><span class="struct-key">▸</span><span class="struct-val">[character] 苏晴川</span></li>
+            <li><span class="struct-key">▸</span><span class="struct-val">[character] 白镜秋</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="tool-item">
+        <div class="tool-head">
+          <span>❌</span>
+          <span class="tool-name">entity_get</span>
+          <span class="tool-time">0.1s</span>
+        </div>
+        <div class="error-card">
+          <div class="error-title">实体未找到</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="pros-cons">
+    <div class="pros"><h4>✅ 优点</h4><ul>
+      <li>通用，任何工具结果都能展示</li>
+      <li>实现简单，一个解析器搞定</li>
+      <li>新工具无需额外适配</li>
+    </ul></div>
+    <div class="cons"><h4>❌ 缺点</h4><ul>
+      <li>视觉效果一般，像配置面板</li>
+      <li>实体列表没有卡片感</li>
+      <li>信息密度不如方案 A</li>
+    </ul></div>
+  </div>
+</div>
+
+<!-- ===== Approach C ===== -->
+<div class="approach">
+  <div class="approach-header">
+    <span class="approach-label">方案 C</span>
+    <span class="approach-title">混合方案：已知工具智能映射 + 未知工具通用兜底</span>
+  </div>
+  <p class="approach-desc">对已知工具（entity_list, entity_create, daily_report 等）使用方案 A 的专属 UI，对未知工具自动降级为方案 B 的键值对卡片。两全其美。</p>
+
+  <div class="preview-area">
+    <div class="preview-header">
+      <span class="status-dot">●</span>
+      <span>已完成</span>
+      <span style="flex:1;text-align:right;color:#888;font-size:11px">6 项调用</span>
+    </div>
+    <div class="preview-body">
+
+      <!-- Known: daily_report → rich UI -->
+      <div class="tool-item">
+        <div class="tool-head">
+          <span>✅</span>
+          <span class="tool-name">daily_report</span>
+          <span class="tool-time">1.2s</span>
+        </div>
+        <div class="report-card">
+          <div class="report-date">📅 2026-05-20</div>
+          <div class="report-stats">
+            <div class="report-stat"><div class="stat-num">14</div><div class="stat-label">实体</div></div>
+            <div class="report-stat"><div class="stat-num">18</div><div class="stat-label">关系</div></div>
+          </div>
+          <div class="report-dist">
+            <span class="dist-tag">character ×3</span>
+            <span class="dist-tag">concept ×2</span>
+            <span class="dist-tag">region ×3</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Known: entity_list → EntityCards -->
+      <div class="tool-item">
+        <div class="tool-head">
+          <span>✅</span>
+          <span class="tool-name">entity_list</span>
+          <span class="tool-time">0.8s</span>
+        </div>
+        <div style="font-size:11px;color:#888;margin-bottom:6px">共 3 个实体</div>
+        <div class="entity-card">
+          <div class="ec-header">
+            <span class="ec-icon">⚔️</span>
+            <span class="ec-name">艾尔文</span>
+            <span class="ec-type">character</span>
+          </div>
+          <div class="ec-tags">
+            <span class="ec-tag">约42岁</span>
+            <span class="ec-tag">流光剑圣</span>
+          </div>
+        </div>
+        <div class="entity-card">
+          <div class="ec-header">
+            <span class="ec-icon">🌟</span>
+            <span class="ec-name">苏晴川</span>
+            <span class="ec-type">character</span>
+          </div>
+          <div class="ec-tags">
+            <span class="ec-tag">19岁</span>
+            <span class="ec-tag">光属性</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Known: entity_create → success card -->
+      <div class="tool-item">
+        <div class="tool-head">
+          <span>✅</span>
+          <span class="tool-name">entity_create</span>
+          <span class="tool-time">0.3s</span>
+        </div>
+        <div class="summary-card">
+          <div class="summary-title">✓ 天陨山脉 & 灵流之渊</div>
+          <div class="summary-id">ID: 783cb46d…</div>
+        </div>
+      </div>
+
+      <!-- Unknown tool → fallback key-value -->
+      <div class="tool-item">
+        <div class="tool-head">
+          <span>✅</span>
+          <span class="tool-name">web_search</span>
+          <span class="tool-time">2.1s</span>
+        </div>
+        <div class="summary-card">
+          <div class="summary-title">✓ 操作成功</div>
+          <ul class="struct-list">
+            <li><span class="struct-key">results</span><span class="struct-val">5 条结果</span></li>
+            <li><span class="struct-key">query</span><span class="struct-val">"仙侠世界观设定"</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Error -->
+      <div class="tool-item">
+        <div class="tool-head">
+          <span>❌</span>
+          <span class="tool-name">entity_get</span>
+          <span class="tool-time">0.1s</span>
+        </div>
+        <div class="error-card">
+          <div class="error-title">实体未找到</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="pros-cons">
+    <div class="pros"><h4>✅ 优点</h4><ul>
+      <li>已知工具有最佳视觉效果</li>
+      <li>未知工具自动降级，不会崩溃</li>
+      <li>渐进式增强，可逐步添加映射</li>
+    </ul></div>
+    <div class="cons"><h4>❌ 缺点</h4><ul>
+      <li>实现量介于 A 和 B 之间</li>
+      <li>需要维护映射表</li>
+    </ul></div>
+  </div>
+
+  <div class="recommend">
+    <strong>💡 推荐</strong>：方案 C 是最优解。已知工具（entity_list, entity_create, entity_get, entity_update, entity_delete, relation_create, daily_report）用专属 UI 组件渲染，未知工具自动降级为键值对卡片。映射表可以放在一个 <code>toolResultRenderers</code> 配置对象中，新增工具只需加一条映射。
+  </div>
+</div>
+
+</body>
+</html>

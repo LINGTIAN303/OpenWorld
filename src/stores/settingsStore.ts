@@ -1,0 +1,374 @@
+import { defineStore } from 'pinia'
+import { ref, watch, computed, type Ref } from 'vue'
+import { useTheme } from '../composables/useTheme'
+
+export interface PluginToggle {
+  id: string
+  label: string
+  icon: string
+  active: boolean
+  dependencies?: { moduleId: string; version?: string; optional?: boolean }[]
+  source?: 'builtin' | 'local' | 'remote'
+}
+
+export interface CustomProviderEntry {
+  id: string
+  name: string
+  baseUrl: string
+  apiType: string
+  modelId: string
+}
+
+const STORAGE_KEY_PLUGINS = 'worldsmith_plugin_toggles'
+const STORAGE_KEY_UNDO_LIMIT = 'worldsmith_undo_history_limit'
+const STORAGE_KEY_MULTI_STEP_REDO = 'worldsmith_multi_step_redo'
+const STORAGE_KEY_MAX_CENTER_NODES = 'worldsmith_max_center_nodes'
+const STORAGE_KEY_PANEL_LIMIT_ENABLED = 'worldsmith_panel_limit_enabled'
+const STORAGE_KEY_SMOOTH_CARET = 'worldsmith_smooth_caret'
+const STORAGE_KEY_SMOOTH_CARET_DURATION = 'worldsmith_smooth_caret_duration'
+const STORAGE_KEY_SMOOTH_CARET_VARIANT = 'worldsmith_smooth_caret_variant'
+const STORAGE_KEY_AUTO_CREATE_ENTITY = 'worldsmith_auto_create_entity'
+const STORAGE_KEY_AUTO_CREATE_SELECTOR = 'worldsmith_auto_create_selector'
+const STORAGE_KEY_AUTO_CREATE_ENTITY_REF = 'worldsmith_auto_create_entity_ref'
+const STORAGE_KEY_AUTO_CREATE_GRAPH = 'worldsmith_auto_create_graph'
+const STORAGE_KEY_HIGHLIGHT_PULSE_ENABLED = 'worldsmith_highlight_pulse_enabled'
+const STORAGE_KEY_HIGHLIGHT_DIMMING_ENABLED = 'worldsmith_highlight_dimming_enabled'
+const STORAGE_KEY_HIGHLIGHT_DIMMING_MODE = 'worldsmith_highlight_dimming_mode'
+const STORAGE_KEY_HIGHLIGHT_DIM_OPACITY = 'worldsmith_highlight_dim_opacity'
+const STORAGE_KEY_HIGHLIGHT_SPREAD_HOPS = 'worldsmith_highlight_spread_hops'
+const STORAGE_KEY_AI_PROVIDER_MODE = 'worldsmith_ai_provider_mode'
+const STORAGE_KEY_AI_CLOUD_PROVIDER = 'worldsmith_ai_cloud_provider'
+const STORAGE_KEY_AI_CLOUD_MODEL = 'worldsmith_ai_cloud_model'
+const STORAGE_KEY_AI_LOCAL_ENDPOINT = 'worldsmith_ai_local_endpoint'
+const STORAGE_KEY_AI_LOCAL_TYPE = 'worldsmith_ai_local_type'
+const STORAGE_KEY_AI_LOCAL_MODEL = 'worldsmith_ai_local_model'
+const STORAGE_KEY_AI_CUSTOM_BASE_URL = 'worldsmith_ai_custom_base_url'
+const STORAGE_KEY_AI_CUSTOM_TYPE = 'worldsmith_ai_custom_type'
+const STORAGE_KEY_AI_CUSTOM_MODEL = 'worldsmith_ai_custom_model'
+const STORAGE_KEY_AI_CUSTOM_PROVIDERS = 'worldsmith_ai_custom_providers'
+const STORAGE_KEY_AI_DANGER_CONFIRM = 'worldsmith_ai_danger_confirm'
+const STORAGE_KEY_VISION_SUB_AGENT_PROVIDER = 'worldsmith_vision_sub_agent_provider'
+const STORAGE_KEY_VISION_SUB_AGENT_MODEL = 'worldsmith_vision_sub_agent_model'
+const STORAGE_KEY_OUTLINE_INLINE_EDIT = 'worldsmith_outline_inline_edit'
+const STORAGE_KEY_VIDEO_MODE_ENABLED = 'worldsmith_video_mode_enabled'
+const STORAGE_KEY_VIDEO_MODE_DURATION = 'worldsmith_video_mode_duration'
+const STORAGE_KEY_VIDEO_MODE_PERSONA_TRANSITION = 'worldsmith_video_mode_persona_transition'
+const STORAGE_KEY_VIDEO_MODE_DEBOUNCE = 'worldsmith_video_mode_debounce'
+const STORAGE_KEY_VIDEO_MODE_TIMEOUT = 'worldsmith_video_mode_timeout'
+const STORAGE_KEY_VIDEO_MODE_MAX_FAILURES = 'worldsmith_video_mode_max_failures'
+const STORAGE_KEY_VIDEO_MODE_CROSS_PLUGIN = 'worldsmith_video_mode_cross_plugin'
+const STORAGE_KEY_VIDEO_MODE_PERSONA_SWITCH_CHANCE = 'worldsmith_video_mode_persona_switch_chance'
+const STORAGE_KEY_VIDEO_MODE_PAUSE_THRESHOLD = 'worldsmith_video_mode_pause_threshold'
+const STORAGE_KEY_VIDEO_MODE_SENTENCE_TRIGGER = 'worldsmith_video_mode_sentence_trigger'
+const STORAGE_KEY_VIDEO_MODE_CHAR_THRESHOLD = 'worldsmith_video_mode_char_threshold'
+const STORAGE_KEY_VIDEO_MODE_LUCK_ENABLED = 'worldsmith_video_mode_luck_enabled'
+const STORAGE_KEY_VIDEO_MODE_LUCK_RESET_MINUTES = 'worldsmith_video_mode_luck_reset_minutes'
+const STORAGE_KEY_VIDEO_MODE_LUCK_RESET_OPS = 'worldsmith_video_mode_luck_reset_ops'
+const STORAGE_KEY_VIDEO_MODE_POSITION_CONTEXT = 'worldsmith_video_mode_position_context'
+const STORAGE_KEY_VIDEO_MODE_CLICK_PIN = 'worldsmith_video_mode_click_pin'
+const STORAGE_KEY_VIDEO_MODE_SCENE_PROBS = 'worldsmith_video_mode_scene_probs'
+const STORAGE_KEY_TIMELINE_DRAG_ENABLED = 'worldsmith_timeline_drag_enabled'
+const STORAGE_KEY_TIMELINE_DEFAULT_MODE = 'worldsmith_timeline_default_mode'
+const STORAGE_KEY_TIMELINE_DEFAULT_GROUP = 'worldsmith_timeline_default_group'
+const STORAGE_KEY_TIMELINE_COMPACT_MODE = 'worldsmith_timeline_compact_mode'
+
+const DEFAULT_PLUGINS: PluginToggle[] = [
+  { id: 'official.characters', label: '人物志', icon: 'character', active: true },
+  { id: 'official.regions', label: '区域图谱', icon: 'region', active: false },
+  { id: 'official.timeline', label: '时间线', icon: 'timeline', active: true },
+  { id: 'official.organizations', label: '势力', icon: 'organization', active: false },
+  { id: 'official.concepts', label: '概念/设定库', icon: 'concept', active: true },
+  { id: 'official.items', label: '道具/装备', icon: 'trade', active: false },
+  { id: 'official.apparel', label: '服饰/装备', icon: 'apparel', active: false },
+  { id: 'official.mindmap', label: '思维导图', icon: 'mindmap', active: false },
+  { id: 'official.custom', label: '自定义视图', icon: 'dashboard', active: false },
+  { id: 'official.module-builder', label: '自定义模块', icon: 'module-builder', active: true },
+  { id: 'official.graph', label: '关系图谱', icon: 'graph', active: false },
+  { id: 'official.buildings', label: '建筑物', icon: 'building', active: false },
+  { id: 'official.species', label: '种族', icon: 'species', active: false },
+  { id: 'official.magic', label: '魔法', icon: 'magic', active: false },
+  { id: 'official.outline', label: '大纲', icon: 'outline', active: true },
+  { id: 'official.languages', label: '语言/文字', icon: 'language', active: false },
+  { id: 'official.culture', label: '文化/文明', icon: 'culture', active: false },
+  { id: 'official.conflict', label: '冲突/战争', icon: 'combat', active: false },
+  { id: 'official.inspiration', label: '灵感/素材库', icon: 'inspiration', active: true },
+  { id: 'official.plants', label: '植物', icon: 'plant', active: false },
+  { id: 'official.combat_stats', label: '战力', icon: 'combat', active: false },
+  { id: 'official.weapons', label: '武器', icon: 'weapon', active: false },
+  { id: 'official.manuscript', label: '正文编辑', icon: 'manuscript', active: false },
+  { id: 'official.drawing', label: '画板', icon: 'drawing', active: false },
+  { id: 'official.tactical-board', label: '战术棋盘', icon: 'tactical-board', active: false },
+  { id: 'official.notebook', label: '笔记本', icon: 'notebook', active: true },
+  { id: 'official.workflow', label: '工作流', icon: 'lightning', active: true },
+]
+
+function loadPlugins(): PluginToggle[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_PLUGINS)
+    if (!raw) return DEFAULT_PLUGINS.map(p => ({ ...p }))
+    const saved = JSON.parse(raw) as { id: string; active: boolean }[]
+    return DEFAULT_PLUGINS.map(def => {
+      const found = saved.find((s: any) => s.id === def.id)
+      return { ...def, active: found ? found.active : def.active }
+    })
+  } catch {
+    return DEFAULT_PLUGINS.map(p => ({ ...p }))
+  }
+}
+
+function savePlugins(plugins: PluginToggle[]) {
+  localStorage.setItem(STORAGE_KEY_PLUGINS, JSON.stringify(plugins.map(p => ({ id: p.id, active: p.active }))))
+}
+
+function loadCustomProviders(): CustomProviderEntry[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_AI_CUSTOM_PROVIDERS)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+function saveCustomProviders(providers: CustomProviderEntry[]): void {
+  localStorage.setItem(STORAGE_KEY_AI_CUSTOM_PROVIDERS, JSON.stringify(providers))
+}
+
+function persistedRef<T extends string | number | boolean>(key: string, defaultValue: T): Ref<T> {
+  const raw = localStorage.getItem(key)
+  let initial: T = defaultValue
+  if (raw !== null) {
+    if (typeof defaultValue === 'boolean') {
+      initial = (defaultValue ? raw !== 'false' : raw === 'true') as T
+    } else if (typeof defaultValue === 'number') {
+      initial = (Number(raw) || defaultValue) as T
+    } else {
+      initial = raw as T
+    }
+  }
+  const val = ref(initial) as Ref<T>
+  watch(val, (v) => {
+    localStorage.setItem(key, String(v))
+  })
+  return val
+}
+
+function deriveKeyStoreId(baseUrl: string): string {
+  if (!baseUrl || !baseUrl.trim()) return 'custom:_empty'
+  try {
+    const url = new URL(baseUrl)
+    return 'custom:' + url.hostname
+  } catch {
+    return 'custom:' + baseUrl.replace(/[^a-zA-Z0-9.-]/g, '_').slice(0, 60)
+  }
+}
+
+
+/* ─── 快捷键默认键位 ─── */
+
+const SHORTCUT_DEFAULTS: Record<string, string[]> = {
+  'help.shortcuts':   ['?'],
+  'sidebar.toggle':   ['ctrl', 'b'],
+  'search.open':      ['ctrl', 'k'],
+  'menu.import-export': ['ctrl', 'shift', 's'],
+  'settings.open':    ['ctrl', ','],
+  'global.undo':      ['ctrl', 'z'],
+  'global.redo':      ['ctrl', 'y'],
+  'global.redo-alt':  ['ctrl', 'shift', 'z'],
+  'global.undoHistory': ['ctrl', 'alt', 'z'],
+  'project.save':     ['ctrl', 's'],
+  'region.borderline': ['alt'],
+  'character.undo':   ['ctrl', 'z'],
+  'character.redo':   ['ctrl', 'y'],
+  'org.undo':         ['ctrl', 'z'],
+  'org.redo':         ['ctrl', 'y'],
+  'region.undo':      ['ctrl', 'z'],
+  'region.redo':      ['ctrl', 'y'],
+  'drawing.undo':     ['ctrl', 'z'],
+  'drawing.redo':     ['ctrl', 'shift', 'z'],
+  'drawing.zoomIn':   ['ctrl', '='],
+  'drawing.zoomOut':  ['ctrl', '-'],
+  'drawing.fitView':  ['ctrl', '0'],
+  'mindmap.undo':     ['ctrl', 'z'],
+  'mindmap.redo':     ['ctrl', 'y'],
+  'mindmap.toggleDetail': ['i'],
+  'mindmap.fitView':  ['f'],
+  'mindmap.exitNested': ['escape'],
+  'mindmap.deleteNode': ['delete'],
+  'mindmap.freeDraw': ['d'],
+  'mindmap.aiSuggest': ['ctrl', 'j'],
+}
+
+const STORAGE_KEY_SHORTCUTS = 'worldsmith_shortcuts'
+
+function loadShortcuts(): Record<string, string[]> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_SHORTCUTS)
+    return raw ? JSON.parse(raw) : {}
+  } catch { return {} }
+}
+
+function saveShortcuts(overrides: Record<string, string[]>) {
+  localStorage.setItem(STORAGE_KEY_SHORTCUTS, JSON.stringify(overrides))
+}
+
+export const useSettingsStore = defineStore('settings', () => {
+  const { currentThemeId, setTheme: setThemeFromEngine } = useTheme()
+  const plugins = ref<PluginToggle[]>(loadPlugins())
+  const theme = computed(() => currentThemeId.value)
+
+  const undoHistoryLimit = persistedRef(STORAGE_KEY_UNDO_LIMIT, 20)
+  const multiStepRedo = persistedRef(STORAGE_KEY_MULTI_STEP_REDO, true)
+  const maxCenterNodes = persistedRef(STORAGE_KEY_MAX_CENTER_NODES, 5)
+  const panelLimitEnabled = persistedRef(STORAGE_KEY_PANEL_LIMIT_ENABLED, true)
+  const smoothCaretEnabled = persistedRef(STORAGE_KEY_SMOOTH_CARET, true)
+  const smoothCaretDuration = persistedRef(STORAGE_KEY_SMOOTH_CARET_DURATION, 150)
+  const smoothCaretVariant = persistedRef(STORAGE_KEY_SMOOTH_CARET_VARIANT, 'line')
+  const autoCreateEntityEnabled = persistedRef(STORAGE_KEY_AUTO_CREATE_ENTITY, true)
+  const autoCreateSelectorEnabled = persistedRef(STORAGE_KEY_AUTO_CREATE_SELECTOR, true)
+  const autoCreateEntityRefEnabled = persistedRef(STORAGE_KEY_AUTO_CREATE_ENTITY_REF, true)
+  const autoCreateGraphEnabled = persistedRef(STORAGE_KEY_AUTO_CREATE_GRAPH, true)
+  const highlight_pulseEnabled = persistedRef(STORAGE_KEY_HIGHLIGHT_PULSE_ENABLED, true)
+  const highlight_dimmingEnabled = persistedRef(STORAGE_KEY_HIGHLIGHT_DIMMING_ENABLED, true)
+  const highlight_dimmingMode = persistedRef(STORAGE_KEY_HIGHLIGHT_DIMMING_MODE, 'spread')
+  const highlight_dimOpacity = persistedRef(STORAGE_KEY_HIGHLIGHT_DIM_OPACITY, 0.25)
+  const highlight_spreadHops = persistedRef(STORAGE_KEY_HIGHLIGHT_SPREAD_HOPS, 3)
+
+  const aiProviderMode = persistedRef(STORAGE_KEY_AI_PROVIDER_MODE, 'cloud')
+  const aiCloudProvider = persistedRef(STORAGE_KEY_AI_CLOUD_PROVIDER, 'anthropic')
+  const aiCloudModel = persistedRef(STORAGE_KEY_AI_CLOUD_MODEL, 'claude-sonnet-4-20250514')
+  const aiLocalEndpoint = persistedRef(STORAGE_KEY_AI_LOCAL_ENDPOINT, 'http://localhost:11434')
+  const aiLocalType = persistedRef(STORAGE_KEY_AI_LOCAL_TYPE, 'ollama')
+  const aiLocalModel = persistedRef(STORAGE_KEY_AI_LOCAL_MODEL, '')
+  const aiCustomBaseUrl = persistedRef(STORAGE_KEY_AI_CUSTOM_BASE_URL, '')
+  const aiCustomType = persistedRef(STORAGE_KEY_AI_CUSTOM_TYPE, 'openai-compatible')
+  const aiCustomModel = persistedRef(STORAGE_KEY_AI_CUSTOM_MODEL, '')
+  const customProviders = ref<CustomProviderEntry[]>(loadCustomProviders())
+  const aiDangerConfirm = persistedRef(STORAGE_KEY_AI_DANGER_CONFIRM, true)
+  const visionSubAgentProvider = persistedRef(STORAGE_KEY_VISION_SUB_AGENT_PROVIDER, '')
+  const visionSubAgentModel = persistedRef(STORAGE_KEY_VISION_SUB_AGENT_MODEL, '')
+  const outlineInlineEdit = persistedRef(STORAGE_KEY_OUTLINE_INLINE_EDIT, true)
+  const videoModeEnabled = persistedRef(STORAGE_KEY_VIDEO_MODE_ENABLED, false)
+  const videoModeDuration = persistedRef(STORAGE_KEY_VIDEO_MODE_DURATION, 5)
+  const videoModePersonaTransition = persistedRef(STORAGE_KEY_VIDEO_MODE_PERSONA_TRANSITION, true)
+  const videoModeDebounce = persistedRef(STORAGE_KEY_VIDEO_MODE_DEBOUNCE, 5)
+  const videoModeTimeout = persistedRef(STORAGE_KEY_VIDEO_MODE_TIMEOUT, 3)
+  const videoModeMaxFailures = persistedRef(STORAGE_KEY_VIDEO_MODE_MAX_FAILURES, 3)
+  const videoModeCrossPlugin = persistedRef(STORAGE_KEY_VIDEO_MODE_CROSS_PLUGIN, false)
+  const videoModePersonaSwitchChance = persistedRef(STORAGE_KEY_VIDEO_MODE_PERSONA_SWITCH_CHANCE, 30)
+  const videoModePauseThreshold = persistedRef(STORAGE_KEY_VIDEO_MODE_PAUSE_THRESHOLD, 2)
+  const videoModeSentenceTrigger = persistedRef(STORAGE_KEY_VIDEO_MODE_SENTENCE_TRIGGER, true)
+  const videoModeCharThreshold = persistedRef(STORAGE_KEY_VIDEO_MODE_CHAR_THRESHOLD, 20)
+  const videoModeLuckEnabled = persistedRef(STORAGE_KEY_VIDEO_MODE_LUCK_ENABLED, true)
+  const videoModeLuckResetMinutes = persistedRef(STORAGE_KEY_VIDEO_MODE_LUCK_RESET_MINUTES, 5)
+  const videoModeLuckResetOps = persistedRef(STORAGE_KEY_VIDEO_MODE_LUCK_RESET_OPS, 10)
+  const videoModePositionContext = persistedRef(STORAGE_KEY_VIDEO_MODE_POSITION_CONTEXT, true)
+  const videoModeClickPin = persistedRef(STORAGE_KEY_VIDEO_MODE_CLICK_PIN, true)
+
+  const DEFAULT_SCENE_PROBS: Record<string, number> = {
+    entity_create: 80,
+    entity_delete: 90,
+    field_short: 50,
+    field_long: 40,
+    name_input: 60,
+    relation_create: 30,
+    relation_delete: 40,
+    view_switch: 20,
+    batch_edit: 25,
+  }
+
+  function loadSceneProbs(): Record<string, number> {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_VIDEO_MODE_SCENE_PROBS)
+      return raw ? { ...DEFAULT_SCENE_PROBS, ...JSON.parse(raw) } : { ...DEFAULT_SCENE_PROBS }
+    } catch {
+      return { ...DEFAULT_SCENE_PROBS }
+    }
+  }
+
+  const videoModeSceneProbs = ref<Record<string, number>>(loadSceneProbs())
+
+  const timelineDragEnabled = persistedRef(STORAGE_KEY_TIMELINE_DRAG_ENABLED, false)
+  const timelineDefaultMode = persistedRef(STORAGE_KEY_TIMELINE_DEFAULT_MODE, 'vertical' as string)
+  const timelineDefaultGroup = persistedRef(STORAGE_KEY_TIMELINE_DEFAULT_GROUP, 'none' as string)
+  const timelineCompactMode = persistedRef(STORAGE_KEY_TIMELINE_COMPACT_MODE, false)
+
+  watch(customProviders, v => saveCustomProviders(v), { deep: true })
+  watch(videoModeSceneProbs, v => localStorage.setItem(STORAGE_KEY_VIDEO_MODE_SCENE_PROBS, JSON.stringify(v)), { deep: true })
+
+  function togglePlugin(id: string) {
+    const p = plugins.value.find(p => p.id === id)
+    if (!p) return
+    p.active = !p.active
+    savePlugins(plugins.value)
+  }
+
+  function setTheme(t: string) {
+    setThemeFromEngine(t)
+  }
+
+  function isActive(id: string): boolean {
+    return plugins.value.find(p => p.id === id)?.active ?? false
+  }
+
+  function getActivePluginIds(): string[] {
+    return plugins.value.filter(p => p.active).map(p => p.id)
+  }
+
+  /* ─── 快捷键覆盖 ─── */
+  const shortcutOverrides = ref<Record<string, string[]>>(loadShortcuts())
+
+  function getShortcut(id: string): string[] {
+    return shortcutOverrides.value[id] || SHORTCUT_DEFAULTS[id] || []
+  }
+
+  function setShortcut(id: string, keys: string[]) {
+    shortcutOverrides.value[id] = keys
+    saveShortcuts(shortcutOverrides.value)
+  }
+
+  function resetShortcut(id: string) {
+    delete shortcutOverrides.value[id]
+    saveShortcuts(shortcutOverrides.value)
+  }
+
+  function resetAllShortcuts() {
+    shortcutOverrides.value = {}
+    localStorage.removeItem(STORAGE_KEY_SHORTCUTS)
+  }
+
+  function addCustomProvider(entry: Omit<CustomProviderEntry, 'id'>): CustomProviderEntry {
+    const id = 'cp-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+    const item: CustomProviderEntry = { id, ...entry }
+    customProviders.value.push(item)
+    return item
+  }
+
+  function removeCustomProvider(id: string): void {
+    const idx = customProviders.value.findIndex(p => p.id === id)
+    if (idx !== -1) customProviders.value.splice(idx, 1)
+  }
+
+  function getCustomKeyStoreId(baseUrl: string): string {
+    return deriveKeyStoreId(baseUrl)
+  }
+
+  return { plugins, theme, togglePlugin, setTheme, isActive, getActivePluginIds,
+           shortcutOverrides, getShortcut, setShortcut, resetShortcut, resetAllShortcuts,
+           SHORTCUT_DEFAULTS, undoHistoryLimit, multiStepRedo, maxCenterNodes, panelLimitEnabled,
+           smoothCaretEnabled, smoothCaretDuration, smoothCaretVariant,
+           autoCreateEntityEnabled, autoCreateSelectorEnabled, autoCreateEntityRefEnabled, autoCreateGraphEnabled,
+           highlight_pulseEnabled, highlight_dimmingEnabled, highlight_dimmingMode, highlight_dimOpacity, highlight_spreadHops,
+           aiProviderMode, aiCloudProvider, aiCloudModel, aiLocalEndpoint, aiLocalType, aiLocalModel,
+           aiCustomBaseUrl, aiCustomType, aiCustomModel, aiDangerConfirm,
+           customProviders, addCustomProvider, removeCustomProvider, getCustomKeyStoreId,
+           visionSubAgentProvider, visionSubAgentModel,
+           outlineInlineEdit,
+           videoModeEnabled, videoModeDuration, videoModePersonaTransition,
+           videoModeDebounce, videoModeTimeout, videoModeMaxFailures,
+           videoModeCrossPlugin, videoModePersonaSwitchChance,
+           videoModePauseThreshold, videoModeSentenceTrigger, videoModeCharThreshold,
+           videoModeLuckEnabled, videoModeLuckResetMinutes, videoModeLuckResetOps,
+           videoModePositionContext, videoModeClickPin, videoModeSceneProbs,
+           timelineDragEnabled, timelineDefaultMode, timelineDefaultGroup, timelineCompactMode,
+           DEFAULT_SCENE_PROBS }
+})

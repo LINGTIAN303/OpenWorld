@@ -1,0 +1,49 @@
+<h2>空白画布引导方案</h2>
+<p class="subtitle">用户打开编辑器时面对空白画布，不知道从何开始。选择一种引导方式</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>模板画廊 + 空白画布</h3>
+      <p>打开编辑器时先弹出模板选择面板，提供常见工作流模板（如"内容创作流程"、"数据处理管道"），也可以跳过直接用空白画布</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>交互式向导</h3>
+      <p>分步引导用户：1.选择目标 → 2.自动生成骨架节点 → 3.逐步填充配置。类似 Notion 的新建页面引导</p>
+    </div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>智能建议 + 模板</h3>
+      <p>画布中央显示"描述你想自动化的任务"输入框，AI 根据描述生成工作流骨架；同时提供模板库作为备选</p>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:20px;">
+  <div class="mockup">
+    <div class="mockup-header">方案 C 预览：智能建议 + 模板</div>
+    <div class="mockup-body" style="background:#f8fafc;border-radius:8px;padding:16px;">
+      <div style="text-align:center;padding:20px 0;">
+        <div style="font-size:24px;margin-bottom:8px;">⚡</div>
+        <div style="font-size:16px;font-weight:600;color:#1e293b;margin-bottom:4px;">创建新工作流</div>
+        <div style="font-size:13px;color:#64748b;margin-bottom:16px;">描述你想自动化的任务，或从模板开始</div>
+        <div style="max-width:400px;margin:0 auto;padding:10px 14px;background:white;border:2px solid #e2e8f0;border-radius:8px;font-size:13px;color:#94a3b8;text-align:left;">
+          💬 例如：每天早上读取邮件，总结要点后发送到飞书群...
+        </div>
+        <div style="margin-top:16px;font-size:12px;color:#94a3b8;">—— 或从模板开始 ——</div>
+        <div style="display:flex;gap:8px;justify-content:center;margin-top:10px;flex-wrap:wrap;">
+          <div style="padding:8px 12px;background:white;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">📧 邮件处理</div>
+          <div style="padding:8px 12px;background:white;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">📝 内容创作</div>
+          <div style="padding:8px 12px;background:white;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">📊 数据分析</div>
+          <div style="padding:8px 12px;background:white;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">🔄 定时任务</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

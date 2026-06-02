@@ -1,0 +1,21 @@
+{
+  "name": "worldsmith-agent",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "latest",
+    "@earendil-works/pi-ai": "latest",
+    "commander": "^14.0.3",
+    "dexie": "^4.4.2"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "typescript": "~6.0.2"
+  }
+}

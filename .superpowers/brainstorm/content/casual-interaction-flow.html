@@ -1,0 +1,185 @@
+<h2>闲聊模式核心交互流程</h2>
+<p class="subtitle">从用户发消息到 Agent 响应的完整数据流</p>
+
+<div class="section">
+  <h3>1. 完整响应链路</h3>
+  <p>用户发送一条消息后，系统如何处理并触发 Agent 响应</p>
+
+  <div class="mockup">
+    <div class="mockup-header">闲聊模式 — 消息处理流程图</div>
+    <div class="mockup-body" style="padding:16px;font-size:12px;max-width:560px;line-height:1.8">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(16,185,129,0.08);border-radius:8px;border-left:4px solid #10b981;margin-bottom:8px">
+        <span style="font-size:18px">📤</span>
+        <span style="font-weight:600">1. 用户发送消息</span>
+      </div>
+
+      <div style="text-align:center;color:var(--text-tertiary);padding:2px">↓ 解析 @提及、引用回复、图片/文件附件</div>
+
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--surface);border-radius:8px;border-left:4px solid #6c5ce7;margin-bottom:8px">
+        <span style="font-size:18px">🧠</span>
+        <span style="font-weight:600">2. CasualStrategy.calculateDesire() × N 个成员</span>
+      </div>
+
+      <div style="margin-left:20px;padding:8px 12px;background:var(--surface-elevated);border-radius:6px;font-size:11px;margin-bottom:8px;border:1px dashed var(--border)">
+        <div style="color:var(--text-tertiary);margin-bottom:4px;font-weight:600">每个 Agent 的欲望值计算：</div>
+        <table style="width:100%;font-size:11px">
+          <tr><td style="padding:2px 4px">架构师</td><td style="color:#3b82f6;font-weight:600;text-align:right">0.85</td><td style="text-align:right">@加成 + 角色匹配</td></tr>
+          <tr><td style="padding:2px 4px">产品经理</td><td style="color:#f59e0b;font-weight:600;text-align:right">0.52</td><td style="text-align:right">角色匹配</td></tr>
+          <tr><td style="padding:2px 4px">测试工程师</td><td style="color:#ef4444;font-weight:600;text-align:right">0.15</td><td style="text-align:right">低于阈值 ❌</td></tr>
+          <tr><td style="padding:2px 4px">设计师</td><td style="color:#ef4444;font-weight:600;text-align:right">0.08</td><td style="text-align:right">不相关 + 近期活跃衰减 ❌</td></tr>
+        </table>
+      </div>
+
+      <div style="text-align:center;color:var(--text-tertiary);padding:2px">↓ 阈值过滤 (threshold = 0.4)，筛选出 2 位发言者</div>
+
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--surface);border-radius:8px;border-left:4px solid #a29bfe;margin-bottom:8px">
+        <span style="font-size:18px">⚡</span>
+        <span style="font-weight:600">3. 并行调用 API (Promise.allSettled)</span>
+      </div>
+
+      <div style="margin-left:20px;display:flex;gap:8px;margin-bottom:8px">
+        <div style="flex:1;padding:8px;background:#3b82f6;color:white;border-radius:6px;text-align:center;font-size:11px">
+          架构师<br>API 调用中...<br><span style="opacity:0.7">⏳ streaming</span>
+        </div>
+        <div style="flex:1;padding:8px;background:#8b5cf6;color:white;border-radius:6px;text-align:center;font-size:11px">
+          产品经理<br>API 调用中...<br><span style="opacity:0.7">⏳ streaming</span>
+        </div>
+      </div>
+
+      <div style="text-align:center;color:var(--text-tertiary);padding:2px">↓ 流式输出 → 逐字渲染到 UI</div>
+
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(16,185,129,0.08);border-radius:8px;border-left:4px solid #10b981;margin-bottom:8px">
+        <span style="font-size:18px">💬</span>
+        <span style="font-weight:600">4. 消息气泡逐个出现（按到达顺序）</span>
+      </div>
+
+      <div style="margin-left:20px;padding:8px;background:var(--surface);border-radius:8px;font-size:11px;margin-bottom:8px">
+        <div style="margin-bottom:4px"><span style="color:#3b82f6;font-weight:600">架构师：</span>方案可行，我补充一下技术细节...</div>
+        <div><span style="color:#8b5cf6;font-weight:600">产品经理：</span>同意，我补充一下产品视角...</div>
+      </div>
+
+      <div style="text-align:center;color:var(--text-tertiary);padding:2px">↓ 未达阈值的 Agent 显示系统提示</div>
+
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:rgba(200,200,200,0.08);border-radius:8px;border-left:4px solid #999;margin-bottom:8px">
+        <span style="font-size:14px">ℹ️</span>
+        <span style="font-size:11px;color:var(--text-tertiary)">测试工程师、设计师 未参与此话题讨论</span>
+      </div>
+
+      <div style="text-align:center;color:var(--text-tertiary);padding:2px">↓ 等待下一条用户消息（不自动终止）</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>2. 发言欲望计算细节</h3>
+  <p>欲望值的四个维度及其权重</p>
+
+  <div class="mockup">
+    <div class="mockup-header">欲望值 = f(基础, @加成, 角色, 活跃度)</div>
+    <div class="mockup-body" style="padding:12px;font-size:12px;max-width:520px">
+      <div style="background:var(--surface);border-radius:10px;padding:12px;margin-bottom:8px">
+        <div style="font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+          <span style="font-size:16px">🧮</span> 计算公式
+        </div>
+        <code style="display:block;padding:10px;background:rgba(108,92,231,0.06);border-radius:6px;font-family:monospace;font-size:11px;line-height:1.8;white-space:pre-wrap">desire = base(0.3)
+       + mentionBoost(×@时+0.5)
+       + roleRelevance(msg关键词匹配) × weight(0.3)
+       - recentDecay(近N条发言数 × 0.1)
+       - muted? → 0
+
+最终值 clamp [0, 1]
+阈值默认 0.4 → 超过才发言</code>
+      </div>
+
+      <div style="font-weight:600;margin-bottom:6px">各维度说明：</div>
+      <table style="width:100%;font-size:11px;border-collapse:collapse">
+        <thead>
+          <tr style="background:var(--surface)">
+            <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border)">维度</th>
+            <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border)">范围</th>
+            <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border)">作用</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td style="padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.05)">基础欲望</td><td style="padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.05)">固定 0.3</td><td style="padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.05)">保证每个Agent都有一定概率参与</td></tr>
+          <tr style="background:var(--surface)"><td style="padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.05)"><span style="color:#3b82f6;font-weight:600">@提及加成</span></td><td style="padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.05)">+0.5</td><td style="padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.05)">被@时基本必回（0.3+0.5=0.8）</td></tr>
+          <tr><td style="padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.05)">角色相关度</td><td style="padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.05)">0 ~ 0.3</td><td style="padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.05)">通过角色描述/关键词匹配计算</td></tr>
+          <tr style="background:var(--surface)"><td style="padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.05)"><span style="color:#ef4444">活跃衰减</span></td><td style="padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.05)">-0.1 × 近期条数</td><td style="padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.05)">防止单个Agent连续刷屏</td></tr>
+          <tr><td style="padding:6px 8px"><span style="color:#ef4444;font-weight:600">禁言归零</span></td><td style="padding:6px 8px">= 0</td><td style="padding:6px 8px">被禁言时无论其他维度多高都不发言</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>3. 状态机</h3>
+  <p>闲聊模式的状态流转</p>
+
+  <div class="mockup">
+    <div class="mockup-header">CasualChatEngine 状态机</div>
+    <div class="mockup-body" style="padding:16px;font-size:12px;max-width:500px">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="min-width:80px;padding:8px 12px;background:rgba(16,185,129,0.1);border:2px solid #10b981;border-radius:8px;text-align:center;font-weight:600;color:#10b981">idle<br><span style="font-size:10px;font-weight:400">空闲</span></div>
+          <div style="flex:1;height:2px;background:var(--border);position:relative"><div style="position:absolute;top:-6px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--text-tertiary);white-space:nowrap">用户发消息</div></div>
+          <div style="min-width:80px;padding:8px 12px;background:rgba(59,130,246,0.1);border:2px dashed #3b82f6;border-radius:8px;text-align:center;font-weight:600;color:#3b82f6">calculating<br><span style="font-size:10px;font-weight:400">计算欲望</span></div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="min-width:80px;padding:8px 12px;background:rgba(168,85,247,0.1);border:2px dashed #a855f7;border-radius:8px;text-align:center;font-weight:600;color:#a855f7">responding<br><span style="font-size:10px;font-weight:400">并行响应中</span></div>
+          <div style="flex:1;height:2px;background:var(--border);position:relative"><div style="position:absolute;top:-6px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--text-tertiary);white-space:nowrap">全部完成</div></div>
+          <div style="min-width:80px;padding:8px 12px;background:rgba(16,185,129,0.1);border:2px solid #10b981;border-radius:8px;text-align:center;font-weight:600;color:#10b981">idle<br><span style="font-size:10px;font-weight:400">空闲</span></div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="min-width:80px;padding:8px 12px;background:rgba(245,158,11,0.1);border:2px solid #f59e0b;border-radius:8px;text-align:center;font-weight:600;color:#f59e0b">paused<br><span style="font-size:10px;font-weight:400">暂停</span></div>
+          <div style="flex:1"></div>
+          <div style="min-width:80px;padding:8px 12px;background:rgba(16,185,129,0.1);border:2px solid #10b981;border-radius:8px;text-align:center;font-weight:600;color:#10b981">idle</div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;padding:10px;background:var(--surface);border-radius:8px;font-size:11px">
+        <div style="font-weight:600;margin-bottom:4px">关键特性：</div>
+        <ul style="margin:0;padding-left:16px;line-height:1.8">
+          <li><strong>idle ↔ calculating ↔ responding</strong> 循环，不会自动终止</li>
+          <li><strong>任何状态 → paused</strong> 用户可随时暂停（如费用警告）</li>
+          <li><strong>responding 中新消息到来</strong>：排队等待当前批次完成后立即处理</li>
+          <li><strong>无 completed/terminated</strong>：闲聊群持续存在直到手动解散</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>4. 并行响应的边界情况</h3>
+
+  <div class="mockup">
+    <div class="mockup-header">需要处理的异常场景</div>
+    <div class="mockup-body" style="padding:12px;font-size:12px;max-width:480px">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="padding:8px 10px;background:var(--surface);border-radius:8px;border-left:3px solid #f59e0b">
+          <div style="font-weight:600;color:#f59e0b">场景A：部分 Agent API 失败</div>
+          <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">成功的正常显示消息，失败的显示「XXX 回复失败」提示，不影响其他 Agent 的结果展示</div>
+        </div>
+        <div style="padding:8px 10px;background:var(--surface);border-radius:8px;border-left:3px solid #3b82f6">
+          <div style="font-weight:600;color:#3b82f6">场景B：所有 Agent 都失败</div>
+          <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">显示一条系统提示：「本次请求未能获得任何回复」，保留用户消息在聊天记录中</div>
+        </div>
+        <div style="padding:8px 10px;background:var(--surface);border-radius:8px;border-left:3px solid #8b5cf6">
+          <div style="font-weight:600;color:#8b5cf6">场景C：用户快速连续发送多条消息</div>
+          <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">第二条消息排队等待，第一条的响应全部完成后才开始第二批的计算和调用</div>
+        </div>
+        <div style="padding:8px 10px;background:var(--surface);border-radius:8px;border-left:3px solid #ef4444">
+          <div style="font-weight:600;color:#ef4444">场景D：费用超预算</div>
+          <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">暂停引擎，显示费用超支提示，用户确认后再恢复或终止</div>
+        </div>
+        <div style="padding:8px 10px;background:var(--surface);border-radius:8px;border-left:3px solid #ec4899">
+          <div style="font-weight:600;color:#ec4899">场景E：上下文窗口溢出</div>
+          <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">复用现有 ContextManager 的摘要策略，自动压缩历史消息</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
