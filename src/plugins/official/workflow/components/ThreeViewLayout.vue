@@ -1,8 +1,18 @@
 <script setup lang="ts">
-// ThreeViewLayout — 三入口合一布局
+// ThreeViewLayout — 三栏布局(sidebar / inline / hover 3 种 editMethod)
 //
-// Phase 3.4：顶部 Tab 切换 3 个视图（表单 / 画布 / YAML），共享 useWorkflowEditor 状态源。
-// Phase 4.5：画布视图按 node.type 动态选 nodeRenderers 渲染（14 个 type + BaseNodeRenderer fallback）。
+// P3 改写:替代 Phase 3.4 的 tab 切换(form/canvas/yaml),
+// 改用 editMethod prop 决定右栏是 inspector(360px) / inline(节点下) / hover(浮层)。
+// 共享 useNodeMetadata 数据源;emit 透传节点选择 / 配置 / drop 事件。
+//
+// 5 slot:
+//   - palette: 必有(左侧 240px)
+//   - canvas: 必有(中部自适应)
+//   - inspector: editMethod=sidebar 时显示
+//   - inline: editMethod=inline 时显示,挂 canvas 内
+//   - hover: editMethod=hover 时显示,挂 canvas 内
+//
+// CSS 全部 token,移除 hardcoded 颜色。
 
 import { ref, computed } from 'vue'
 import NodePalette from './NodePalette.vue'
@@ -10,12 +20,16 @@ import NodeInspector from './NodeInspector.vue'
 import { nodeRenderers, DefaultNodeRenderer } from './nodeRenderers'
 import { useNodeMetadata } from '../composables/useNodeMetadata'
 import type { EditorDefinition } from '../composables/editor-types'
+import type { EditMethod } from '../composables/useEditorPreferences'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   definition: EditorDefinition
   selectedNodeId: string | null
   yamlText: string
-}>()
+  editMethod?: EditMethod
+}>(), {
+  editMethod: 'sidebar',
+})
 
 const emit = defineEmits<{
   'update:definition': [value: EditorDefinition]
@@ -24,10 +38,6 @@ const emit = defineEmits<{
   'drop:node': [value: { type: string; x: number; y: number }]
 }>()
 
-type Tab = 'form' | 'canvas' | 'yaml'
-const currentTab = ref<Tab>('form')
-
-// ── 节点元数据（画布视图按 type 渲染用） ──
 const metaStore = useNodeMetadata()
 const metaList = metaStore.list
 const lookupMeta = (type: string) => metaList.value?.find((m) => m.type === type) ?? null
@@ -68,48 +78,28 @@ function selectNode(id: string): void {
   emit('update:selectedNodeId', id)
 }
 
-/** 节点在画布上的默认位置（避免堆在一起） */
 function defaultPosition(i: number): { x: number; y: number } {
   return { x: 40 + (i % 4) * 220, y: 40 + Math.floor(i / 4) * 140 }
 }
 </script>
 
 <template>
-  <div class="three-view-layout">
-    <nav class="tv-tabs">
-      <button
-        v-for="t in (['form', 'canvas', 'yaml'] as Tab[])"
-        :key="t"
-        :class="['tv-tab', { active: currentTab === t }]"
-        @click="currentTab = t"
-      >
-        {{ t === 'form' ? '表单' : t === 'canvas' ? '画布' : 'YAML' }}
-      </button>
-    </nav>
-
-    <div class="tv-body">
-      <!-- 表单视图 -->
-      <div v-if="currentTab === 'form'" class="tv-form-view">
+  <div :class="['three-view-layout', `layout--${editMethod}`]">
+    <!-- 左侧调色板(必有) -->
+    <aside class="layout__palette" data-testid="layout-palette">
+      <slot name="palette">
         <NodePalette />
-        <div class="tv-form-center">
-          <div v-if="selectedNode" class="tv-form-summary">
-            <h3>已选：{{ selectedNode.id }} ({{ selectedNode.type }})</h3>
-            <p>在右侧检查器编辑 config</p>
-          </div>
-          <div v-else class="tv-form-empty">
-            <p>从左侧拖一个节点到画布，或在画布视图点击节点</p>
-          </div>
-        </div>
-        <NodeInspector :node="selectedNode" @update:config="onNodeConfigUpdate" />
-      </div>
+      </slot>
+    </aside>
 
-      <!-- 画布视图 -->
-      <div
-        v-else-if="currentTab === 'canvas'"
-        class="tv-canvas-view"
-        @dragover="onCanvasDragOver"
-        @drop="onCanvasDrop"
-      >
+    <!-- 中部画布(必有) -->
+    <div
+      class="layout__canvas"
+      data-testid="layout-canvas"
+      @dragover="onCanvasDragOver"
+      @drop="onCanvasDrop"
+    >
+      <slot name="canvas">
         <div v-if="definition.nodes.length === 0" class="canvas-empty">
           <p>从左侧调色板拖节点到这里</p>
         </div>
@@ -132,107 +122,93 @@ function defaultPosition(i: number): { x: number; y: number } {
             />
           </div>
         </div>
-      </div>
-
-      <!-- YAML 视图 -->
-      <div v-else class="tv-yaml-view">
-        <textarea
-          class="yaml-textarea"
-          :value="yamlText"
-          spellcheck="false"
-          @input="emit('update:yamlText', ($event.target as HTMLTextAreaElement).value)"
-        />
-        <p class="yaml-hint">YAML 编辑 5s 内自动同步到表单 / 画布</p>
-      </div>
+      </slot>
     </div>
+
+    <!-- 右栏 1:sidebar 编辑 -->
+    <aside
+      v-if="editMethod === 'sidebar'"
+      class="layout__inspector"
+      data-testid="layout-inspector"
+    >
+      <slot name="inspector">
+        <NodeInspector :node="selectedNode" @update:config="onNodeConfigUpdate" />
+      </slot>
+    </aside>
+
+    <!-- 内联编辑(挂在 canvas 内的节点下方) -->
+    <template v-if="editMethod === 'inline'">
+      <div class="layout__inline-editor" data-testid="layout-inline-editor">
+        <slot name="inline" />
+      </div>
+    </template>
+
+    <!-- hover 浮层编辑 -->
+    <template v-if="editMethod === 'hover'">
+      <div class="layout__hover-layer" data-testid="layout-hover-layer">
+        <slot name="hover" />
+      </div>
+    </template>
   </div>
 </template>
 
 <style scoped>
 .three-view-layout {
   display: flex;
-  flex-direction: column;
   height: 100%;
-  background: #f8fafc;
-}
-.tv-tabs {
-  display: flex;
-  gap: 0;
-  background: white;
-  border-bottom: 1px solid #e2e8f0;
-  padding: 0 12px;
-}
-.tv-tab {
-  padding: 8px 16px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 13px;
-  color: #64748b;
-  border-bottom: 2px solid transparent;
-  transition: all 0.1s;
-}
-.tv-tab:hover {
-  color: #1e293b;
-}
-.tv-tab.active {
-  color: #2563eb;
-  border-bottom-color: #2563eb;
-  font-weight: 500;
-}
-.tv-body {
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-}
-.tv-form-view {
-  display: flex;
-  flex: 1;
+  background: var(--color-bg-secondary);
   overflow: hidden;
 }
-.tv-form-center {
-  flex: 1;
-  padding: 24px;
-  overflow-y: auto;
-}
-.tv-form-summary {
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 16px;
-}
-.tv-form-summary h3 {
-  margin: 0 0 4px 0;
-  font-size: 14px;
-  color: #1e293b;
-}
-.tv-form-summary p {
-  margin: 0;
-  font-size: 12px;
-  color: #64748b;
-}
-.tv-form-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.layout__palette {
+  flex-shrink: 0;
+  width: 240px;
   height: 100%;
-  color: #94a3b8;
-  font-size: 13px;
+  overflow: hidden;
+  border-right: 1px solid var(--color-border-default);
 }
-.tv-canvas-view {
+.layout__canvas {
   flex: 1;
   position: relative;
-  background:
-    radial-gradient(circle, #e2e8f0 1px, transparent 1px) 0 0 / 20px 20px,
-    white;
   overflow: auto;
+  background:
+    radial-gradient(circle, var(--color-border-default) 1px, transparent 1px) 0 0 / 20px 20px,
+    var(--color-bg-elevated);
+}
+.layout__inspector {
+  flex-shrink: 0;
+  width: 360px;
+  height: 100%;
+  overflow: hidden;
+  border-left: 1px solid var(--color-border-default);
+  background: var(--color-bg-secondary);
+}
+.layout__inline-editor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+.layout__inline-editor > * {
+  pointer-events: auto;
+}
+.layout__hover-layer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 50;
+}
+.layout__hover-layer > * {
+  pointer-events: auto;
 }
 .canvas-empty {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #94a3b8;
+  color: var(--color-text-tertiary);
   font-size: 13px;
 }
 .canvas-nodes {
@@ -244,29 +220,5 @@ function defaultPosition(i: number): { x: number; y: number } {
 .canvas-node-wrapper {
   position: absolute;
   cursor: pointer;
-}
-.tv-yaml-view {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  padding: 12px;
-  background: #1e293b;
-}
-.yaml-textarea {
-  flex: 1;
-  background: #0f172a;
-  color: #e2e8f0;
-  border: 1px solid #334155;
-  border-radius: 4px;
-  padding: 12px;
-  font-family: ui-monospace, SFMono-Regular, monospace;
-  font-size: 12px;
-  line-height: 1.6;
-  resize: none;
-}
-.yaml-hint {
-  margin: 8px 0 0 0;
-  color: #94a3b8;
-  font-size: 11px;
 }
 </style>
