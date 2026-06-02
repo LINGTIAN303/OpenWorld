@@ -128,6 +128,12 @@ export interface DecisionContext {
   decisionTimeoutMs: number
 }
 
+/** P3:用户对决策的响应结果 */
+export interface DecisionResult {
+  choice: string
+  note: string
+}
+
 export type ParseFormat = 'auto' | 'json' | 'yaml'
 
 /** 浏览器开发模式（无 Tauri）下用本地 mock；否则用 @tauri-apps/api/core */
