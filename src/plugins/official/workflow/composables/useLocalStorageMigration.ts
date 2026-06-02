@@ -9,11 +9,60 @@
 //   3. 全部成功后清空 localStorage 键
 //
 // 失败：保留 localStorage（让用户重启再试一次），不抛。
+//
+// 另：`migrateEditorPrefs_v0_to_v1` 是 editor 偏好的 v0→v1 schema 迁移，
+// 由 `useEditorPreferences.ensureInit` 在浏览器 dev 模式也调用一次。
+// 纯 localStorage 操作，不依赖 Tauri。
 
 import { useWorkflowClient } from './useWorkflowClient'
 import { isTauri } from '../types'
 
 const STORAGE_KEY = 'worldsmith_workflows'
+const LEGACY_PREFS_KEY = 'worldsmith:editor:prefs'
+const V1_PREFS_KEY = 'worldsmith:editor:prefs:v1'
+
+/**
+ * 把 P1 时期的 editor 偏好 schema(addMethod 单值 + fallbackTimeoutSec)
+ * 迁移到 P3 v1 schema(addMethods 数组 + hoverDelayMs)。
+ *
+ * 纯函数,可在浏览器 dev 模式调用(不需要 Tauri)。
+ * 由 `useEditorPreferences.ensureInit` 在第一次访问时触发。
+ */
+export function migrateEditorPrefs_v0_to_v1(): void {
+  if (typeof localStorage === 'undefined') return
+  const raw = localStorage.getItem(LEGACY_PREFS_KEY)
+  if (!raw) return
+  let old: Record<string, unknown>
+  try {
+    old = JSON.parse(raw) as Record<string, unknown>
+  }
+  catch {
+    // 损坏 — 不抛,留 LEGACY 给后续手动处理
+    return
+  }
+  try {
+    const addMethods = Array.isArray(old.addMethods)
+      ? (old.addMethods as string[])
+      : (typeof old.addMethod === 'string' ? [old.addMethod] : ['click'])
+    const editMethod = typeof old.editMethod === 'string'
+      ? old.editMethod
+      : 'sidebar'
+    const hoverDelayMs = typeof old.hoverDelayMs === 'number'
+      ? old.hoverDelayMs
+      : (typeof old.fallbackTimeoutSec === 'number'
+        ? Math.min(old.fallbackTimeoutSec * 1000, 500)
+        : 300)
+    localStorage.setItem(V1_PREFS_KEY, JSON.stringify({
+      addMethods,
+      editMethod,
+      hoverDelayMs,
+    }))
+    localStorage.removeItem(LEGACY_PREFS_KEY)
+  }
+  catch {
+    /* quota or denied — 静默 */
+  }
+}
 
 interface LegacyPersisted {
   id: string
