@@ -102,6 +102,32 @@ export interface RunStatusInfo {
   currentNodeId: string | null
 }
 
+/** P3:Agent 决策节点暂停时,前端接收的决策上下文 */
+export interface DecisionContextItem {
+  label: string
+  value: string
+}
+
+export interface DecisionContext {
+  runId: string
+  nodeId: string
+  nodeName: string
+  nodeType: string
+  /** Agent 抛给用户的问题(节点 prompt) */
+  prompt: string
+  /** Agent 收集的上下文数据汇总 */
+  context: {
+    summary: string
+    items: DecisionContextItem[]
+  }
+  /** 用户可选的决策选项 */
+  options: Array<{ id: string; label: string }>
+  /** 默认选项 id(超时 fallback 用) */
+  defaultOption: string
+  /** 0 表示不超时 */
+  decisionTimeoutMs: number
+}
+
 export type ParseFormat = 'auto' | 'json' | 'yaml'
 
 /** 浏览器开发模式（无 Tauri）下用本地 mock；否则用 @tauri-apps/api/core */
