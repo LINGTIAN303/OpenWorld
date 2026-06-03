@@ -50,6 +50,8 @@ function loadFromStorage(): EditorPreferences {
 const state = reactive<EditorPreferences>(loadFromStorage())
 
 let initialized = false
+let storageListener: ((e: StorageEvent) => void) | null = null
+
 function ensureInitialized() {
   if (initialized || typeof window === 'undefined') return
   initialized = true
@@ -61,7 +63,7 @@ function ensureInitialized() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(val)) }
     catch { /* quota or denied */ }
   }, { deep: true })
-  window.addEventListener('storage', (e) => {
+  storageListener = (e: StorageEvent) => {
     if (e.key !== STORAGE_KEY || !e.newValue) return
     try {
       const parsed = JSON.parse(e.newValue) as Partial<EditorPreferences>
@@ -72,7 +74,17 @@ function ensureInitialized() {
       })
     }
     catch { /* ignore malformed payload */ }
-  })
+  }
+  window.addEventListener('storage', storageListener)
+}
+
+/** 清理 storage listener(测试 / SSR 场景用) */
+export function destroyEditorPreferences(): void {
+  if (storageListener) {
+    window.removeEventListener('storage', storageListener)
+    storageListener = null
+  }
+  initialized = false
 }
 
 export function useEditorPreferences() {

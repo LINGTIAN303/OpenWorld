@@ -122,20 +122,20 @@ function formatTime(ts: number): string {
 
 <style scoped>
 .workflow-progress {
-  padding: 16px;
+  padding: var(--space-4);
 }
 
 .active-run {
-  border: 1px solid var(--border-color, #e5e7eb);
-  border-radius: 8px;
-  padding: 16px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg, 8px);
+  padding: var(--space-4);
 }
 
 .run-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 
 .run-header h3 {
@@ -151,28 +151,28 @@ function formatTime(ts: number): string {
 }
 
 .status-badge.running {
-  background: #dbeafe;
-  color: #2563eb;
+  background: color-mix(in srgb, var(--color-info) 15%, transparent);
+  color: var(--color-info);
 }
 
 .status-badge.completed {
-  background: #dcfce7;
-  color: #16a34a;
+  background: color-mix(in srgb, var(--color-success) 15%, transparent);
+  color: var(--color-success);
 }
 
 .status-badge.failed {
-  background: #fee2e2;
-  color: #dc2626;
+  background: color-mix(in srgb, var(--color-danger) 15%, transparent);
+  color: var(--color-danger);
 }
 
 .status-badge.paused {
-  background: #fef3c7;
-  color: #d97706;
+  background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+  color: var(--color-warning);
 }
 
 .status-badge.cancelled {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: color-mix(in srgb, var(--color-text-tertiary) 15%, transparent);
+  color: var(--color-text-tertiary);
 }
 
 .status-badge.small {
@@ -182,19 +182,19 @@ function formatTime(ts: number): string {
 
 .run-meta {
   font-size: var(--font-size-sm);
-  color: var(--text-secondary, #6b7280);
-  margin-bottom: 12px;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-3);
 }
 
 .node-states {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 
 .node-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 0;
+  gap: var(--space-2);
+  padding: var(--space-1_5) 0;
   font-size: var(--font-size-sm);
 }
 
@@ -208,47 +208,48 @@ function formatTime(ts: number): string {
 
 .node-duration {
   font-size: var(--font-size-xs);
-  color: var(--text-secondary, #6b7280);
+  color: var(--color-text-secondary);
 }
 
 .run-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .action-btn {
   padding: 6px 14px;
-  border: 1px solid var(--border-color, #e5e7eb);
-  border-radius: 6px;
-  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md, 6px);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
   cursor: pointer;
   font-size: var(--font-size-sm);
-  transition: all 0.15s;
+  transition: border-color var(--duration-fast) var(--ease-default);
 }
 
 .action-btn:hover {
-  border-color: var(--primary, #3b82f6);
+  border-color: var(--color-primary);
 }
 
 .action-btn.cancel:hover {
-  border-color: #ef4444;
-  color: #ef4444;
+  border-color: var(--color-danger);
+  color: var(--color-danger);
 }
 
 .run-history {
-  margin-top: 16px;
+  margin-top: var(--space-4);
 }
 
 .run-history h4 {
   font-size: var(--font-size-sm);
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 
 .history-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 0;
+  padding: var(--space-1_5) 0;
   font-size: var(--font-size-sm);
 }
 </style>

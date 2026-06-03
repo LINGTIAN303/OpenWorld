@@ -26,13 +26,15 @@ import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 
 const props = withDefaults(defineProps<{
   title?: string
-  placement?: 'top' | 'bottom' | 'left' | 'right'
+  placement?: 'top' | 'bottom' | 'left' | 'right' | 'bottom-end'
   trigger?: 'click' | 'hover'
   closeOnClickOutside?: boolean
+  offset?: number
 }>(), {
   placement: 'bottom',
   trigger: 'click',
   closeOnClickOutside: true,
+  offset: 6,
 })
 
 const emit = defineEmits<{ 'update:show': [value: boolean] }>()
