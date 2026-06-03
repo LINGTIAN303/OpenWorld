@@ -17,8 +17,36 @@
           @create-template="handleCreateTemplate"
           @import="handleImport"
         />
+        <button
+          class="tab-btn pref-trigger"
+          data-testid="prefs-trigger"
+          @click="prefsOpen = !prefsOpen"
+        >
+          <WsIcon name="settings" size="xs" /> 偏好
+        </button>
       </div>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="prefsOpen"
+        class="prefs-overlay"
+        data-testid="prefs-overlay"
+        @click.self="prefsOpen = false"
+      >
+        <div class="prefs-dialog" data-testid="prefs-dialog">
+          <button
+            type="button"
+            class="prefs-close"
+            data-testid="prefs-close"
+            @click="prefsOpen = false"
+          >
+            ×
+          </button>
+          <EditorPreferencesCard @save="prefsOpen = false" />
+        </div>
+      </div>
+    </Teleport>
 
     <div class="workflow-content">
       <WorkflowList
@@ -55,6 +83,7 @@ import WorkflowList from './components/WorkflowList.vue'
 import WorkflowEditorView from './components/WorkflowEditorView.vue'
 import WorkflowProgress from './components/WorkflowProgress.vue'
 import NewWorkflowDropdown from './components/NewWorkflowDropdown.vue'
+import EditorPreferencesCard from './components/editor/EditorPreferencesCard.vue'
 import { useWorkflow } from './composables/useWorkflow'
 import { useNewWorkflow } from './composables/useNewWorkflow'
 
@@ -63,6 +92,7 @@ const { runs, workflowList, getActiveRun, updateRunStatus, removeWorkflow, addWo
 const { createBlank, createFromTemplate, commit } = useNewWorkflow()
 
 const currentTab = ref('list')
+const prefsOpen = ref(false)
 // Phase 4.8：编辑/运行 tab 需要知道当前 workflowId（外层 state）
 const currentWorkflowId = ref<string | null>(null)
 
@@ -216,5 +246,40 @@ function handleCancel(runId: string) {
   height: 100%;
   color: var(--color-text-tertiary);
   font-size: var(--font-size-sm);
+}
+.prefs-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--color-overlay-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9000;
+  padding: 24px;
+  box-sizing: border-box;
+}
+.prefs-dialog {
+  position: relative;
+  max-width: 640px;
+  width: 100%;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-default);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 8px 32px var(--color-shadow-medium);
+}
+.prefs-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: var(--color-text-tertiary);
+  padding: 0 4px;
+}
+.prefs-close:hover {
+  color: var(--color-text-primary);
 }
 </style>

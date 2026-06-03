@@ -1,17 +1,26 @@
 <script setup lang="ts">
 // WorkflowEditorView — Phase 3 编辑器主入口
 //
-// 三入口合一：表单 / 画布 / YAML 顶部 Tab 切换。
-// 单一状态源：useWorkflowEditor（替换旧 editorMode + nodeModeOverrides）。
-// 工具栏：保存 / 运行 / 清空。
+// 三入口合一:表单 / 画布 / YAML 顶部 Tab 切换。
+// 单一状态源:useWorkflowEditor(替换旧 editorMode + nodeModeOverrides)。
+// 工具栏:保存 / 运行 / 清空。
 //
-// 注意：useWorkflowEditor 必须在 setup 顶层调用，所以不能用 computed 包装。
-// 流程：setup 时构造占位 editor → onMounted 异步 load → 用 editor.loadFromYaml 覆盖。
+// P3 扩展:
+//   - 读 useEditorPreferences().value.editMethod 注入 ThreeViewLayout
+//   - 监听 useWorkflowRuns().activeDecision 挂 AgentDecisionCard
+//   - handleDecide / handleFallback / handleDismiss → resolve / fallback / dismiss
+//   - CSS 全部 token 化(去掉 hardcoded 颜色)
 
 import { ref, onMounted, computed, watch } from 'vue'
 import yaml from 'js-yaml'
 import ThreeViewLayout from './ThreeViewLayout.vue'
+import AgentDecisionCard from './run/AgentDecisionCard.vue'
+import CanvasContextMenu from './editor/CanvasContextMenu.vue'
+import { useEditorPreferences } from '../composables/useEditorPreferences'
+import { useWorkflowRuns } from '../composables/useWorkflowRuns'
+import { useCanvasContextMenu } from '../composables/useCanvasContextMenu'
 import type { EditorDefinition } from '../composables/editor-types'
+import type { DecisionResult } from '../types'
 import { useWorkflowEditor } from '../composables/useWorkflowEditor'
 import { useWorkflowClient } from '../composables/useWorkflowClient'
 import { isTauri } from '../types'
@@ -26,12 +35,14 @@ const emit = defineEmits<{
 }>()
 
 const client = useWorkflowClient()
+const prefs = useEditorPreferences()
+const runs = useWorkflowRuns()
+const ctxMenu = useCanvasContextMenu()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
 const ready = ref(false)
 
-// 占位 editor（空 definition）；load 完成后用 loadFromYaml 覆盖
 const placeholder: EditorDefinition = {
   id: props.workflowId,
   name: props.workflowId,
@@ -47,13 +58,9 @@ async function load(): Promise<void> {
   error.value = null
   try {
     if (isTauri()) {
-      const def = (await client.get(props.workflowId)) as unknown as Record<
-        string,
-        unknown
-      >
+      const def = (await client.get(props.workflowId)) as unknown as Record<string, unknown>
       editor.loadFromYaml(serializeRawToYaml(def))
     } else {
-      // dev mock：建一个最小 demo
       editor.loadFromYaml(demoYaml(props.workflowId))
     }
     ready.value = true
@@ -65,32 +72,16 @@ async function load(): Promise<void> {
   }
 }
 
-onMounted(() => {
-  void load()
-})
-
-watch(
-  () => props.workflowId,
-  () => {
-    void load()
-  },
-)
+onMounted(() => { void load() })
+watch(() => props.workflowId, () => { void load() })
 
 function serializeRawToYaml(d: Record<string, unknown>): string {
-  // 用 useYamlSync 的序列化逻辑：从对象转 YAML
-  // 但 loadFromYaml 接受 YAML 字符串。我们把 Rust 端的 JSON 串行化为 YAML 字符串。
-  // 简化处理：直接 dump 整个对象（与 Rust schema 字段对齐）。
-  // 实际生产中应该走 client.export(id, 'yaml')，但 dev 时用此近似。
   const obj = {
-    id: d.id,
-    name: d.name,
-    version: d.version,
-    description: d.description,
+    id: d.id, name: d.name, version: d.version, description: d.description,
     category: d.category ?? 'custom',
     nodes: (d.nodes as Array<Record<string, unknown>>) ?? [],
     edges: (d.edges as Array<Record<string, unknown>>) ?? [],
   }
-  // 在 setup 顶层 import js-yaml（ESM），避免 require 在 Vite ESM 环境下 "require is not defined"。
   return yaml.dump(obj)
 }
 
@@ -149,16 +140,11 @@ async function handleRun(): Promise<void> {
 }
 
 function handleClear(): void {
-  editor.definition.value = {
-    ...editor.definition.value,
-    nodes: [],
-    edges: [],
-  }
+  editor.definition.value = { ...editor.definition.value, nodes: [], edges: [] }
   editor.refreshYaml()
-  emit('toast', '已清空（请保存以持久化）', 'info')
+  emit('toast', '已清空(请保存以持久化)', 'info')
 }
 
-// 三入口回调：直接写到 editor 内部
 function onDefinitionUpdate(next: EditorDefinition): void {
   editor.definition.value = next
 }
@@ -170,6 +156,37 @@ function onSelectNode(id: string | null): void {
 }
 function onDropNode(payload: { type: string; x: number; y: number }): void {
   editor.addNode(payload.type, { x: payload.x, y: payload.y })
+}
+
+function onAddNode(type: string): void {
+  editor.addNode(type)
+}
+
+// P3 决策回调
+function onDecide(payload: DecisionResult): void {
+  runs.resolveDecision(payload)
+  emit('toast', '决策已提交', 'success')
+}
+function onFallback(): void {
+  runs.fallbackDecision()
+  emit('toast', '决策超时,已走默认', 'info')
+}
+function onDismiss(): void {
+  runs.activeDecision.value = null
+}
+
+// 画布右键菜单
+function onCanvasContextMenu(e: MouseEvent): void {
+  e.preventDefault()
+  ctxMenu.openAt(e.clientX, e.clientY)
+}
+function onContextMenuPick(type: string): void {
+  if (type === 'more') {
+    // 折叠入口 — 简化处理:打开 start
+    editor.addNode('start')
+  } else {
+    editor.addNode(type)
+  }
 }
 
 const toolbarVersion = computed(() => editor.definition.value?.version ?? 1)
@@ -199,11 +216,25 @@ const toolbarName = computed(() => editor.definition.value?.name ?? props.workfl
       :definition="editor.definition.value"
       :selected-node-id="editor.selectedNodeId.value"
       :yaml-text="editor.yamlText.value"
+      :edit-method="prefs.value.editMethod"
       @update:definition="onDefinitionUpdate"
       @update:selected-node-id="onSelectNode"
       @update:yaml-text="onYamlUpdate"
       @drop:node="onDropNode"
+      @contextmenu="onCanvasContextMenu"
     />
+
+    <CanvasContextMenu @pick="onContextMenuPick" />
+
+    <!-- P3 决策卡:当 activeDecision 不为空时显示 -->
+    <div v-if="runs.activeDecision.value" class="decision-overlay" data-testid="decision-overlay">
+      <AgentDecisionCard
+        :context="runs.activeDecision.value"
+        @decide="onDecide"
+        @fallback="onFallback"
+        @dismiss="onDismiss"
+      />
+    </div>
   </div>
 </template>
 
@@ -212,15 +243,15 @@ const toolbarName = computed(() => editor.definition.value?.name ?? props.workfl
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #f8fafc;
+  background: var(--color-bg-secondary);
 }
 .editor-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 8px 16px;
-  background: white;
-  border-bottom: 1px solid #e2e8f0;
+  background: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--color-border-default);
 }
 .toolbar-left {
   display: flex;
@@ -231,11 +262,11 @@ const toolbarName = computed(() => editor.definition.value?.name ?? props.workfl
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--color-text-primary);
 }
 .editor-version {
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--color-text-tertiary);
   font-family: ui-monospace, SFMono-Regular, monospace;
 }
 .toolbar-right {
@@ -244,28 +275,28 @@ const toolbarName = computed(() => editor.definition.value?.name ?? props.workfl
 }
 .toolbar-btn {
   padding: 5px 12px;
-  border: 1px solid #cbd5e1;
-  background: white;
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-elevated);
   border-radius: 4px;
   font-size: 12px;
-  color: #1e293b;
+  color: var(--color-text-primary);
   cursor: pointer;
   font-family: inherit;
 }
 .toolbar-btn:hover {
-  background: #f1f5f9;
+  background: var(--color-bg-hover);
 }
 .toolbar-btn.primary {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: white;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-text-on-primary, white);
 }
 .toolbar-btn.primary:hover {
-  background: #1d4ed8;
+  filter: brightness(1.1);
 }
 .toolbar-btn.danger {
-  border-color: #fca5a5;
-  color: #dc2626;
+  border-color: var(--color-danger-border);
+  color: var(--color-danger);
 }
 .toolbar-btn:disabled {
   opacity: 0.5;
@@ -273,9 +304,20 @@ const toolbarName = computed(() => editor.definition.value?.name ?? props.workfl
 }
 .editor-error {
   padding: 8px 16px;
-  background: #fee2e2;
-  color: #b91c1c;
+  background: var(--color-danger-subtle);
+  color: var(--color-danger);
   font-size: 12px;
-  border-bottom: 1px solid #fecaca;
+  border-bottom: 1px solid var(--color-danger-border);
+}
+.decision-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--color-overlay-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9000;
+  padding: 24px;
+  box-sizing: border-box;
 }
 </style>
