@@ -14,6 +14,9 @@ vi.mock('@/plugins/official/workflow/composables/useNodeSchema', () => ({
   useNodeSchema: () => ({
     getFor: vi.fn().mockReturnValue(sampleSchema),
   }),
+  useNodeSchemaSimple: () => ({
+    getFor: vi.fn().mockReturnValue(sampleSchema),
+  }),
 }))
 
 describe('NodeHoverLayer', () => {

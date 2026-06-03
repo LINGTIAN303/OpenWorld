@@ -5,10 +5,10 @@
 // 复用 NodeForm 渲染 config 段,emit('update:config', newConfig) 由父组件接。
 // basic / advanced 段占位(节点 metadata 字段后续 P4 再丰富)。
 
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import WsCollapse from '@/ui/WsCollapse.vue'
 import NodeForm from '@/plugins/official/workflow/components/NodeForm.vue'
-import { useNodeSchema } from '@/plugins/official/workflow/composables/useNodeSchema'
+import { useNodeSchemaSimple } from '@/plugins/official/workflow/composables/useNodeSchema'
 
 interface NodeLike {
   id: string
@@ -17,7 +17,7 @@ interface NodeLike {
 }
 
 const props = defineProps<{
-  node: NodeLike
+  node: NodeLike | null
 }>()
 
 const emit = defineEmits<{
@@ -26,9 +26,17 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const { getFor } = useNodeSchema()
-const config = ref<Record<string, unknown>>({ ...(props.node.config ?? {}) })
-const schema = computed(() => getFor(props.node.type))
+const { getFor } = useNodeSchemaSimple()
+const config = ref<Record<string, unknown>>({ ...(props.node?.config ?? {}) })
+const schema = computed(() => props.node ? getFor(props.node.type) : null)
+
+// BUG 7 修复:当 node prop 变化时同步 config ref
+watch(
+  () => props.node,
+  (newNode) => {
+    config.value = { ...(newNode?.config ?? {}) }
+  },
+)
 
 const panels = [
   { key: 'basic', title: '基本信息' },
@@ -52,7 +60,7 @@ function onCancel(): void {
 </script>
 
 <template>
-  <div class="inline-node-editor" data-testid="inline-node-editor">
+  <div v-if="node" class="inline-node-editor" data-testid="inline-node-editor">
     <WsCollapse :panels="panels" :default-expanded="['basic', 'config']">
       <template #basic>
         <div class="inline-section">

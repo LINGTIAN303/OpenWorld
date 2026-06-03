@@ -7,7 +7,7 @@
 
 import { computed } from 'vue'
 import NodeForm from '@/plugins/official/workflow/components/NodeForm.vue'
-import { useNodeSchema } from '@/plugins/official/workflow/composables/useNodeSchema'
+import { useNodeSchemaSimple } from '@/plugins/official/workflow/composables/useNodeSchema'
 
 interface NodeLike {
   id: string
@@ -30,7 +30,7 @@ const emit = defineEmits<{
   cancel: []
 }>()
 
-const { getFor } = useNodeSchema()
+const { getFor } = useNodeSchemaSimple()
 
 const LAYER_WIDTH = 280
 const GAP = 8

@@ -90,17 +90,39 @@ export function fieldToFormField(
 
 /** useNodeSchema — 给 Vue 组件用（拿单个节点的 form schema） */
 export function useNodeSchema(
-  typeRef: Ref<string | null> | ComputedRef<string | null>,
+  typeRef?: Ref<string | null> | ComputedRef<string | null>,
 ) {
-  const formSchema: ComputedRef<FormSchema | null> = computed(() => null)
+  const formSchema: Ref<FormSchema | null> = ref(null)
 
-  async function load(): Promise<FormSchema | null> {
-    const t = typeRef.value
+  async function load(type?: string): Promise<FormSchema | null> {
+    const t = type ?? typeRef?.value
     if (!t) return null
     const meta = await getNodeSchema(t)
     if (!meta) return null
-    return metadataToFormSchema(meta)
+    const schema = metadataToFormSchema(meta)
+    formSchema.value = schema
+    return schema
   }
 
   return { formSchema, load }
+}
+
+/** 无参版 — 给 InlineNodeEditor / NodeHoverLayer 等已有 node.type 的组件用 */
+export function useNodeSchemaSimple() {
+  function getFor(type: string): FormSchema | null {
+    // 同步版:从 useNodeMetadata 的 cache 查(可能为 null 如果还没加载)
+    const { get } = useNodeMetadataAsRef()
+    const meta = get(type)
+    return meta ? metadataToFormSchema(meta) : null
+  }
+  return { getFor }
+}
+
+function useNodeMetadataAsRef() {
+  // 复用 useNodeMetadata 的同步 cache
+  const { list } = useNodeMetadata()
+  function get(type: string): NodeMetadata | null {
+    return list.value?.find((n) => n.type === type) ?? null
+  }
+  return { get }
 }

@@ -92,14 +92,12 @@ function toggle(): void {
 }
 
 function onBlank(): void {
-  const def = createBlank('未命名工作流')
-  emit('create-blank', def.name)
+  emit('create-blank', '未命名工作流')
   close()
 }
 
 function onTemplate(): void {
-  const def = createFromTemplate('tpl-default', { name: '新模板工作流' })
-  emit('create-template', { templateId: def.templateId ?? 'tpl-default', name: def.name })
+  emit('create-template', { templateId: 'tpl-default', name: '新模板工作流' })
   close()
 }
 

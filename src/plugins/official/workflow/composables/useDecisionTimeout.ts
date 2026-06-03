@@ -11,7 +11,7 @@
 //
 // 注意:每个 useDecisionTimeout() call 独立 interval,避免跨实例污染。
 
-import { ref, onUnmounted } from 'vue'
+import { ref, onUnmounted, getCurrentInstance } from 'vue'
 
 export function useDecisionTimeout() {
   const remainingMs = ref(0)
@@ -51,7 +51,15 @@ export function useDecisionTimeout() {
     // 保留当前 remainingMs(plan:停止时 remaining 不变)
   }
 
-  onUnmounted(() => clear())
+  function destroy(): void {
+    clear()
+    handler = null
+  }
 
-  return { remainingMs, start, cancel, onTimeout }
+  // 仅在组件上下文内自动注册 onUnmounted
+  if (getCurrentInstance()) {
+    onUnmounted(() => clear())
+  }
+
+  return { remainingMs, start, cancel, onTimeout, destroy }
 }

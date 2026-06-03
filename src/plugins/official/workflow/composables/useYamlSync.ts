@@ -88,9 +88,16 @@ export function useYamlSync(
 ) {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
+  function clearDebounce(): void {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer)
+      debounceTimer = null
+    }
+  }
+
   // 监听 yaml 文本：debounce 5s → parse → update def
   watch(yamlRef, (text) => {
-    if (debounceTimer) clearTimeout(debounceTimer)
+    clearDebounce()
     debounceTimer = setTimeout(() => {
       const parsed = parseYamlToDefinition(text)
       if (parsed && parsed.id === defRef.value.id) {
@@ -114,6 +121,7 @@ export function useYamlSync(
   return {
     serialize: () => serializeDefinitionToYaml(defRef.value),
     parse: (src: string) => parseYamlToDefinition(src),
+    destroy: clearDebounce,
   }
 }
 

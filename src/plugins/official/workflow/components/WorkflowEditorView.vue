@@ -190,11 +190,30 @@ function onDismiss(): void {
 // hover 模式 — 节点 hover 状态
 interface HoverPayload { id: string; anchor: { x: number; y: number } }
 const hoveredNode = ref<HoverPayload | null>(null)
+
+// 选中节点 computed — 避免 template 内重复 find + 消除 as never
+const selectedNode = computed(() => {
+  const id = editor.selectedNodeId.value
+  if (!id) return null
+  return editor.definition.value.nodes.find((n) => n.id === id) ?? null
+})
+const hoveredNodeData = computed(() => {
+  if (!hoveredNode.value) return null
+  return editor.definition.value.nodes.find((n) => n.id === hoveredNode.value!.id) ?? null
+})
+
 function onHoverNode(payload: HoverPayload | null): void {
   hoveredNode.value = payload
 }
-function onHoverConfirm(_config: Record<string, unknown>): void {
-  // TODO: P3 — hover 层确认后需更新节点 config(与 inline editor 一致)
+function onHoverConfirm(config: Record<string, unknown>): void {
+  // hover 层确认后更新节点 config(与 inline editor 一致)
+  const id = hoveredNode.value?.id
+  if (id) {
+    const nodes = editor.definition.value.nodes.map((n) =>
+      n.id === id ? { ...n, config } : n,
+    )
+    editor.definition.value = { ...editor.definition.value, nodes }
+  }
   hoveredNode.value = null
 }
 function onHoverCancel(): void {
@@ -255,21 +274,15 @@ const toolbarName = computed(() => editor.definition.value?.name ?? props.workfl
     >
       <template #inline>
         <div
-          v-if="editor.selectedNodeId.value && prefs.value.editMethod === 'inline'"
+          v-if="selectedNode && prefs.value.editMethod === 'inline'"
           :style="{
             position: 'absolute',
-            left: (() => {
-              const n = editor.definition.value.nodes.find((x) => x.id === editor.selectedNodeId.value)
-              return (n?.position?.x ?? 0) + 'px'
-            })(),
-            top: (() => {
-              const n = editor.definition.value.nodes.find((x) => x.id === editor.selectedNodeId.value)
-              return ((n?.position?.y ?? 0) + 80) + 'px'
-            })(),
+            left: (selectedNode.position?.x ?? 0) + 'px',
+            top: ((selectedNode.position?.y ?? 0) + 80) + 'px',
           }"
         >
           <InlineNodeEditor
-            :node="(editor.definition.value.nodes.find((x) => x.id === editor.selectedNodeId.value) ?? null) as never"
+            :node="selectedNode"
             @update:config="onNodeConfigUpdate"
             @close="onInlineClose"
           />
@@ -277,9 +290,9 @@ const toolbarName = computed(() => editor.definition.value?.name ?? props.workfl
       </template>
       <template #hover>
         <NodeHoverLayer
-          v-if="hoveredNode && prefs.value.editMethod === 'hover'"
-          :node="(editor.definition.value.nodes.find((x) => x.id === hoveredNode.id) ?? null) as never"
-          :anchor="hoveredNode.anchor"
+          v-if="hoveredNodeData && prefs.value.editMethod === 'hover'"
+          :node="hoveredNodeData"
+          :anchor="hoveredNode!.anchor"
           @confirm="onHoverConfirm"
           @cancel="onHoverCancel"
         />
