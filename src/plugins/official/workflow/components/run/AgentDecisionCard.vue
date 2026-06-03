@@ -5,7 +5,7 @@
 // 6 段:标题条 + 上下文 + 问题 + 选项 + 自由输入 + 操作条。
 // 5min 倒计时到 0 走 fallback(emit('fallback', defaultOption))。
 
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import WsCard from '@/ui/WsCard.vue'
 import WsStatusDot from '@/ui/WsStatusDot.vue'
 import type { DecisionContext } from '../../types'
@@ -22,6 +22,8 @@ const selectedOptionId = ref<string>(props.context.defaultOption)
 const note = ref('')
 const contextExpanded = ref(false)
 
+const { remainingMs, start: startTimer, onTimeout: onTimeoutCb } = useDecisionTimeout()
+
 const summaryText = computed(() => props.context.context.summary ?? '')
 const isSummaryLong = computed(() => summaryText.value.length > 200)
 const displayedSummary = computed(() => {
@@ -29,27 +31,28 @@ const displayedSummary = computed(() => {
   return summaryText.value.slice(0, 200) + '…'
 })
 
-const { remainingMs, start: startTimer, onTimeout: onTimeoutCb } = useDecisionTimeout()
+// 当切换到不同 decision(runId+nodeId 变化)时,重置内部状态 + 重启 timer
+watch(
+  () => `${props.context.runId}:${props.context.nodeId}`,
+  () => {
+    selectedOptionId.value = props.context.defaultOption
+    note.value = ''
+    contextExpanded.value = false
+    startTimeout()
+  },
+  { immediate: true },
+)
 
 function startTimeout(): void {
   const ms = props.context.decisionTimeoutMs
   if (ms > 0) {
     startTimer(ms)
     onTimeoutCb(() => {
+      // 闭包内访问 props.context 是 reactive,每次取最新 defaultOption
       emit('fallback', props.context.defaultOption)
     })
   }
 }
-
-watch(
-  () => props.context.decisionTimeoutMs,
-  () => startTimeout(),
-  { immediate: true },
-)
-
-onUnmounted(() => {
-  // useDecisionTimeout 内部 onUnmounted 会 clear,这里只是为了一致性
-})
 
 function onConfirm(): void {
   emit('decide', { choice: selectedOptionId.value, note: note.value })

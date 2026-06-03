@@ -76,4 +76,44 @@ describe('AgentDecisionCard', () => {
     vi.advanceTimersByTime(60_000)
     expect(w.emitted('fallback')).toBeFalsy()
   })
+
+  it('resets internal state when context switches to a different decision (different runId+nodeId)', async () => {
+    const w = mount(AgentDecisionCard, {
+      props: { context: makeContext({ runId: 'r1', nodeId: 'n1', defaultOption: 'a' }) },
+      attachTo: document.body,
+    })
+    // user types note + picks a non-default option
+    await w.find('[data-testid="free-input"]').setValue('keep this')
+    await w.find('[data-testid="option-low"]').trigger('click')
+    // setup-scope consts/refs are not exposed on vm; assert via DOM class + textarea content
+    const optsBefore = w.findAll('.decision-option')
+    expect(optsBefore.find((o) => o.classes().includes('selected'))?.attributes('data-testid')).toBe('option-low')
+    expect((w.find('[data-testid="free-input"]').element as HTMLTextAreaElement).value).toBe('keep this')
+    // switch to a different decision (same timeout value to ensure change is keyed, not timer-based)
+    await w.setProps({
+      context: makeContext({ runId: 'r2', nodeId: 'n9', defaultOption: 'high', decisionTimeoutMs: 300_000 }),
+    })
+    // internal state should be reset: new defaultOption is selected, note cleared
+    const optsAfter = w.findAll('.decision-option')
+    expect(optsAfter.find((o) => o.classes().includes('selected'))?.attributes('data-testid')).toBe('option-high')
+    expect((w.find('[data-testid="free-input"]').element as HTMLTextAreaElement).value).toBe('')
+    w.unmount()
+  })
+
+  it('fallback uses new defaultOption when context switches before timer expires', async () => {
+    const w = mount(AgentDecisionCard, {
+      props: { context: makeContext({ runId: 'r1', nodeId: 'n1', defaultOption: 'a', decisionTimeoutMs: 60_000 }) },
+      attachTo: document.body,
+    })
+    // 30s into the 60s timer, then switch decision (same timeoutMs to exercise the key)
+    vi.advanceTimersByTime(30_000)
+    await w.setProps({
+      context: makeContext({ runId: 'r2', nodeId: 'n9', defaultOption: 'high', decisionTimeoutMs: 60_000 }),
+    })
+    // 30s more → total 60s since switch, but timer was restarted so 30s left at this point
+    // need to advance to 60s since the switch
+    vi.advanceTimersByTime(60_000)
+    expect(w.emitted('fallback')![0]).toEqual(['high'])
+    w.unmount()
+  })
 })

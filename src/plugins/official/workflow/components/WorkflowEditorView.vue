@@ -16,6 +16,8 @@ import yaml from 'js-yaml'
 import ThreeViewLayout from './ThreeViewLayout.vue'
 import AgentDecisionCard from './run/AgentDecisionCard.vue'
 import CanvasContextMenu from './editor/CanvasContextMenu.vue'
+import InlineNodeEditor from './editor/InlineNodeEditor.vue'
+import NodeHoverLayer from './editor/NodeHoverLayer.vue'
 import { useEditorPreferences } from '../composables/useEditorPreferences'
 import { useWorkflowRuns } from '../composables/useWorkflowRuns'
 import { useCanvasContextMenu } from '../composables/useCanvasContextMenu'
@@ -158,6 +160,15 @@ function onDropNode(payload: { type: string; x: number; y: number }): void {
   editor.addNode(payload.type, { x: payload.x, y: payload.y })
 }
 
+function onNodeConfigUpdate(value: Record<string, unknown>): void {
+  const id = editor.selectedNodeId.value
+  if (!id) return
+  const nodes = editor.definition.value.nodes.map((n) =>
+    n.id === id ? { ...n, config: value } : n,
+  )
+  editor.definition.value = { ...editor.definition.value, nodes }
+}
+
 function onAddNode(type: string): void {
   editor.addNode(type)
 }
@@ -172,7 +183,25 @@ function onFallback(): void {
   emit('toast', '决策超时,已走默认', 'info')
 }
 function onDismiss(): void {
-  runs.activeDecision.value = null
+  // 通知后端 user-dismissed,后端可走 fallback 路径(等同超时)
+  runs.dismissDecision('user-dismissed')
+}
+
+// hover 模式 — 节点 hover 状态
+interface HoverPayload { id: string; anchor: { x: number; y: number } }
+const hoveredNode = ref<HoverPayload | null>(null)
+function onHoverNode(payload: HoverPayload | null): void {
+  hoveredNode.value = payload
+}
+function onHoverConfirm(_config: Record<string, unknown>): void {
+  // TODO: P3 — hover 层确认后需更新节点 config(与 inline editor 一致)
+  hoveredNode.value = null
+}
+function onHoverCancel(): void {
+  hoveredNode.value = null
+}
+function onInlineClose(): void {
+  editor.selectedNodeId.value = null
 }
 
 // 画布右键菜单
@@ -222,7 +251,40 @@ const toolbarName = computed(() => editor.definition.value?.name ?? props.workfl
       @update:yaml-text="onYamlUpdate"
       @drop:node="onDropNode"
       @contextmenu="onCanvasContextMenu"
-    />
+      @hover-node="onHoverNode"
+    >
+      <template #inline>
+        <div
+          v-if="editor.selectedNodeId.value && prefs.value.editMethod === 'inline'"
+          :style="{
+            position: 'absolute',
+            left: (() => {
+              const n = editor.definition.value.nodes.find((x) => x.id === editor.selectedNodeId.value)
+              return (n?.position?.x ?? 0) + 'px'
+            })(),
+            top: (() => {
+              const n = editor.definition.value.nodes.find((x) => x.id === editor.selectedNodeId.value)
+              return ((n?.position?.y ?? 0) + 80) + 'px'
+            })(),
+          }"
+        >
+          <InlineNodeEditor
+            :node="(editor.definition.value.nodes.find((x) => x.id === editor.selectedNodeId.value) ?? null) as never"
+            @update:config="onNodeConfigUpdate"
+            @close="onInlineClose"
+          />
+        </div>
+      </template>
+      <template #hover>
+        <NodeHoverLayer
+          v-if="hoveredNode && prefs.value.editMethod === 'hover'"
+          :node="(editor.definition.value.nodes.find((x) => x.id === hoveredNode.id) ?? null) as never"
+          :anchor="hoveredNode.anchor"
+          @confirm="onHoverConfirm"
+          @cancel="onHoverCancel"
+        />
+      </template>
+    </ThreeViewLayout>
 
     <CanvasContextMenu @pick="onContextMenuPick" />
 

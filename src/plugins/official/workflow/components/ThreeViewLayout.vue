@@ -36,6 +36,7 @@ const emit = defineEmits<{
   'update:selectedNodeId': [value: string | null]
   'update:yamlText': [value: string]
   'drop:node': [value: { type: string; x: number; y: number }]
+  'hover-node': [value: { id: string; anchor: { x: number; y: number } } | null]
 }>()
 
 const metaStore = useNodeMetadata()
@@ -78,6 +79,19 @@ function selectNode(id: string): void {
   emit('update:selectedNodeId', id)
 }
 
+function onNodeMouseEnter(e: MouseEvent, n: { id: string }): void {
+  if (props.editMethod !== 'hover') return
+  const target = e.currentTarget as HTMLElement | null
+  if (!target) return
+  const rect = target.getBoundingClientRect()
+  emit('hover-node', { id: n.id, anchor: { x: rect.right, y: rect.top } })
+}
+
+function onNodeMouseLeave(): void {
+  if (props.editMethod !== 'hover') return
+  emit('hover-node', null)
+}
+
 function defaultPosition(i: number): { x: number; y: number } {
   return { x: 40 + (i % 4) * 220, y: 40 + Math.floor(i / 4) * 140 }
 }
@@ -113,6 +127,8 @@ function defaultPosition(i: number): { x: number; y: number } {
               top: (n.position?.y ?? defaultPosition(i).y) + 'px',
             }"
             @click="selectNode(n.id)"
+            @mouseenter="(e) => onNodeMouseEnter(e, n)"
+            @mouseleave="onNodeMouseLeave"
           >
             <component
               :is="nodeRenderers[n.type] ?? DefaultNodeRenderer"

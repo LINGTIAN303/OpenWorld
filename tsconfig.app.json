@@ -6,6 +6,7 @@
     "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
+      "@/*": ["src/*"],
       "@agent/*": ["worldsmith-agent/src/*"],
       "@worldsmith/entity-core": ["packages/entity-core/src/index.ts"],
       "@worldsmith/entity-core/*": ["packages/entity-core/src/*"],

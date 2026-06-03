@@ -61,4 +61,27 @@ describe('useWorkflowRuns — decision events', () => {
     fallbackDecision()
     expect(activeDecision.value).toBeNull()
   })
+
+  it('dismissDecision dispatches worldsmith:workflow-run-dismissed and clears activeDecision', () => {
+    const { activeDecision, dismissDecision } = useWorkflowRuns()
+    window.dispatchEvent(new CustomEvent('worldsmith:workflow-run', {
+      detail: { type: 'workflow_node_paused', payload: sampleDecision },
+    }))
+    let received: unknown = null
+    window.addEventListener('worldsmith:workflow-run-dismissed', (e) => {
+      received = (e as CustomEvent).detail
+    })
+    dismissDecision('user-dismissed')
+    expect(activeDecision.value).toBeNull()
+    expect(received).toEqual({ runId: 'r1', nodeId: 'n1', reason: 'user-dismissed' })
+  })
+
+  it('dismissDecision is a no-op when no active decision', () => {
+    const { activeDecision, dismissDecision } = useWorkflowRuns()
+    let fired = false
+    window.addEventListener('worldsmith:workflow-run-dismissed', () => { fired = true })
+    dismissDecision()
+    expect(activeDecision.value).toBeNull()
+    expect(fired).toBe(false)
+  })
 })

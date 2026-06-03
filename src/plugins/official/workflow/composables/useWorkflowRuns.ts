@@ -66,6 +66,13 @@ function dispatchResolved(runId: string, nodeId: string, result: DecisionResult)
   }))
 }
 
+function dispatchDismissed(runId: string, nodeId: string, reason: string): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('worldsmith:workflow-run-dismissed', {
+    detail: { runId, nodeId, reason },
+  }))
+}
+
 /** useWorkflowRuns — 列运行 + 详情 + 轮询 */
 export function useWorkflowRuns(filterRef?: Ref<RunListFilter | null>) {
   const list: Ref<RunSummary[]> = ref([])
@@ -140,6 +147,13 @@ export function useWorkflowRuns(filterRef?: Ref<RunListFilter | null>) {
     resolveDecision({ choice: ctx.defaultOption, note: '(fallback)' })
   }
 
+  function dismissDecision(reason = 'user-dismissed'): void {
+    const ctx = _activeDecision.value
+    if (!ctx) return
+    dispatchDismissed(ctx.runId, ctx.nodeId, reason)
+    _activeDecision.value = null
+  }
+
   return {
     list,
     loading,
@@ -154,6 +168,7 @@ export function useWorkflowRuns(filterRef?: Ref<RunListFilter | null>) {
     activeDecision: _activeDecision,
     resolveDecision,
     fallbackDecision,
+    dismissDecision,
     unregisterListeners: detachDecisionListeners,
   }
 }

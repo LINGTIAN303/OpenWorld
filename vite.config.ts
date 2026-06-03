@@ -76,6 +76,7 @@ export default defineConfig({
   plugins: [vue(), wasm(), worldsmithServerLauncher(), customProxyPlugin()],
   resolve: {
     alias: {
+      '@': path.resolve(__dirname, 'src'),
       '@agent': path.resolve(__dirname, 'worldsmith-agent/src'),
       '@worldsmith/entity-core': path.resolve(__dirname, 'packages/entity-core/src'),
       '@worldsmith/plugin-sdk': path.resolve(__dirname, 'packages/plugin-sdk/src'),
