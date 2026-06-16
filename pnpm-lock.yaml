@@ -58,13 +58,16 @@ importers:
         version: file:worldsmith-core/pkg
       '@worldsmith/entity-core':
         specifier: file:./packages/entity-core
-        version: link:packages/entity-core
+        version: file:packages/entity-core
       '@worldsmith/font-kit':
         specifier: file:./packages/font-kit
         version: link:packages/font-kit
       '@worldsmith/motion-kit':
         specifier: file:./packages/motion-kit
         version: link:packages/motion-kit
+      '@worldsmith/perf-kit':
+        specifier: workspace:*
+        version: link:packages/perf-kit
       '@worldsmith/plugin-sdk':
         specifier: file:./packages/plugin-sdk
         version: link:packages/plugin-sdk
@@ -218,11 +221,24 @@ importers:
 
   packages/canvas-engine: {}
 
-  packages/entity-core: {}
+  packages/entity-core:
+    dependencies:
+      '@worldsmith/perf-kit':
+        specifier: workspace:*
+        version: link:../perf-kit
 
   packages/font-kit: {}
 
   packages/motion-kit: {}
+
+  packages/perf-kit:
+    dependencies:
+      dexie:
+        specifier: ^4.0
+        version: 4.4.3
+      vue:
+        specifier: ^3.4
+        version: 3.5.38(typescript@6.0.3)
 
   packages/plugin-sdk: {}
 
@@ -1918,6 +1934,9 @@ packages:
 
   '@worldsmith/core@file:worldsmith-core/pkg':
     resolution: {directory: worldsmith-core/pkg, type: directory}
+
+  '@worldsmith/entity-core@file:packages/entity-core':
+    resolution: {directory: packages/entity-core, type: directory}
 
   '@worldsmith/tactical-engine@file:tactical-engine/pkg':
     resolution: {directory: tactical-engine/pkg, type: directory}
@@ -5451,6 +5470,10 @@ snapshots:
   '@windfonts/chinese-fonts@1.0.22': {}
 
   '@worldsmith/core@file:worldsmith-core/pkg': {}
+
+  '@worldsmith/entity-core@file:packages/entity-core':
+    dependencies:
+      '@worldsmith/perf-kit': link:packages/perf-kit
 
   '@worldsmith/tactical-engine@file:tactical-engine/pkg': {}
 

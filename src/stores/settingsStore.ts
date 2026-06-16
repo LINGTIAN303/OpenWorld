@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, watch, computed, type Ref } from 'vue'
 import { useTheme } from '../composables/useTheme'
-
 import { getProjectManager } from '@worldsmith/entity-core/core'
+import { watchDebounced } from '@worldsmith/perf-kit/render'
 
 export interface PluginToggle {
   id: string
@@ -351,8 +351,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const timelineDefaultGroup = persistedRef(STORAGE_KEY_TIMELINE_DEFAULT_GROUP, 'none' as string)
   const timelineCompactMode = persistedRef(STORAGE_KEY_TIMELINE_COMPACT_MODE, false)
 
-  watch(customProviders, v => saveCustomProviders(v), { deep: true })
-  watch(companionModeSceneProbs, v => localStorage.setItem(STORAGE_KEY_COMPANION_MODE_SCENE_PROBS, JSON.stringify(v)), { deep: true })
+  watch(customProviders, v => saveCustomProviders(v))
+  watchDebounced(() => companionModeSceneProbs.value, () => localStorage.setItem(STORAGE_KEY_COMPANION_MODE_SCENE_PROBS, JSON.stringify(companionModeSceneProbs.value)), { debounce: 200, deep: true })
 
   function togglePlugin(id: string) {
     const p = plugins.value.find(p => p.id === id)
@@ -398,13 +398,13 @@ export const useSettingsStore = defineStore('settings', () => {
   function addCustomProvider(entry: Omit<CustomProviderEntry, 'id'>): CustomProviderEntry {
     const id = 'cp-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
     const item: CustomProviderEntry = { id, ...entry }
-    customProviders.value.push(item)
+    customProviders.value = [...customProviders.value, item]
     return item
   }
 
   function removeCustomProvider(id: string): void {
     const idx = customProviders.value.findIndex(p => p.id === id)
-    if (idx !== -1) customProviders.value.splice(idx, 1)
+    if (idx !== -1) customProviders.value = customProviders.value.filter(p => p.id !== id)
   }
 
   function getCustomKeyStoreId(baseUrl: string): string {

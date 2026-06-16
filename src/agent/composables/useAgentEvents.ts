@@ -1,5 +1,6 @@
 import { ref, readonly } from 'vue'
 import type { AgentEvent } from '@agent/index'
+import { useShallowArray } from '@worldsmith/perf-kit/reactive'
 import { usePlanStore } from './usePlanStore'
 import { useGenerationProgress } from './useGenerationProgress'
 
@@ -14,7 +15,8 @@ export interface ToolCallView {
   progress: number
 }
 
-const toolCalls = ref<ToolCallView[]>([])
+const { items: toolCallsArr, setAll: setToolCalls, push: pushToolCall, updateById: updateToolCall, trigger: triggerToolCalls } = useShallowArray<ToolCallView>('id')
+const toolCalls = toolCallsArr
 const isProcessing = ref(false)
 const currentThinking = ref('')
 
@@ -24,7 +26,7 @@ export function useAgentEvents() {
       case 'agent_start':
         isProcessing.value = true
         currentThinking.value = ''
-        toolCalls.value = []
+        setToolCalls([])
         break
       case 'agent_end':
         isProcessing.value = false
@@ -42,29 +44,25 @@ export function useAgentEvents() {
         currentThinking.value = ''
         const dupIdx = toolCalls.value.findIndex(tc => tc.id === event.toolCall.id)
         if (dupIdx !== -1) {
-          const updated = [...toolCalls.value]
-          updated[dupIdx] = { ...updated[dupIdx], status: 'running', startedAt: Date.now(), progress: 0 }
-          toolCalls.value = updated
+          updateToolCall(event.toolCall.id, { status: 'running', startedAt: Date.now(), progress: 0 })
         } else {
-          toolCalls.value = [...toolCalls.value, {
+          pushToolCall({
             id: event.toolCall.id,
             name: event.toolCall.name,
             args: event.toolCall.args,
             status: 'running',
             startedAt: Date.now(),
             progress: 0,
-          }]
+          })
         }
         break
       case 'tool_execution_update': {
         const updateIdx = toolCalls.value.findIndex(tc => tc.id === event.toolCallId)
         if (updateIdx !== -1) {
-          const updated = [...toolCalls.value]
-          updated[updateIdx] = { ...updated[updateIdx], progress: event.progress }
-          toolCalls.value = updated
+          updateToolCall(event.toolCallId, { progress: event.progress })
 
           // Handle generation progress for image_generate / video_generate
-          const tc = updated[updateIdx]
+          const tc = toolCalls.value[updateIdx]
           if (tc.name === 'image_generate' || tc.name === 'video_generate') {
             const genProgress = useGenerationProgress()
             const progress = event.progress
@@ -97,18 +95,15 @@ export function useAgentEvents() {
       case 'tool_execution_end': {
         const endIdx = toolCalls.value.findIndex(tc => tc.id === event.toolCallId)
         if (endIdx !== -1) {
-          const updated = [...toolCalls.value]
-          updated[endIdx] = {
-            ...updated[endIdx],
+          updateToolCall(event.toolCallId, {
             status: event.success ? 'completed' : 'failed',
             result: event.result,
             endedAt: Date.now(),
             progress: 100,
-          }
-          toolCalls.value = updated
+          })
 
           // Handle plan tool results
-          const tc = updated[endIdx]
+          const tc = toolCalls.value[endIdx]
           if (event.success && event.result) {
             if (tc.name === 'plan_create') {
               try {
@@ -135,26 +130,26 @@ export function useAgentEvents() {
   }
 
   function removeEntityFromResults(entityId: string): void {
-    const updated = toolCalls.value.map(tc => {
-      if (tc.name !== 'entity_list' || !tc.result) return tc
+    for (let i = 0; i < toolCalls.value.length; i++) {
+      const tc = toolCalls.value[i]
+      if (tc.name !== 'entity_list' || !tc.result) continue
       try {
         const obj = JSON.parse(tc.result)
-        if (!obj || !Array.isArray(obj.entities)) return tc
+        if (!obj || !Array.isArray(obj.entities)) continue
         const filtered = obj.entities.filter((e: any) => e.id !== entityId)
-        if (filtered.length === obj.entities.length) return tc
+        if (filtered.length === obj.entities.length) continue
         const newObj = { ...obj, entities: filtered }
         if (typeof newObj.total === 'number') newObj.total = Math.max(0, newObj.total - 1)
         if (typeof newObj.showing === 'number') newObj.showing = filtered.length
-        return { ...tc, result: JSON.stringify(newObj) }
+        updateToolCall(tc.id, { result: JSON.stringify(newObj) })
       } catch {
-        return tc
+        continue
       }
-    })
-    toolCalls.value = updated
+    }
   }
 
   function clearToolCalls(): void {
-    toolCalls.value = []
+    setToolCalls([])
   }
 
   return {

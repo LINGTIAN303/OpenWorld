@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { useShallowArray, useShallowRefMap } from '@worldsmith/perf-kit/reactive'
 import { storage } from '../core/StorageBackend'
 import { useUndoRedo, isUndoing } from '../composables/useUndoRedo'
 import { entitySchemaRegistry } from '../core/EntitySchema'
@@ -10,7 +11,8 @@ import { useTrashStore } from './trashStore'
 import type { Entity } from '../types/entity'
 
 export const useEntityStore = defineStore('entity', () => {
-  const entities = ref<Entity[]>([])
+  const { items: entities, setAll, push, removeById, updateById, findById } = useShallowArray<Entity>('id')
+  const { map: entityMap, set: mapSet, delete: mapDel, replaceAll: mapReplaceAll } = useShallowRefMap<string, Entity>()
   const loading = ref(false)
   const error = ref<string | null>(null)
   const { record } = useUndoRedo()
@@ -19,11 +21,9 @@ export const useEntityStore = defineStore('entity', () => {
   function clearError() { error.value = null }
   function setError(msg: string) { error.value = msg; console.error('[EntityStore]', msg) }
 
-  const entityMap = computed(() => {
-    const map = new Map<string, Entity>()
-    for (const e of entities.value) map.set(e.id, e)
-    return map
-  })
+  function syncIndex() {
+    mapReplaceAll(entities.value.map(e => [e.id, e] as [string, Entity]))
+  }
 
   const typeCounts = computed(() => {
     const map = new Map<string, number>()
@@ -49,7 +49,8 @@ export const useEntityStore = defineStore('entity', () => {
     clearError()
     loading.value = true
     try {
-      entities.value = sanitize(await storage.getAllEntities())
+      setAll(sanitize(await storage.getAllEntities()))
+      syncIndex()
       refreshAllTypeCounts()
       clearAllDirty()
     } catch (e: any) {
@@ -63,7 +64,8 @@ export const useEntityStore = defineStore('entity', () => {
     clearError()
     loading.value = true
     try {
-      entities.value = sanitize(await storage.getEntitiesByType(type))
+      setAll(sanitize(await storage.getEntitiesByType(type)))
+      syncIndex()
     } catch (e: any) {
       setError(e?.message ?? '加载实体失败')
     } finally {
@@ -77,7 +79,9 @@ export const useEntityStore = defineStore('entity', () => {
 
   async function add(entity: Entity, source: 'user' | 'agent' | 'import' = 'user'): Promise<string> {
     clearError()
-    const clean = structuredClone(entity)
+    // import 来源数据已由 importBatch 处理，无需 clone；
+    // user/agent 来源需要 clone 防止外部引用污染
+    const clean = source === 'import' ? entity : structuredClone(entity)
     clean.createdAt = new Date().toISOString()
     clean.updatedAt = clean.createdAt
 
@@ -104,7 +108,8 @@ export const useEntityStore = defineStore('entity', () => {
     }
 
     await storage.putEntity(clean)
-    entities.value.push(clean)
+    push(clean)
+    mapSet(clean.id, clean)
     if (!isUndoing) record('entity', 'add', clean.id, null, { ...clean }, clean.name)
     getEventBus().emit('entity:create', { entityId: clean.id, entityType: clean.type, properties: clean.properties || {}, source })
     refreshAllTypeCounts()
@@ -113,10 +118,9 @@ export const useEntityStore = defineStore('entity', () => {
 
   async function update(id: string, changes: Partial<Entity>, source: 'user' | 'agent' | 'import' = 'user') {
     clearError()
-    const clean = structuredClone(changes)
-    clean.updatedAt = new Date().toISOString()
+    const clean = { ...changes, updatedAt: new Date().toISOString() }
 
-    const old = entities.value.find(e => e.id === id)
+    const old = findById(id)
     const oldProps = old?.properties ?? {}
 
     if (!isUndoing && old) {
@@ -128,18 +132,19 @@ export const useEntityStore = defineStore('entity', () => {
     }
 
     // 先更新内存状态（同步，确保 UI 立即响应）
-    const idx = entities.value.findIndex((e) => e.id === id)
-    if (idx !== -1) {
-      entities.value[idx] = { ...entities.value[idx], ...changes }
-    }
+    updateById(id, clean)
+    const updated = findById(id)
 
     // 异步持久化 + 事件发射（不阻塞 UI 更新）
     storage.updateEntity(id, clean).then(() => {
       markEntityDirty(id)
     }).catch(e => setError(e?.message ?? '更新实体失败'))
 
+    // 更新索引
+    if (updated) mapSet(id, updated)
+
     // 事件发射（EventBus.emit 已改为非阻塞）
-    const newProps = entities.value[idx]?.properties ?? {}
+    const newProps = updated?.properties ?? {}
     const changedFields = Object.keys(clean).filter(k => k !== 'updatedAt')
     getEventBus().emit('entity:update', {
       entityId: id, entityType: old?.type ?? '',
@@ -163,7 +168,7 @@ export const useEntityStore = defineStore('entity', () => {
 
   async function remove(id: string, source: 'user' | 'agent' | 'import' = 'user') {
     clearError()
-    const old = entities.value.find(e => e.id === id)
+    const old = findById(id)
     if (!old) return
 
     // 收集关联关系信息（用于回收站和undo）
@@ -183,7 +188,8 @@ export const useEntityStore = defineStore('entity', () => {
     }
 
     // 更新内存状态
-    entities.value = entities.value.filter((e) => e.id !== id)
+    removeById(id)
+    mapDel(id)
     if (connectedRels.length > 0) {
       const connectedIds = new Set(connectedRels.map(r => r.id))
       rs.relations = rs.relations.filter(r => !connectedIds.has(r.id))
@@ -231,10 +237,9 @@ export const useEntityStore = defineStore('entity', () => {
     refreshAllTypeCounts()
   }
 
-  async function search(query: string): Promise<Entity[]> {
+  function search(query: string): Entity[] {
     const lower = query.toLowerCase()
-    const all = await storage.getAllEntities()
-    return all.filter(
+    return entities.value.filter(
       (e) =>
         e.name.toLowerCase().includes(lower) ||
         e.description.toLowerCase().includes(lower) ||
@@ -282,6 +287,20 @@ export const useEntityStore = defineStore('entity', () => {
     }
   }
 
+  /**
+   * 批量导入实体：一次性写入 DB + 刷新内存状态。
+   * 替代逐个 add()，避免 N 次 IPC/DB 写入。
+   */
+  async function importBatch(newEntities: Entity[]): Promise<number> {
+    clearError()
+    const sanitized = sanitize(newEntities)
+    const count = await storage.importEntities(sanitized)
+    setAll(sanitize(await storage.getAllEntities()))
+    syncIndex()
+    refreshAllTypeCounts()
+    return count
+  }
+
   return {
     entities,
     loading,
@@ -301,5 +320,6 @@ export const useEntityStore = defineStore('entity', () => {
     update,
     remove,
     search,
+    importBatch,
   }
 })

@@ -165,6 +165,7 @@ import BlockAccordion from './blocks/BlockAccordion.vue'
 import BlockManuscript from './blocks/BlockManuscript.vue'
 import { usePersonaFont } from '../space/composables/usePersonaFont'
 import { useAgent } from './composables/useAgent'
+import { watchDebounced } from '@worldsmith/perf-kit/render'
 const { enterAnimation } = usePersonaFont()
 const { deepSegments, finalOutput, isStreaming: agentIsStreaming, resolveToolConfirmation } = useAgent()
 
@@ -362,11 +363,11 @@ function setupScrollObserver(): void {
   }
 }
 
-watch(() => props.messages, () => {
+watch(() => props.messages.length, () => {
   nextTick(() => {
     setupScrollObserver()
   })
-}, { deep: true })
+})
 
 onMounted(() => {
   nextTick(setupScrollObserver)
@@ -447,25 +448,16 @@ function stopDotAnimation(): void {
 
 let scrollTimer: ReturnType<typeof setTimeout> | null = null
 
-watch(() => props.messages, () => {
+function scheduleScrollToBottom() {
   if (scrollTimer) clearTimeout(scrollTimer)
   scrollTimer = setTimeout(() => nextTick(scrollToBottom), 50)
-}, { deep: true })
+}
 
-watch(() => props.a2uiSurfaces, () => {
-  if (scrollTimer) clearTimeout(scrollTimer)
-  scrollTimer = setTimeout(() => nextTick(scrollToBottom), 50)
-}, { deep: true })
-
-watch(() => deepSegments.value, () => {
-  if (scrollTimer) clearTimeout(scrollTimer)
-  scrollTimer = setTimeout(() => nextTick(scrollToBottom), 50)
-}, { deep: true })
-
-watch(() => finalOutput.value, () => {
-  if (scrollTimer) clearTimeout(scrollTimer)
-  scrollTimer = setTimeout(() => nextTick(scrollToBottom), 50)
-}, { deep: true })
+// 合并所有滚动到底部的 watch，用 watchDebounced 替代 deep watch
+watchDebounced(() => props.messages.length, () => scheduleScrollToBottom(), { debounce: 50 })
+watchDebounced(() => Object.keys(props.a2uiSurfaces).length, () => scheduleScrollToBottom(), { debounce: 50 })
+watchDebounced(() => deepSegments.value.length, () => scheduleScrollToBottom(), { debounce: 50 })
+watch(() => finalOutput.value, () => scheduleScrollToBottom())
 
 watch(() => props.isStreaming, (val) => {
   if (val) startDotAnimation()

@@ -101,6 +101,16 @@ export const useRelationStore = defineStore('relation', () => {
     return relations.value.filter(r => r.pairId === pairId)
   }
 
+  /**
+   * 批量导入关系：一次性写入 DB + 刷新内存状态。
+   * 替代逐个 add()，避免 N 次 IPC/DB 写入。
+   */
+  async function importBatch(newRelations: Relation[]): Promise<number> {
+    const count = await storage.importRelations(newRelations)
+    relations.value = await storage.getAllRelations()
+    return count
+  }
+
   return {
     relations,
     loading,
@@ -115,5 +125,6 @@ export const useRelationStore = defineStore('relation', () => {
     getAllRelations,
     getPairRelation,
     getByPairId,
+    importBatch,
   }
 })

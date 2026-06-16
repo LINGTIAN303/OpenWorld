@@ -241,6 +241,7 @@ import { replaceFontSpans } from '../composables/fontSpanParser'
 import { useFontStore } from '../stores/fontStore'
 import { renderText, toBlob, renderAnimatedText } from '@worldsmith/font-kit'
 import { encodeGif } from '@worldsmith/motion-kit'
+import { useStreamingRenderer } from '@worldsmith/perf-kit/render'
 const { fontFamily, enterAnimation, profile } = usePersonaFont()
 const { logs: activityLogs } = useActivityLog()
 const fontStore = useFontStore()
@@ -529,12 +530,18 @@ const emit = defineEmits<{
 
 const marked = new Marked({ gfm: true, breaks: true })
 
-const renderedMarkdown = computed(() => {
+// 流式输出时 content 高频变化，用 rAF 节流渲染
+const rawMarkdown = computed(() => {
   if (!props.msg || props.msg.role !== 'assistant' || !props.msg.content) return ''
-  // 先替换字体标记（避免 stripJsonBlocks 误吞 {font:...}）
   const withFontSpans = replaceFontSpans(props.msg.content.trim())
   if (!withFontSpans) return ''
-  const filtered = stripJsonBlocks(withFontSpans)
+  return stripJsonBlocks(withFontSpans)
+})
+
+const throttledRaw = useStreamingRenderer(() => rawMarkdown.value, { initialValue: '' })
+
+const renderedMarkdown = computed(() => {
+  const filtered = throttledRaw.value
   return filtered ? renderMd(filtered) : ''
 })
 

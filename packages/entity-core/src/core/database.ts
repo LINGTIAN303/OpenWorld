@@ -69,14 +69,14 @@ export class WorldDatabase extends Dexie {
       files: 'id, path, name, entityId, *tags, createdAt',
       file_contents: 'id',
     }).upgrade(async tx => {
-      // 旧记录没有 updatedAt，回填为 createdAt
+      // 旧记录没有 updatedAt，回填为 createdAt（批量 bulkPut）
       const entities = await tx.table('entities').toArray()
-      for (const e of entities) {
-        if (!e.updatedAt) {
-          await tx.table('entities').update(e.id, {
-            updatedAt: e.createdAt || new Date(0).toISOString(),
-          })
+      const toUpdate = entities.filter(e => !e.updatedAt)
+      if (toUpdate.length > 0) {
+        for (const e of toUpdate) {
+          e.updatedAt = e.createdAt || new Date(0).toISOString()
         }
+        await tx.table('entities').bulkPut(toUpdate)
       }
     })
     // v6: facets 字段支持（Trait 系统），无需新索引——facets 存储在 properties 内

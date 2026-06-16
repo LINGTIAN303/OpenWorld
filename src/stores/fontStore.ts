@@ -98,7 +98,7 @@ function savePrefs(prefs: FontPreferences) {
 export const useFontStore = defineStore('font', () => {
   const prefs = ref<FontPreferences>(loadPrefs())
 
-  watch(prefs, (v) => savePrefs(v), { deep: true })
+  watchDebounced(() => prefs.value, () => savePrefs(prefs.value), { debounce: 200, deep: true })
 
   function applyLayerCSS(layer: FontLayer, pref: FontLayerPref) {
     const familyVar = LAYER_CSS_VAR[layer]

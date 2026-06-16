@@ -31,6 +31,7 @@ import { useEntityStore, useRelationStore, useFileStore } from '@worldsmith/enti
 import { usePluginStore } from '@worldsmith/entity-core/stores'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { moduleStore } from '@/modules/store'
+import { createBatchIpc } from '@worldsmith/perf-kit/io'
 
 /* ════════════════════════════════════════
    类型定义
@@ -189,7 +190,8 @@ export async function exportProjectToDir(
     createdAt: projectInfo.createdAt,
     exportedAt: new Date().toISOString(),
   }
-  await writeTextFile(`${projectDir}/project.json`, JSON.stringify(manifest, null, 2))
+  const batchWriter = createBatchIpc({ maxBatchSize: 50 })
+  batchWriter.add(`${projectDir}/project.json`, JSON.stringify(manifest, null, 2))
 
   // 3. 导出实体（按类型分目录，每个实体一个文件）
   const entityStore = useEntityStore()
@@ -211,7 +213,7 @@ export async function exportProjectToDir(
       const fileName = toSafeFileName(entity.name, entity.id)
       const filePath = `${projectDir}/entities/${type}/${fileName}`
       const content = JSON.stringify(entity, null, 2)
-      await writeTextFile(filePath, content)
+      batchWriter.add(filePath, content)
       checksums[`entities/${type}/${fileName}`] = simpleChecksum(content)
       entityIdx++
       onProgress?.('entities', entityIdx, entities.length)
@@ -222,7 +224,7 @@ export async function exportProjectToDir(
   const relationStore = useRelationStore()
   const relations = await relationStore.getAllRelations()
   const relationsContent = JSON.stringify(relations, null, 2)
-  await writeTextFile(`${projectDir}/relations/_index.json`, relationsContent)
+  batchWriter.add(`${projectDir}/relations/_index.json`, relationsContent)
   checksums['relations/_index.json'] = simpleChecksum(relationsContent)
   onProgress?.('relations', 1, 1)
 
@@ -232,7 +234,7 @@ export async function exportProjectToDir(
   for (const mod of modules) {
     const fileName = `${mod.id.replace(/\./g, '_')}.json`
     const content = JSON.stringify(mod, null, 2)
-    await writeTextFile(`${projectDir}/modules/${fileName}`, content)
+    batchWriter.add(`${projectDir}/modules/${fileName}`, content)
     checksums[`modules/${fileName}`] = simpleChecksum(content)
     moduleIdx++
     onProgress?.('modules', moduleIdx, modules.length)
@@ -241,7 +243,7 @@ export async function exportProjectToDir(
   // 6. 导出设置
   const settingsStore = useSettingsStore()
   const pluginsConfig = settingsStore.plugins.map(p => ({ id: p.id, active: p.active }))
-  await writeTextFile(
+  batchWriter.add(
     `${projectDir}/settings/plugins.json`,
     JSON.stringify(pluginsConfig, null, 2),
   )
@@ -255,7 +257,11 @@ export async function exportProjectToDir(
     moduleCount: modules.length,
     checksums,
   }
-  await writeTextFile(`${projectDir}/.worldsmith/cache.json`, JSON.stringify(cache, null, 2))
+  batchWriter.add(`${projectDir}/.worldsmith/cache.json`, JSON.stringify(cache, null, 2))
+
+  // 8. 批量刷出所有文件
+  await batchWriter.flush()
+  batchWriter.destroy()
 
   return projectDir
 }
@@ -293,7 +299,7 @@ export async function importProjectFromDir(
   const switcher = useProjectSwitcher()
   await switcher.switchProject(newProject.id)
 
-  // 5. 导入实体
+  // 5. 导入实体（批量收集后一次性写入 DB）
   const entitiesDir = `${sourceDir}/entities`
   const entityTypes = await listDir(entitiesDir)
   let entityCount = 0
@@ -306,30 +312,33 @@ export async function importProjectFromDir(
     entityTotal += files.filter(f => f.name.endsWith('.json')).length
   }
 
-  const entityStore = useEntityStore()
+  // 收集所有实体
+  const allEntities: any[] = []
   for (const typeDir of entityTypes) {
     if (!typeDir.isDir) continue
     const files = await listDir(typeDir.path)
     for (const file of files) {
       if (!file.name.endsWith('.json')) continue
       const content = await readTextFile(file.path)
-      const entity = JSON.parse(content)
-      await entityStore.add(entity, 'import')
+      allEntities.push(JSON.parse(content))
       entityCount++
-      onProgress?.('entities', entityCount, entityTotal)
+      onProgress?.('entities_read', entityCount, entityTotal)
     }
   }
 
-  // 6. 导入关系
+  // 批量写入 DB + 刷新内存状态
+  const entityStore = useEntityStore()
+  await entityStore.importBatch(allEntities)
+  onProgress?.('entities', entityTotal, entityTotal)
+
+  // 6. 导入关系（批量）
   let relationCount = 0
   try {
     const relationsText = await readTextFile(`${sourceDir}/relations/_index.json`)
     const relations = JSON.parse(relationsText)
     const relationStore = useRelationStore()
-    for (const rel of relations) {
-      await relationStore.add(rel, 'import')
-      relationCount++
-    }
+    await relationStore.importBatch(relations)
+    relationCount = relations.length
   } catch {
     // 关系文件可能不存在
   }

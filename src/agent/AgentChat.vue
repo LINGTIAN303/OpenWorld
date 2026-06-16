@@ -147,7 +147,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, watch, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
 import { useAgent } from './composables/useAgent'
 import type { ChatMode } from './composables/useAgent'
 import { useAgentCommands } from './composables/useAgentCommands'
@@ -174,6 +174,10 @@ import { listSessions, deleteSession } from '@agent/index'
 import { useOrchestrator } from './composables/useOrchestrator'
 import { usePersonaFont } from '../space/composables/usePersonaFont'
 import { useFontStore } from '../stores/fontStore'
+import { createDebouncedStorage } from '@worldsmith/perf-kit/io'
+
+const agentStorage = createDebouncedStorage({ debounce: 100 })
+
 const { fontFamily, profile } = usePersonaFont()
 const fontStore = useFontStore()
 const agentFontFamily = computed(() => fontStore.prefs.agent.family || fontFamily.value || '')
@@ -552,7 +556,7 @@ async function onModelChange(provider: string, modelId: string): Promise<void> {
     if (!validLevels.some(l => l.value === thinkingLevel.value)) {
       thinkingLevel.value = 'off'
       updateThinkingLevel('off')
-      try { localStorage.setItem('agent_thinking_level', 'off') } catch {}
+      try { agentStorage.set('agent_thinking_level', 'off') } catch {}
     }
   }
   const apiKey = await loadApiKey(provider)
@@ -567,7 +571,7 @@ async function onModelChange(provider: string, modelId: string): Promise<void> {
   }
   await updateModel(provider, modelId, undefined, apiKey || undefined, temperature.value, maxTokens.value, contextWindow, maxOut)
   try {
-    localStorage.setItem('agent_current_model', JSON.stringify({ provider, modelId, contextLength: contextLength.value }))
+    agentStorage.set('agent_current_model', { provider, modelId, contextLength: contextLength.value })
   } catch {}
   saveAgentSettings()
 }
@@ -576,7 +580,7 @@ function onThinkingLevelChange(level: string): void {
   thinkingLevel.value = level as ThinkingLevel
   updateThinkingLevel(level as ThinkingLevel)
   try {
-    localStorage.setItem('agent_thinking_level', level)
+    agentStorage.set('agent_thinking_level', level)
   } catch {}
 }
 
@@ -595,7 +599,7 @@ async function onSearchEngineChange(engine: string): Promise<void> {
   searchApiKey.value = newKey || ''
 
   try {
-    localStorage.setItem('agent_search_config', JSON.stringify({ engine }))
+    agentStorage.set('agent_search_config', { engine })
   } catch {}
 
   await refreshSearchConfig()
@@ -666,9 +670,9 @@ async function onRemoveMcp(serverId: string): Promise<void> {
 
 async function saveSearchConfig(): Promise<void> {
   try {
-    localStorage.setItem('agent_search_config', JSON.stringify({
+    agentStorage.set('agent_search_config', {
       engine: searchEngine.value,
-    }))
+    })
   } catch {}
   if (searchApiKey.value) {
     await storeApiKey('search_' + searchEngine.value, searchApiKey.value)
@@ -702,12 +706,12 @@ function loadThinkingLevel(): void {
 
 function saveAgentSettings(): void {
   try {
-    localStorage.setItem('agent_settings', JSON.stringify({
+    agentStorage.set('agent_settings', {
       temperature: temperature.value,
       maxTokens: maxTokens.value,
       contextLength: contextLength.value,
       personaPreset: personaPreset.value,
-    }))
+    })
   } catch {}
 }
 
@@ -742,9 +746,9 @@ async function loadCurrentModel(): Promise<void> {
 
 function savePanelState(): void {
   try {
-    localStorage.setItem('agent_panel', JSON.stringify({
+    agentStorage.set('agent_panel', {
       x: panelX.value, y: panelY.value, w: panelW.value, h: panelH.value,
-    }))
+    })
   } catch {}
 }
 

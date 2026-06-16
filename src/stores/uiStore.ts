@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import type { Component } from 'vue'
+import { watchDebounced } from '@worldsmith/perf-kit/render'
 
 const STORAGE_KEY = 'worldsmith_sidebar_order'
 
@@ -38,8 +39,8 @@ export const useUIStore = defineStore('ui', () => {
 
   const sidebarOrder = ref<string[]>(loadOrder())
 
-  // 自动持久化
-  watch(sidebarOrder, (val) => saveOrder(val), { deep: true })
+  // 自动持久化（防抖替代 deep watch）
+  watchDebounced(() => sidebarOrder.value, () => saveOrder(sidebarOrder.value), { debounce: 100, deep: true })
 
   function setView(viewId: string) {
     currentView.value = viewId

@@ -44,6 +44,7 @@
     "@worldsmith/entity-core": "file:./packages/entity-core",
     "@worldsmith/font-kit": "file:./packages/font-kit",
     "@worldsmith/motion-kit": "file:./packages/motion-kit",
+    "@worldsmith/perf-kit": "workspace:*",
     "@worldsmith/plugin-sdk": "file:./packages/plugin-sdk",
     "@worldsmith/tactical-engine": "file:./tactical-engine/pkg",
     "@worldsmith/ui-kit": "file:./packages/ui-kit",
