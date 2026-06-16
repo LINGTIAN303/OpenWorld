@@ -241,6 +241,17 @@ export class CoreBackend implements IAgentBackend {
       parameters: this.convertParamsToJsonSchema(t.parameters),
       execute: async (toolCallId: string, params: unknown, _signal?: AbortSignal, _onUpdate?: any) => {
         const args = params as Record<string, unknown>
+        // 深度模式下等待用户确认后再执行工具
+        if (this.config.toolContext?.waitForConfirmation) {
+          const approved = await this.config.toolContext.waitForConfirmation(toolCallId)
+          if (!approved) {
+            return {
+              content: [{ type: 'text' as const, text: '用户拒绝执行' }],
+              details: { error: true },
+              isError: true,
+            }
+          }
+        }
         // 注意：PI 框架会自动发射 tool_execution_start / tool_execution_end 事件，
         // 这里不再手动发射，避免双重发射导致 useAgent 收到重复事件
         const ctx: typeof this.config.toolContext = {
@@ -352,7 +363,7 @@ export class CoreBackend implements IAgentBackend {
       },
       beforeToolCall: async (ctx: any) => {
         if (this.config.beforeToolCall) {
-          const result = await this.config.beforeToolCall({ toolCall: { name: ctx.toolCall?.name, args: ctx.args } })
+          const result = await this.config.beforeToolCall({ toolCall: { id: ctx.toolCallId || ctx.toolCall?.id, name: ctx.toolCall?.name, args: ctx.args } })
           if (result?.block) return { block: true, reason: result.reason }
         }
         return undefined

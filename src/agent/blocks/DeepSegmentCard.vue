@@ -56,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import WsIcon from '../../ui/WsIcon.vue'
 import InteractiveToolCall from './InteractiveToolCall.vue'
 import type { DeepSegment, ToolCallView } from '../composables/useAgent'
@@ -72,7 +72,17 @@ const emit = defineEmits<{
 }>()
 
 // 阶段容器默认折叠，推理段默认展开
-const isExpanded = ref(props.segment.type === 'thinking')
+// 但如果阶段内有等待确认的工具，自动展开
+const hasPendingConfirm = computed(() =>
+  props.segment.type === 'phase' &&
+  props.segment.tools.some(tc => tc.interactiveType === 'confirm' && tc.status === 'running')
+)
+const isExpanded = ref(props.segment.type === 'thinking' || hasPendingConfirm.value)
+
+// 当出现新的待确认工具时自动展开
+watch(hasPendingConfirm, (pending) => {
+  if (pending) isExpanded.value = true
+})
 
 function toggleExpand() {
   isExpanded.value = !isExpanded.value

@@ -26,7 +26,7 @@ export interface AgentConfig {
   tools: ToolDefinition[]
   toolContext: IToolContext
   beforeToolCall?: (info: {
-    toolCall: { name: string; args: Record<string, unknown> }
+    toolCall: { id?: string; name: string; args: Record<string, unknown> }
   }) => Promise<{ block: boolean; reason?: string } | void>
 }
 

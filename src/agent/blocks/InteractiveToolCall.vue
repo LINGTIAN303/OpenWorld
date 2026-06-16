@@ -131,7 +131,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import WsIcon from '../../ui/WsIcon.vue'
 import BlockTable from './BlockTable.vue'
 import BlockChoice from './BlockChoice.vue'
@@ -199,9 +199,20 @@ const emit = defineEmits<{
 }>()
 
 const interactiveType = computed(() => props.tc.interactiveType || 'none')
-const isExpanded = ref(interactiveType.value === 'display' && props.tc.status === 'completed')
+const isExpanded = ref(
+  (interactiveType.value === 'display' && props.tc.status === 'completed') ||
+  (interactiveType.value === 'confirm' && props.tc.status === 'running')
+)
 const choiceSelected = ref<string | null>(null)
 const block = computed(() => props.tc.block)
+
+// confirm 类型工具在 running 状态时自动展开，完成后自动折叠
+watch(() => props.tc.status, (status) => {
+  if (interactiveType.value === 'confirm') {
+    if (status === 'running') isExpanded.value = true
+    else isExpanded.value = false
+  }
+})
 
 function toggleExpand() {
   isExpanded.value = !isExpanded.value

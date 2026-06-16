@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { ref, shallowRef, watch } from 'vue'
 import type { Component } from 'vue'
 import { watchDebounced } from '@worldsmith/perf-kit/render'
 
@@ -25,7 +25,7 @@ export const useUIStore = defineStore('ui', () => {
   const selectedEntityId = ref<string | null>(null)
   const sidebarCollapsed = ref(false)
   const menuOpen = ref(false)
-  const viewComponent = ref<Component | null>(null)
+  const viewComponent = shallowRef<Component | null>(null)
   const viewRefreshKey = ref(0)
   const _jumpBackViewId = ref<string | null>(null)
 

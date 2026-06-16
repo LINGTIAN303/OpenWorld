@@ -85,4 +85,6 @@ export interface IToolContext {
   listSessions?: (query?: string) => Promise<SessionSummary[]>
   /** 读取指定会话的消息内容 */
   readSessionMessages?: (sessionId: string) => Promise<{ role: string; content: string; timestamp: number }[] | null>
+  /** 深度模式下等待用户确认工具执行（由 bridge.ts execute 调用） */
+  waitForConfirmation?: (toolCallId: string) => Promise<boolean>
 }

@@ -482,7 +482,7 @@ let phaseCounter = 0
 let hasToolCallsInCurrentTurn = false
 const toolCallNameMap = new Map<string, string>()
 /** 深度模式内联确认：等待用户确认的工具 Promise 解析器 */
-const pendingConfirmations = new Map<string, { resolve: (approved: boolean) => void }>()
+const pendingConfirmations = new Map<string, { resolve: (approved: boolean) => void; _resolved?: boolean; _approved?: boolean }>()
 const totalUsage = ref<{
   inputTokens: number
   outputTokens: number
@@ -1173,6 +1173,23 @@ export function useAgent() {
             return null
           }
         },
+        /** 深度模式下等待用户确认工具执行（由 bridge.ts execute 调用） */
+        waitForConfirmation: (toolCallId: string): Promise<boolean> => {
+          // 非深度模式直接放行
+          if (activeChatMode.value !== 'deep') return Promise.resolve(true)
+          // 如果该工具不在 pendingConfirmations 中（不需要确认），直接放行
+          if (!pendingConfirmations.has(toolCallId)) return Promise.resolve(true)
+          // 已有 pending 条目且已 resolved（用户在 waitForConfirmation 调用前就点了确认）
+          const existing = pendingConfirmations.get(toolCallId)
+          if (existing?._resolved) {
+            pendingConfirmations.delete(toolCallId)
+            return Promise.resolve(existing._approved!)
+          }
+          // 创建 Promise 等待用户确认，替换占位条目的 resolve
+          return new Promise<boolean>((resolve) => {
+            pendingConfirmations.set(toolCallId, { resolve, _resolved: false, _approved: undefined })
+          })
+        },
       }
 
       const fontLibrary = useFontLibraryStore()
@@ -1203,12 +1220,11 @@ export function useAgent() {
             .map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : v}`)
             .join(', ')
 
-          // 深度模式：使用内联确认（InteractiveToolCall 组件）
+          // 深度模式：不在 beforeToolCall 中阻塞（会死锁，因为 tool_execution_start 事件
+          // 在 beforeToolCall 返回后才发射，UI 无法渲染确认按钮）。
+          // 改为在 tool_execution_start 事件中创建 pendingConfirmation，
+          // 在 bridge.ts 的 execute 中通过 toolContext.waitForConfirmation 等待确认。
           if (activeChatMode.value === 'deep') {
-            const approved = await new Promise<boolean>((resolve) => {
-              pendingConfirmations.set(toolCall.id, { resolve })
-            })
-            if (!approved) return { block: true, reason: '用户拒绝' }
             return void 0
           }
 
@@ -1573,6 +1589,11 @@ export function useAgent() {
           // moderate 权限且未开启安全确认时，视为普通工具
           const effectivePermission = (toolPermission === 'moderate' && !settingsStore.aiDangerConfirm) ? 'safe' : toolPermission
           const interactiveType = classifyInteractive(event.toolCall.name, effectivePermission)
+          // 深度模式下需要确认的工具：创建 pendingConfirmation 占位条目
+          // waitForConfirmation 会在 bridge.ts execute 中被调用，届时替换 resolve
+          if (interactiveType === 'confirm') {
+            pendingConfirmations.set(event.toolCall.id, { resolve: () => {}, _resolved: false, _approved: undefined })
+          }
           const newTool: ToolCallView = {
             id: event.toolCall.id,
             name: event.toolCall.name,
@@ -2246,6 +2267,8 @@ export function useAgent() {
     resolveToolConfirmation: (toolId: string, approved: boolean) => {
       const pending = pendingConfirmations.get(toolId)
       if (pending) {
+        pending._resolved = true
+        pending._approved = approved
         pending.resolve(approved)
         pendingConfirmations.delete(toolId)
       }
