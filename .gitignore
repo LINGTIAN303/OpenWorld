@@ -64,6 +64,12 @@ storybook-static/
 test-results/
 playwright-report/
 
+# ── Tauri auto-generated ────────────────────────────────────────────────
+src-tauri/gen/
+
+# ── pnpm project: npm lock files not needed ─────────────────────────────
+package-lock.json
+
 # ── Rust / cargo / wasm (added at git init) ─────────────────────────────
 **/target/
 **/Cargo.lock.bak
