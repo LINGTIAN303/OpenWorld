@@ -25,7 +25,7 @@
           <WsIcon v-if="hasIcon(item.view.icon)" :name="item.view.icon" size="md" class="sidebar-icon" />
           <span v-else class="sidebar-icon">{{ item.view.icon }}</span>
           <span v-if="!uiStore.sidebarCollapsed" class="sidebar-label">{{ item.view.label }}</span>
-          <span v-if="!uiStore.sidebarCollapsed && entityCount(item.view.pluginId) > 0" class="sidebar-count">{{ entityCount(item.view.pluginId) }}</span>
+          <span v-if="!uiStore.sidebarCollapsed && item.count > 0" class="sidebar-count">{{ item.count }}</span>
         </div>
       </div>
     </div>
@@ -116,26 +116,32 @@ const pluginEntityTypes = computed(() => {
   return map
 })
 
-function entityCount(pluginId: string | undefined): number {
-  if (!pluginId) return 0
-  const types = pluginEntityTypes.value.get(pluginId)
-  if (!types || types.length === 0) return 0
-  let total = 0
-  for (const t of types) {
-    total += entityStore.allTypeCounts.get(t) || 0
+/** 缓存每个插件的实体数量，仅在实体增删时更新，避免动画帧中重复计算 */
+const pluginEntityCounts = computed(() => {
+  const counts = new Map<string, number>()
+  const typesMap = pluginEntityTypes.value
+  for (const [pluginId, types] of typesMap) {
+    let total = 0
+    for (const t of types) {
+      total += entityStore.allTypeCounts.get(t) || 0
+    }
+    counts.set(pluginId, total)
   }
-  return total
-}
+  return counts
+})
 
 const sortedViews = computed(() => {
   const order = uiStore.sidebarOrder
+  // 预计算 order Map，将 O(n² log n) 降为 O(n log n)
+  const orderMap = new Map<string, number>()
+  for (let i = 0; i < order.length; i++) orderMap.set(order[i], i)
   return pluginStore.views
     .filter(v => !v.pluginId || settingsStore.isActive(v.pluginId))
     .slice()
     .sort((a, b) => {
-      const ia = order.indexOf(a.id)
-      const ib = order.indexOf(b.id)
-      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib)
+      const ia = orderMap.get(a.id) ?? 999
+      const ib = orderMap.get(b.id) ?? 999
+      return ia - ib
     })
 })
 
@@ -155,11 +161,14 @@ interface CarouselItem {
   view: PluginView
   offset: number
   realIndex: number
+  /** 预计算的实体数量，避免模板中调用函数 */
+  count: number
 }
 
 const carouselItems = computed<CarouselItem[]>(() => {
   void renderTick.value
   const views = sortedViews.value
+  const counts = pluginEntityCounts.value
   const n = views.length
   if (n === 0) return []
 
@@ -172,10 +181,12 @@ const carouselItems = computed<CarouselItem[]>(() => {
     const realIdx = ((center + offset) % n + n) % n
     if (seen.has(realIdx)) continue
     seen.add(realIdx)
+    const view = views[realIdx]
     items.push({
-      view: views[realIdx],
+      view,
       offset,
       realIndex: realIdx,
+      count: counts.get(view.pluginId || '') || 0,
     })
   }
 
@@ -440,6 +451,9 @@ onBeforeUnmount(() => {
   overflow: hidden;
   position: relative;
   contain: layout style;
+  /* 初始宽度由 :not(.collapsed) 或 .collapsed 决定，避免从 0 过渡 */
+  flex-shrink: 0;
+  will-change: width;
 }
 .sidebar:not(.collapsed) {
   width: var(--layout-sidebar-width);
@@ -473,6 +487,8 @@ onBeforeUnmount(() => {
   gap: 2px;
   padding: 4px 6px;
   position: relative;
+  /* 防止空→有内容时的布局偏移 */
+  min-height: 200px;
 }
 .sidebar-btn {
   display: flex;

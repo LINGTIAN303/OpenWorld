@@ -114,11 +114,21 @@ onMounted(async () => {
 
   const loadedPlugins = await Promise.all(loadPromises)
 
+  // 尽早设置首屏视图：第一个激活的插件视图立即可用
+  let firstViewSet = false
   for (const p of loadedPlugins) {
     await pluginManager.activate(p.instance as any)
+    // 每激活一个插件就检查是否已有视图可显示
+    if (!firstViewSet && pluginStore.views.length > 0) {
+      const uiStore = useUIStore()
+      uiStore.setView(pluginStore.views[0].id)
+      uiStore.viewComponent = pluginStore.views[0].component
+      firstViewSet = true
+    }
   }
 
-  if (pluginStore.views.length > 0) {
+  // 兜底：如果所有插件激活完仍无视图（理论上不会发生）
+  if (!firstViewSet && pluginStore.views.length > 0) {
     const uiStore = useUIStore()
     uiStore.setView(pluginStore.views[0].id)
     uiStore.viewComponent = pluginStore.views[0].component

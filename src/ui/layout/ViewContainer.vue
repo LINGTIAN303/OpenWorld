@@ -90,6 +90,8 @@ onBeforeUnmount(() => {
   padding: 0;
   background: var(--content-bg);
   contain: layout style;
+  /* 固定最小高度防止空状态→内容切换时的布局偏移 */
+  min-height: 0;
 }
 .view-empty {
   display: flex;
@@ -98,6 +100,8 @@ onBeforeUnmount(() => {
   justify-content: center;
   height: 100%;
   color: var(--text-secondary);
+  /* 防止空状态→视图切换时的布局偏移 */
+  min-height: 300px;
 }
 .view-empty-icon {
   font-size: var(--icon-2xl);
