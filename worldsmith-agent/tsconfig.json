@@ -19,6 +19,8 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["node"],
     "paths": {
+      "@agent": ["./src/index.ts"],
+      "@agent/*": ["./src/*"],
       "@worldsmith/motion-kit": ["../packages/motion-kit/src/index.ts"],
       "@worldsmith/motion-kit/*": ["../packages/motion-kit/src/*"],
       "@worldsmith/ui-kit": ["../packages/ui-kit/src/index.ts"],

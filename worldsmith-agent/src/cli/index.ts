@@ -1,8 +1,9 @@
 import { Command } from 'commander'
-import { createWorldSmithAgent } from '../agent'
+import { createCliAgent, CLI_TOOLS } from './cli-agent'
 import { createCliToolContext } from './cli-context'
 import { createCLISafetyGuard } from './cli-safety-guard'
 import { createCliSessionStore } from './cli-session-store'
+import { initToolMetaRegistry } from '../tools/tool-meta-registry'
 import type { ProviderConfig } from '../providers/config'
 import type { AgentEvent } from '../bridge-types'
 import type { AgentMessage, AgentSession } from '../session/types'
@@ -525,7 +526,7 @@ async function runSubagents(
         if (!fs.existsSync(subDataPath)) fs.mkdirSync(subDataPath, { recursive: true })
         const subToolContext = createCliToolContext(subDataPath, config)
 
-        createWorldSmithAgent({
+        createCliAgent({
           providerConfig: config,
           toolContext: subToolContext,
           projectName: `SubAgent-${task.id}`,
@@ -636,7 +637,10 @@ export async function runCli(): Promise<void> {
         }
       }
 
-      const agent = await createWorldSmithAgent({
+      // 初始化工具元数据注册中心（CLI 使用 CLI_TOOLS，避免拉入 agent.ts 的 Vue 依赖）
+      initToolMetaRegistry(CLI_TOOLS)
+
+      const agent = await createCliAgent({
         providerConfig: config,
         toolContext,
         projectName: 'WorldSmith',
@@ -1088,3 +1092,9 @@ Commands:
 
   program.parse()
 }
+
+// 自动启动
+runCli().catch((err) => {
+  console.error('Fatal:', err)
+  process.exit(1)
+})

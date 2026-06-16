@@ -287,6 +287,17 @@ export interface AgentConfig {
   beforeToolCall?: (info: { toolCall: { name: string; args: Record<string, unknown> } }) => Promise<{ block: boolean; reason?: string } | void>
 }
 
+export interface CreateAgentOptions {
+  providerConfig: ProviderConfig
+  toolContext: IToolContext
+  tools?: AgentConfig['tools']
+  beforeToolCall?: AgentConfig['beforeToolCall']
+  projectName?: string
+  personaPreset?: string
+  availableFontFamilies?: string[]
+  systemPromptOverride?: string
+}
+
 export interface ToolDefinition {
   name: string
   description: string

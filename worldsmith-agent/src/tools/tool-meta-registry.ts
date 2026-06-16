@@ -11,9 +11,18 @@
  */
 
 import type { ToolMeta } from '@worldsmith/agent-core'
-import { ALL_TOOLS } from '../agent'
+import type { ToolDefinition } from '../bridge-types'
 import { LEGACY_ALGO_MAP } from './algo-tools'
 import { LEGACY_PLUGIN_MAP } from './plugin-backend-tools'
+
+/** 工具列表注入点（默认从 agent.ts 注入，CLI 从 cli-agent.ts 注入） */
+let _toolsSource: ToolDefinition[] | null = null
+
+/** 注入工具列表（必须在首次 getToolMeta 前调用） */
+export function initToolMetaRegistry(tools: ToolDefinition[]): void {
+  _toolsSource = tools
+  _metaCache = null
+}
 
 /** 旧工具名→标准工具名的别名映射 */
 const ALIAS_MAP: Record<string, string> = {
@@ -236,8 +245,9 @@ export function resetToolMetaCache(): void {
 function buildMetaCache(): Map<string, ToolMeta> {
   const cache = new Map<string, ToolMeta>()
 
-  // 1. 从 ALL_TOOLS 的 meta 字段收集
-  for (const tool of ALL_TOOLS) {
+  // 1. 从注入的工具列表的 meta 字段收集
+  const tools = _toolsSource || []
+  for (const tool of tools) {
     if (tool.meta) {
       cache.set(tool.name, tool.meta)
       // 注册别名

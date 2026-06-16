@@ -3,7 +3,7 @@ import type { Platform } from './capability-types'
 import { InternalChainRegistry } from './internal-registry'
 import { findSkillById, resolveToolNames } from '../skills/registry'
 import { resolvePluginToolNames } from '../skills/plugin-bridge'
-import { SKILL_META_TOOLS } from '../agent'
+import { SKILL_META_TOOLS } from '../skills/meta-tools'
 
 export interface ToolBus {
   register(tool: ToolDefinition): void

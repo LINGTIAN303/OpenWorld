@@ -14,7 +14,7 @@
  */
 
 export { createWorldSmithAgent, getToolsForSkills, ALL_TOOLS, TOOL_CATEGORIES, internalRegistry } from './agent'
-export type { CreateAgentOptions } from './agent'
+export type { CreateAgentOptions } from './bridge-types'
 export { CoreBackend } from './bridge'
 export type { IAgentBackend } from './bridge'
 export type { AgentEvent, AgentEventListener, AgentConfig, ToolDefinition, ToolParameter, PromptOptions, ImageAttachment, UsageData, ThinkingLevel, ChatMode, A2UIMessage, A2UIComponent, MessageBlock, TableBlock, ChoiceBlock, CodeBlockData, EntityCardBlock, AlertBlock, StatBlock, ListBlock, ProgressBlock, ComparisonBlock, TimelineBlock, ImageBlock, VideoBlock, AccordionBlock, ManuscriptBlock, ExportCorrectorConfig } from './bridge-types'

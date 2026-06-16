@@ -88,12 +88,6 @@ function compactMessages(messages: AgentMessage[]): AgentMessage[] {
 
 // ── P2-7: Repo Map ──
 
-const IGNORED_DIRS = new Set([
-  'node_modules', '.git', 'dist', 'build', '.next', '.nuxt', 'out', 'target',
-  '__pycache__', '.venv', 'venv', '.tox', '.mypy_cache', '.pytest_cache',
-  'vendor', 'Pods', '.gradle', '.idea', '.vscode', '.cache', '.turbo',
-])
-
 function detectLanguage(cwd: string): string {
   if (fs.existsSync(path.join(cwd, 'package.json'))) return 'JavaScript/TypeScript'
   if (fs.existsSync(path.join(cwd, 'Cargo.toml'))) return 'Rust'
@@ -230,7 +224,7 @@ describe('CLI Agent 集成测试', () => {
     it('应解析子目录中的文件引用', () => {
       fs.mkdirSync(path.join(tmpDir, 'src'))
       fs.writeFileSync(path.join(tmpDir, 'src', 'utils.ts'), 'export function add(a: number, b: number) { return a + b }')
-      const { prompt, files } = resolveFileRefs('看 @src/utils.ts', tmpDir)
+      const { files } = resolveFileRefs('看 @src/utils.ts', tmpDir)
       expect(files).toHaveLength(1)
       expect(files[0].content).toContain('export function add')
     })
@@ -439,7 +433,7 @@ describe('CLI Agent 集成测试', () => {
       const { createCliSessionStore } = await import('../../cli/cli-session-store')
       const store = createCliSessionStore(tmpDir)
       const s1 = await store.createSession('cloud', 'model-a')
-      const s2 = await store.createSession('cloud', 'model-b')
+      await store.createSession('cloud', 'model-b')
       // 更新 s1 使其更新时间更晚
       s1.messages.push({ id: 'msg', role: 'user', content: 'hi', timestamp: Date.now() })
       await store.saveSession(s1)
