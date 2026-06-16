@@ -52,6 +52,7 @@ export type ToolCategoryId =
   | 'vision'
   | 'plan'
   | 'persona'
+  | 'native'
   | 'session'
   | 'coding'
 

@@ -6,7 +6,7 @@
  * 数据库名: worldsmith_vectors_v2, 存储对象: quantized_vectors
  */
 
-import { quantizeInt8, cosineSimilarityInt8, type QuantizedVector } from './quantizer'
+import { quantizeInt8, cosineSimilarityInt8 } from './quantizer'
 
 const DB_NAME = 'worldsmith_vectors_v2'
 const DB_VERSION = 1
@@ -76,8 +76,7 @@ export async function putVectorV2(record: VectorRecordV2): Promise<void> {
   const stored: StoredRecord = {
     id: record.id,
     collection: record.collection,
-    quantizedData: q.data.buffer,
-    scale: q.scale,
+    quantizedData: q.data.buffer as ArrayBuffer,    scale: q.scale,
     offset: q.offset,
     dim: vec.length,
     metadata: record.metadata,
@@ -104,8 +103,7 @@ export async function putVectorsV2(records: VectorRecordV2[]): Promise<void> {
       const stored: StoredRecord = {
         id: record.id,
         collection: record.collection,
-        quantizedData: q.data.buffer,
-        scale: q.scale,
+        quantizedData: q.data.buffer as ArrayBuffer,        scale: q.scale,
         offset: q.offset,
         dim: vec.length,
         metadata: record.metadata,

@@ -178,7 +178,8 @@ class ConcurrencyLimiter {
   private active = 0
   private queue: Array<() => void> = []
 
-  constructor(private readonly maxConcurrent: number) {}
+  private readonly maxConcurrent: number
+  constructor(maxConcurrent: number) { this.maxConcurrent = maxConcurrent }
 
   async acquire(): Promise<void> {
     if (this.active < this.maxConcurrent) {

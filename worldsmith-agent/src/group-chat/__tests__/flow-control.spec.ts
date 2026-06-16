@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { FlowController, retryWithBackoff, isRetryableError } from '../flow-control'
 import type { RateLimitConfig } from '../types'
 

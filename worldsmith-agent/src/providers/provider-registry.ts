@@ -100,7 +100,7 @@ const anthropic: ProviderManifest = {
   chatCompletionsPath: '/v1/messages',
   defaultModelId: 'claude-sonnet-4-6',
   visionDetector: () => true,
-  customEndpoint: (apiKey, modelId) => ({
+  customEndpoint: (apiKey, _modelId) => ({
     url: 'https://api.anthropic.com/v1/messages',
     headers: {
       'x-api-key': apiKey,

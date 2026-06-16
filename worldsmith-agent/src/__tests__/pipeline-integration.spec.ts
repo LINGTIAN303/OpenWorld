@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { quantizeInt8, dequantizeInt8, cosineSimilarityInt8 } from '../embedding/quantizer'
+import { quantizeInt8, cosineSimilarityInt8 } from '../embedding/quantizer'
 import { packRecords, unpackRecords } from '../embedding/quantizer.worker'
 
 describe('pipeline integration', () => {

@@ -42,11 +42,14 @@ export class TurnEngine {
   private luckState: LuckState
   private readonly maxSpeakers: number
 
+  private strategy: TurnStrategy
+
   constructor(
-    private strategy: TurnStrategy,
+    strategy: TurnStrategy,
     luckState: LuckState,
     maxSpeakers = 3,
   ) {
+    this.strategy = strategy
     this.luckState = luckState
     this.maxSpeakers = maxSpeakers
   }

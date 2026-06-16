@@ -12,7 +12,7 @@
 
 import type { ProviderConfig } from '../providers/config'
 import { loadApiKey } from '../providers/key-store'
-import type { ProviderSlot, ProviderSlotEntry, LoadBalanceStrategy } from './types'
+import type { ProviderSlot, ProviderSlotEntry } from './types'
 
 interface SlotRuntime {
   slot: ProviderSlot

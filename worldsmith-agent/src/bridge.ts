@@ -8,7 +8,7 @@ import { DefaultToolBus } from './toolbus/toolbus'
 import type { ToolBus } from './toolbus/toolbus'
 import { MCPManager } from './mcp/mcp-manager'
 import { recallMemory, formatMemoryForPrompt } from './tools/memory'
-import { retryWithBackoff, isRetryableError } from './group-chat/flow-control'
+import { retryWithBackoff } from './group-chat/flow-control'
 import { kbSearchKeyword, kbList } from './kb/kb-store'
 import { semanticSearchKB, isEmbeddingReady as isKBEmbeddingReady } from './kb/kb-indexer'
 import { extractFromConversation, extractShortMemory } from './kb/kb-extractor'
@@ -19,7 +19,6 @@ import {
   detectThinkingSupport,
   resolveModelId as registryResolveModelId,
   buildProxyEndpoint,
-  getDomesticProviderIds,
 } from './providers/provider-registry'
 
 export type {
@@ -353,7 +352,7 @@ export class CoreBackend implements IAgentBackend {
       },
       beforeToolCall: async (ctx: any) => {
         if (this.config.beforeToolCall) {
-          const result = await this.config.beforeToolCall({ toolCall: { id: ctx.toolCall?.id, name: ctx.toolCall?.name, args: ctx.args } })
+          const result = await this.config.beforeToolCall({ toolCall: { name: ctx.toolCall?.name, args: ctx.args } })
           if (result?.block) return { block: true, reason: result.reason }
         }
         return undefined
@@ -747,8 +746,8 @@ export class CoreBackend implements IAgentBackend {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         model = getModel(provider as any, modelId)
         if (model) {
-          const proxyBase = CoreBackend.PROVIDER_BASE_URLS[provider]
-          if (proxyBase) model.baseUrl = CoreBackend.resolveProxyUrl(proxyBase)
+          const proxyBase = buildProxyEndpoint(provider)
+          if (proxyBase) model.baseUrl = proxyBase
         }
       } catch (err) {
         console.warn('[Agent] updateModel: getModel failed, falling back to custom:', err)

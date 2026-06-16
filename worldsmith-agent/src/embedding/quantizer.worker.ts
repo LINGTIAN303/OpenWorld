@@ -5,7 +5,7 @@
  * 支持通过 postMessage 加载序列化记录和执行搜索。
  */
 
-import { quantizeInt8, cosineSimilarityInt8, type QuantizedVector } from './quantizer'
+import { cosineSimilarityInt8, type QuantizedVector } from './quantizer'
 
 /** 量化向量记录 */
 export interface QuantizedVectorRecord {
@@ -155,7 +155,8 @@ function handleLoad(msg: LoadMessage): void {
 }
 
 // Worker 消息处理：仅在 Worker 环境中激活
-if (typeof WorkerGlobalScope !== 'undefined' && typeof self !== 'undefined' && self instanceof WorkerGlobalScope) {
+declare const WorkerGlobalScope: typeof globalThis
+if (typeof globalThis !== 'undefined' && typeof self !== 'undefined' && typeof (self as any).onmessage !== 'undefined') {
   ;(self as any).onmessage = (e: MessageEvent) => {
     const msg = e.data
     if (msg.type === 'search') {

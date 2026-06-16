@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { TurnEngine, type TurnResult } from '../turn-engine'
-import type { AgentProfile, TurnStrategy } from '../types'
+import { TurnEngine } from '../turn-engine'
+import type { AgentProfile } from '../types'
 import type { LuckState } from '../speaking-desire'
 
 // ── Mocks ──────────────────────────────────────────────────────────────
@@ -125,6 +125,7 @@ describe('TurnEngine', () => {
       finalProbability: ctx.agentProfile.id === 'a1' ? 0.9 : 0.1,
       agentId: ctx.agentProfile.id,
       agentName: ctx.agentProfile.name,
+      factors: { base: 0.3, scene: 0.5, intimacy: 0.5, decay: 0.5, luck: 0.5 },
     }))
 
     const result = await engine.resolveTurn('hello', [], agents, '')
@@ -154,7 +155,7 @@ describe('TurnEngine', () => {
 
   // ── 6. TurnResult has correct mode (parallel/sequential/staggered) ──
   it('TurnResult has correct mode (parallel/sequential/staggered)', async () => {
-    const engine = new TurnEngine('modator', makeLuck())
+    const engine = new TurnEngine('moderator', makeLuck())
     const agents = [makeAgent({ id: 'a1' }), makeAgent({ id: 'a2' }), makeAgent({ id: 'a3' })]
 
     // Sequential: single mention
@@ -190,6 +191,7 @@ describe('TurnEngine', () => {
       finalProbability: 0.8,
       agentId: ctx.agentProfile.id,
       agentName: ctx.agentProfile.name,
+      factors: { base: 0.3, scene: 0.5, intimacy: 0.5, decay: 0.5, luck: 0.5 },
     }))
     const sdEngine = new TurnEngine('speaking-desire', makeLuck())
     const sdResult = await sdEngine.resolveTurn('hi', [], agents, '')

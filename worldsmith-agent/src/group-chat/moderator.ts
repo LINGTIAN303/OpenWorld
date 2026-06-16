@@ -38,6 +38,15 @@ interface ModeratorDecision {
   reason: string
 }
 
+/** 默认回退决策：选择第一个启用的 Agent */
+function fallbackDecision(agents: AgentProfile[]): ModeratorDecision {
+  const first = agents[0]
+  return {
+    nextSpeakers: first ? [first.id] : [],
+    reason: 'fallback: no valid JSON decision from moderator',
+  }
+}
+
 /**
  * 运行 Moderator 调度决策
  *
@@ -89,9 +98,9 @@ export async function runModerator(
       return fallbackDecision(enabledAgents)
     }
     const validIds = new Set(enabledAgents.map(a => a.id))
-    const filtered = parsed.nextSpeakers
-      .filter((id): id is string => typeof id === 'string')
-      .filter(id => validIds.has(id))
+    const filtered = (parsed.nextSpeakers as unknown[])
+      .filter((id: unknown): id is string => typeof id === 'string')
+      .filter((id: string) => validIds.has(id))
 
     if (filtered.length === 0) return fallbackDecision(enabledAgents)
 

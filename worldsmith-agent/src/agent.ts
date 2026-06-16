@@ -29,7 +29,6 @@ import { moduleBuilderTools } from './tools/module-builder-tools'
 import { webCliTools } from './tools/web-cli-tools'
 // fsTools 已被 codingAgentTools 取代，不再暴露给 Agent
 // 旧工具名通过 LEGACY_TO_CODING_MAP 别名映射到 codingAgentTools
-import { fsTools } from './tools/fs-tools'
 import { pkgTools } from './tools/pkg-tools'
 import { gitTools } from './tools/git-tools'
 import { sysTools } from './tools/sys-tools'
