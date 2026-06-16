@@ -6,6 +6,8 @@
  */
 
 import type { ToolDefinition } from '../bridge-types'
+import type { ToolMeta } from '@worldsmith/agent-core'
+import { smartFetch } from '../utils/smart-fetch'
 
 /**
  * web_fetch — 抓取网页内容
@@ -19,6 +21,12 @@ export const webFetchTool: ToolDefinition = {
     url: { type: 'string', description: '要读取的网页 URL', required: true },
     max_length: { type: 'number', description: '返回内容的最大字符数，默认8000', required: false },
   },
+  meta: {
+    permission: 'safe',
+    category: 'search',
+    alwaysAvailable: true,
+    displayName: '网页抓取',
+  } satisfies ToolMeta,
   execute: async (args, _ctx) => {
     const url = String(args.url)
     const maxLength = Number(args.max_length) || 8000
@@ -29,7 +37,7 @@ export const webFetchTool: ToolDefinition = {
 
     try {
       const jinaUrl = `https://r.jina.ai/${url}`
-      const resp = await fetch(jinaUrl, {
+      const resp = await smartFetch(jinaUrl, {
         method: 'GET',
         headers: {
           'Accept': 'text/markdown',

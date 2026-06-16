@@ -11,6 +11,6 @@
     "sourceMap": true,
     "skipLibCheck": true
   },
-  "include": ["./*.ts"],
+  "include": ["./*.ts", "./routes/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

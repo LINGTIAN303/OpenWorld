@@ -1,11 +1,11 @@
 <template>
-  <div class="note-card" @click="$emit('click', note.id)">
+  <div :class="['note-card', variant]" @click="$emit('click', note.id)">
     <div class="nc-type-icon"><WsIcon :name="typeIcon" size="sm" /></div>
     <div class="nc-content">
       <div class="nc-name">{{ note.name }}</div>
-      <div class="nc-preview">{{ preview }}</div>
+      <div v-if="variant === 'card'" class="nc-preview">{{ preview }}</div>
     </div>
-    <div v-if="note.tags?.length" class="nc-tags">
+    <div v-if="variant === 'card' && note.tags?.length" class="nc-tags">
       <span v-for="tag in note.tags.slice(0, 2)" :key="tag" class="nc-tag">{{ tag }}</span>
     </div>
   </div>
@@ -15,8 +15,12 @@
 import { computed } from 'vue'
 import WsIcon from '../../../../ui/WsIcon.vue'
 import { NOTE_TYPES } from '../notebookConfig'
+import type { NotebookEntity } from '../types'
 
-const props = defineProps<{ note: any }>()
+const props = defineProps<{
+  note: NotebookEntity
+  variant?: 'card' | 'list'
+}>()
 defineEmits<{ click: [id: string] }>()
 
 const typeIcon = computed(() => {
@@ -25,17 +29,21 @@ const typeIcon = computed(() => {
 })
 
 const preview = computed(() =>
-  (props.note.properties?.content || '').slice(0, 60)
+  (props.note.properties?.content || '').replace(/<[^>]*>/g, '').slice(0, 60)
 )
 </script>
 
 <style scoped>
-.note-card { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--color-border-subtle); border-radius: 6px; cursor: pointer; transition: all 0.15s; }
-.note-card:hover { border-color: var(--color-primary); }
-.nc-type-icon { font-size: var(--font-size-xl); }
+.note-card { display: flex; align-items: center; gap: 8px; cursor: pointer; transition: all 0.15s; }
+.note-card.card { padding: 10px 12px; border: 1px solid var(--color-border-subtle); border-radius: 6px; }
+.note-card.card:hover { border-color: var(--color-primary); }
+.note-card.list { padding: 5px 8px; border-radius: 4px; }
+.note-card.list:hover { background: var(--color-bg-hover); }
+.note-card.list.active { background: color-mix(in srgb, var(--color-primary) 15%, transparent); color: var(--color-primary); }
+.nc-type-icon { font-size: var(--font-size-xl); flex-shrink: 0; }
 .nc-content { flex: 1; min-width: 0; }
 .nc-name { font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nc-preview { font-size: var(--font-size-xs); color: var(--color-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nc-tags { display: flex; gap: 3px; }
+.nc-preview { font-size: var(--font-size-xs); color: var(--color-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+.nc-tags { display: flex; gap: 3px; flex-shrink: 0; }
 .nc-tag { font-size: var(--text-micro-font-size); padding: 1px 5px; border-radius: 3px; background: color-mix(in srgb, var(--color-primary) 15%, transparent); color: var(--color-primary); }
 </style>

@@ -13,7 +13,6 @@
 import type { A2UIMessage, A2UIComponent } from '../bridge-types'
 import type { ToolDefinition } from '../bridge-types'
 import type { WorldSmithToolContext } from './types'
-import { unwrap } from './types'
 
 /** WorldSmith 应用组件目录 URL */
 const WS_CATALOG = 'https://worldsmith.app/catalog/v1'

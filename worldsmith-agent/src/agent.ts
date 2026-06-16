@@ -11,6 +11,7 @@ import { entityCrudTools } from './tools/entity-crud'
 import { relationManageTools } from './tools/relation-manage'
 import { contentSearchTools } from './tools/content-search'
 import { dailyTaskTools } from './tools/daily-task'
+// webSearchTools / webFetchTools 已包含在 codingAgentTools 中，不再单独导入到 ALL_TOOLS
 import { webSearchTools } from './tools/web-search'
 import { webFetchTools } from './tools/web-fetch'
 import { a2uiTools } from './tools/a2ui-tools'
@@ -23,37 +24,50 @@ import { algoTools } from './tools/algo-tools'
 import { fileTools } from './tools/file-tools'
 import { pluginTools } from './tools/plugin-tools'
 import { moduleBuilderTools } from './tools/module-builder-tools'
-import { terminalTools } from './tools/terminal-tools'
+// terminalTools 已被 codingAgentTools 的 shell_session 完全取代（action 参数统一）
+// 旧工具名通过 LEGACY_TO_CODING_MAP 别名映射到 shell_session
 import { webCliTools } from './tools/web-cli-tools'
+// fsTools 已被 codingAgentTools 取代，不再暴露给 Agent
+// 旧工具名通过 LEGACY_TO_CODING_MAP 别名映射到 codingAgentTools
 import { fsTools } from './tools/fs-tools'
 import { pkgTools } from './tools/pkg-tools'
 import { gitTools } from './tools/git-tools'
 import { sysTools } from './tools/sys-tools'
 import { terminalLauncherTools } from './tools/terminal-launcher-tools'
 import { orchestratorTools } from './tools/orchestrator-tools'
-import { workflowTools } from './tools/workflow-tools'
+import { pipelineTools } from './tools/pipeline-tools'
 import { outputTools } from './tools/output-tools'
+import { manuscriptClone } from './tools/manuscript-tools'
 import { visionTools } from './tools/vision-tools'
 import { imageGenTools } from './tools/image-gen-tools'
+import { videoGenTools } from './tools/video-gen-tools'
+import { planTools } from './tools/plan-tools'
 import { kbTools } from './tools/kb-tools'
 import { personaTools } from './tools/persona'
-import { PLUGIN_BACKEND_TOOLS } from './tools/plugin-backend-tools'
+import { sessionTools } from './tools/session-tools'
+import { crawlTools } from './tools/crawl-tool'
+import { docConvertTools } from './tools/doc-convert-tool'
+import { entityContextTools } from './tools/entity-context'
+import { nativeTools } from './tools/native-tools'
+import { codingAgentTools, LEGACY_TO_CODING_MAP } from './tools/coding-agent-tools'
+import { LEGACY_ALGO_MAP } from './tools/algo-tools'
+import { PLUGIN_BACKEND_TOOLS, LEGACY_PLUGIN_MAP } from './tools/plugin-backend-tools'
 import { InternalChainRegistry } from './toolbus/internal-registry'
 import { entityCoreDescriptor } from '@worldsmith/entity-core'
 import { pluginSdkDescriptor } from '@worldsmith/plugin-sdk'
 import { canvasEngineDescriptor } from '@worldsmith/canvas-engine'
-import { uiKitDescriptor } from '@worldsmith/ui-kit'
 
 const ALL_TOOLS_MAP = new Map<string, typeof entityCrudTools[0]>()
 
 function registerAllTools(): void {
+  // 与 ALL_TOOLS 保持一致：排除重复工具
   const all = [
     ...entityCrudTools,
+    ...entityContextTools,
     ...relationManageTools,
     ...contentSearchTools,
     ...dailyTaskTools,
-    ...webSearchTools,
-    ...webFetchTools,
+    // webSearchTools / webFetchTools 已包含在 codingAgentTools 中，不再单独注册
     ...a2uiTools,
     ...a2uiHelperTools,
     ...memoryTools,
@@ -64,18 +78,61 @@ function registerAllTools(): void {
     ...fileTools,
     ...pluginTools,
     ...moduleBuilderTools,
-    ...terminalTools,
+    // terminalTools 已被 codingAgentTools 的 shell_session 完全取代
     ...webCliTools,
+    // fsTools 已被 codingAgentTools 取代，不再注册
+    ...pkgTools,
+    ...gitTools,
+    ...sysTools,
+    ...terminalLauncherTools,
     ...orchestratorTools,
-    ...workflowTools,
+    ...pipelineTools,
+    ...PLUGIN_BACKEND_TOOLS,
     ...outputTools,
+    manuscriptClone,
     ...visionTools,
     ...imageGenTools,
+    ...videoGenTools,
+    ...planTools,
     ...kbTools,
     ...personaTools,
+    ...sessionTools,
+    ...crawlTools,
+    ...docConvertTools,
+    ...nativeTools,
+    ...codingAgentTools,
   ]
   for (const t of all) {
     ALL_TOOLS_MAP.set(t.name, t)
+    // 注册工具别名（meta.aliases）
+    if (t.meta?.aliases) {
+      for (const alias of t.meta.aliases) {
+        if (!ALL_TOOLS_MAP.has(alias)) {
+          ALL_TOOLS_MAP.set(alias, t)
+        }
+      }
+    }
+  }
+  // 注册旧工具名→标准工具名的别名映射（供技能系统 resolveToolNames 查找）
+  for (const [legacy, canonical] of Object.entries(LEGACY_TO_CODING_MAP)) {
+    if (!ALL_TOOLS_MAP.has(legacy)) {
+      const tool = ALL_TOOLS_MAP.get(canonical)
+      if (tool) ALL_TOOLS_MAP.set(legacy, tool)
+    }
+  }
+  // 注册 algo 旧工具名→algo_run 的别名映射
+  for (const [legacy, canonical] of Object.entries(LEGACY_ALGO_MAP)) {
+    if (!ALL_TOOLS_MAP.has(legacy)) {
+      const tool = ALL_TOOLS_MAP.get(canonical)
+      if (tool) ALL_TOOLS_MAP.set(legacy, tool)
+    }
+  }
+  // 注册插件后端旧工具名→域级工具的别名映射
+  for (const [legacy, canonical] of Object.entries(LEGACY_PLUGIN_MAP)) {
+    if (!ALL_TOOLS_MAP.has(legacy)) {
+      const tool = ALL_TOOLS_MAP.get(canonical)
+      if (tool) ALL_TOOLS_MAP.set(legacy, tool)
+    }
   }
 }
 
@@ -85,7 +142,10 @@ export const internalRegistry = new InternalChainRegistry()
 internalRegistry.register(entityCoreDescriptor)
 internalRegistry.register(pluginSdkDescriptor)
 internalRegistry.register(canvasEngineDescriptor)
-internalRegistry.register(uiKitDescriptor)
+// uiKitDescriptor 延迟注册，避免 @worldsmith/ui-kit → @agent 循环依赖
+import('@worldsmith/ui-kit').then(mod => {
+  internalRegistry.register(mod.uiKitDescriptor)
+}).catch(() => {})
 
 const REFERENCE_PRELOAD_MAX_TOKENS = 3000
 
@@ -234,11 +294,11 @@ export function getToolsForSkills(activeSkillIds: string[]): typeof entityCrudTo
 
 export const ALL_TOOLS = [
   ...entityCrudTools,
+  ...entityContextTools,
   ...relationManageTools,
   ...contentSearchTools,
   ...dailyTaskTools,
-  ...webSearchTools,
-  ...webFetchTools,
+  // webSearchTools / webFetchTools 已包含在 codingAgentTools 中，不再单独展开
   ...a2uiTools,
   ...a2uiHelperTools,
   ...memoryTools,
@@ -249,22 +309,60 @@ export const ALL_TOOLS = [
   ...fileTools,
   ...pluginTools,
   ...moduleBuilderTools,
-  ...terminalTools,
+  // terminalTools 已被 codingAgentTools 的 shell_session 完全取代
   ...webCliTools,
-  ...fsTools,
+  // fsTools 已被 codingAgentTools 取代（read_file/write_file/list_directory/search_files/execute_command）
   ...pkgTools,
   ...gitTools,
   ...sysTools,
   ...terminalLauncherTools,
   ...orchestratorTools,
-  ...workflowTools,
+  ...pipelineTools,
   ...PLUGIN_BACKEND_TOOLS,
   ...outputTools,
+  manuscriptClone,
   ...visionTools,
   ...imageGenTools,
+  ...videoGenTools,
+  ...planTools,
   ...kbTools,
   ...personaTools,
+  ...sessionTools,
   ...SKILL_META_TOOLS,
+  ...crawlTools,
+  ...docConvertTools,
+  ...nativeTools,
+  ...codingAgentTools,
+]
+
+/** 工具分类定义（供 UI 按分组展示工具勾选面板） */
+export interface ToolCategory {
+  id: string
+  label: string
+  tools: typeof entityCrudTools[0][]
+}
+
+export const TOOL_CATEGORIES: ToolCategory[] = [
+  { id: 'entity', label: '实体管理', tools: [...entityCrudTools, ...entityContextTools] },
+  { id: 'relation', label: '关系管理', tools: [...relationManageTools] },
+  { id: 'search', label: '搜索与检索', tools: [...contentSearchTools, ...webSearchTools, ...webFetchTools, ...crawlTools] },
+  { id: 'output', label: '输出渲染', tools: [...outputTools] },
+  { id: 'a2ui', label: 'A2UI 界面', tools: [...a2uiTools, ...a2uiHelperTools] },
+  { id: 'memory', label: '记忆系统', tools: [...memoryTools] },
+  { id: 'project', label: '项目管理', tools: [...projectTools] },
+  { id: 'schema', label: 'Schema 管理', tools: [...schemaTools] },
+  { id: 'retrofit', label: '改造工具', tools: [...retrofitTools] },
+  { id: 'algo', label: '算法工具', tools: [...algoTools] },
+  { id: 'file', label: '文件操作', tools: [...fileTools, ...docConvertTools] },
+  { id: 'dev', label: '开发工具', tools: [...terminalLauncherTools, ...webCliTools, ...pkgTools, ...gitTools, ...sysTools] },
+  { id: 'native', label: '原生能力', tools: [...nativeTools] },
+  { id: 'plugin', label: '插件系统', tools: [...pluginTools, ...moduleBuilderTools, ...PLUGIN_BACKEND_TOOLS] },
+  { id: 'orchestrator', label: '编排与流水线', tools: [...orchestratorTools, ...pipelineTools] },
+  { id: 'vision', label: '视觉与生成', tools: [...visionTools, ...imageGenTools, ...videoGenTools] },
+  { id: 'plan', label: '规划与知识', tools: [...planTools, ...kbTools] },
+  { id: 'persona', label: '人格与任务', tools: [...personaTools, ...dailyTaskTools] },
+  { id: 'session', label: '会话管理', tools: [...sessionTools, manuscriptClone] },
+  { id: 'coding-agent', label: '编码 Agent', tools: [...codingAgentTools] },
 ]
 
 export interface CreateAgentOptions {
@@ -274,15 +372,19 @@ export interface CreateAgentOptions {
   beforeToolCall?: AgentConfig['beforeToolCall']
   projectName?: string
   personaPreset?: string
+  availableFontFamilies?: string[]
+  /** 覆盖默认构建的系统提示词。调用方需自行组合共享基础层（buildSharedBaseLayer）+ 独立人格层，群聊 Agent 由 GroupChatEngine.buildGroupAgentSystemPrompt() 负责组合 */
+  systemPromptOverride?: string
 }
 
 export async function createWorldSmithAgent(options: CreateAgentOptions): Promise<IAgentBackend> {
-  const systemPrompt = buildSystemPrompt({
+  const systemPrompt = options.systemPromptOverride ?? buildSystemPrompt({
     projectName: options.projectName || 'WorldSmith',
     entityTypes: options.toolContext.projectInfo.entityTypes,
     relationTypes: options.toolContext.projectInfo.relationTypes,
     platform: options.toolContext.platform,
     personaPreset: options.personaPreset,
+    availableFontFamilies: options.availableFontFamilies,
   })
 
   const config: AgentConfig = {

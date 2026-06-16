@@ -36,16 +36,30 @@ export interface CanvasEdge {
   id: string
   source: string
   target: string
+  /** useTreeCanvas 兼容 — source 的别名 */
+  sourceId?: string
+  /** useTreeCanvas 兼容 — target 的别名 */
+  targetId?: string
+  /** 边标签（useTreeCanvas 的 label 字段） */
+  label?: string
+  /** 是否有箭头（useTreeCanvas 兼容） */
+  arrow?: boolean
+  /** 是否双向（useTreeCanvas 兼容 — bidir = bidirectional || symmetric） */
+  bidir?: boolean
   relType: string
   relLabel: string
   bidirectional: boolean
   symmetric: boolean
+  /** 是否为有向关系（默认 true；symmetric=false 时使用） */
+  directional?: boolean
   color: string
   curveStyle: 'bezier' | 'straight' | 'taxi'
   dashed: boolean
   noArrow: boolean
   hidden: boolean
   selected: boolean
+  /** AI 候选虚线（半透青色） */
+  isAISuggestion?: boolean
 }
 
 export interface CameraState {

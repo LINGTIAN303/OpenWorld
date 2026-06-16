@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <Transition name="ws-slide-up">
     <div v-if="visible" class="terminal-panel">
       <div class="terminal-toolbar">
@@ -27,7 +27,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { TerminalLogBridge } from './TerminalLogBridge'
-import { isTauri as detectTauri, createExecutionAdapter } from '../../worldsmith-agent/src/execution'
+import { isTauri as detectTauri, createExecutionAdapter } from '@agent/execution'
 
 type LogCategory = 'chat' | 'tool' | 'mcp' | 'cmd' | 'error'
 

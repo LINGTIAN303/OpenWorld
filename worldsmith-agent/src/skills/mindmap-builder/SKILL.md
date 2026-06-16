@@ -14,28 +14,28 @@
 ### 构建思维导图
 1. 理解用户的知识组织结构
 2. 从根节点开始，逐层创建子节点
-3. 使用 `mindmap_create_node` 逐个添加
-4. 完成后使用 `mindmap_auto_layout` 优化布局
+3. 使用 `mindmap(action='create_node')` 逐个添加
+4. 完成后使用 `mindmap(action='auto_layout')` 优化布局
 
 ### 编辑思维导图
-1. 使用 `mindmap_get_structure` 获取当前树结构
-2. 使用 `mindmap_update_node` 修改节点内容
-3. 使用 `mindmap_delete_node` 删除不需要的节点
-4. 重新布局：`mindmap_auto_layout`
+1. 使用 `mindmap(action='get_structure')` 获取当前树结构
+2. 使用 `mindmap(action='update_node')` 修改节点内容
+3. 使用 `mindmap(action='delete_node')` 删除不需要的节点
+4. 重新布局：`mindmap(action='auto_layout')`
 
 ### 导出
-- `mindmap_export_image` — 导出为PNG/SVG
+- `mindmap(action='export_image')` — 导出为PNG/SVG
 
 ## 工具绑定
 
 | 工具 | 用途 |
 |------|------|
-| `mindmap_create_node` | 创建节点 |
-| `mindmap_update_node` | 更新节点 |
-| `mindmap_delete_node` | 删除节点 |
-| `mindmap_get_structure` | 获取整棵树结构 |
-| `mindmap_auto_layout` | 自动布局 |
-| `mindmap_export_image` | 导出为图片 |
+| `mindmap(action='create_node')` | 创建节点 |
+| `mindmap(action='update_node')` | 更新节点 |
+| `mindmap(action='delete_node')` | 删除节点 |
+| `mindmap(action='get_structure')` | 获取整棵树结构 |
+| `mindmap(action='auto_layout')` | 自动布局 |
+| `mindmap(action='export_image')` | 导出为图片 |
 | `entity_create` / `entity_update` | 底层实体操作 |
 
 ## 触发关键词

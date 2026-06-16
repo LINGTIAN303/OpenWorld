@@ -1,11 +1,7 @@
 <template>
   <div class="building-view">
     <div v-if="viewMode === 'section'" class="bv-section">
-      <div class="bv-back-bar">
-        <button class="btn-ghost" @click="viewMode = 'list'">← 返回列表</button>
-        <span class="bv-title">剖面分层</span>
-      </div>
-      <BuildingSectionView />
+      <BuildingSectionView @back="viewMode = 'list'" />
     </div>
     <SchemaRenderer v-else type-key="building" :detail-tabs="buildingTabs">
       <template #toolbar-extra>
@@ -41,9 +37,5 @@ const buildingTabs: RelationTabDef[] = [
   color: #c9d1d9; font-size: var(--font-size-sm); cursor: pointer; transition: all 0.15s; white-space: nowrap;
 }
 .bv-sec-btn:hover { background: #30363d; border-color: #8b949e; color: #e6edf3; }
-.bv-back-bar {
-  display: flex; align-items: center; gap: 12px; padding: 8px 16px;
-  border-bottom: 1px solid var(--border, #333);
-}
-.bv-title { font-weight: var(--font-weight-semibold); font-size: var(--font-size-base); }
+
 </style>

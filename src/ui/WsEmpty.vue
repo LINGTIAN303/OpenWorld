@@ -43,6 +43,7 @@ const displayDescription = computed(() => props.description || PRESET_CONFIG[pro
 <style scoped>
 .ws-empty {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
+  flex: 1; min-height: 0;
   padding: var(--space-8) var(--space-4); text-align: center;
 }
 .ws-empty__icon { color: var(--color-text-tertiary); margin-bottom: var(--space-4); font-size: var(--icon-2xl); }

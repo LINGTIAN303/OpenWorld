@@ -1,18 +1,18 @@
 <template>
-  <SimpleEntityView
+  <GenericEntityView
     entityType="item"
-    label="道具"
-    idPrefix="item"
-    icon="item"
-    :fields="fields"
-    :filterDefs="filterDefs"
-    :cardFooterFields="cardFooterFields"
-    :detailTabs="detailTabs"
+    :form-fields="fields"
+    :filter-defs="filterDefs"
+    :card-footer-fields="cardFooterFields"
+    :detail-tabs="detailTabs"
+    entity-label="道具"
+    id-prefix="item"
+    :icon-fn="() => 'item'"
   />
 </template>
 
 <script setup lang="ts">
-import { SimpleEntityView, type FormFieldDef, type FilterDef, type CardFieldDef, type RelationTabDef } from '@worldsmith/plugin-sdk'
+import { GenericEntityView, type FormFieldDef, type FilterDef, type CardFieldDef, type RelationTabDef } from '@worldsmith/plugin-sdk'
 
 const fields: FormFieldDef[] = [
   { key: 'name', label: '名称', type: 'text', required: true, placeholder: '道具名称' },

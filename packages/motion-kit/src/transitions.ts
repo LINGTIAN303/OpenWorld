@@ -36,6 +36,42 @@ export interface TransitionPreset {
   exitEasing: EasingToken
 }
 
+/** 运行时过渡预设覆盖（由主题系统注入） */
+let _runtimeOverrides: Partial<Record<TransitionPresetName, TransitionPreset>> = {}
+
+/**
+ * 设置运行时过渡预设覆盖
+ * 用于主题系统动态调整动画效果
+ */
+export function setTransitionOverrides(
+  overrides: Partial<Record<TransitionPresetName, Partial<TransitionPreset>>>
+): void {
+  const merged: Partial<Record<TransitionPresetName, TransitionPreset>> = {}
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value && TRANSITION_PRESETS[key as TransitionPresetName]) {
+      merged[key as TransitionPresetName] = {
+        ...TRANSITION_PRESETS[key as TransitionPresetName],
+        ...value,
+      }
+    }
+  }
+  _runtimeOverrides = merged
+}
+
+/**
+ * 清除所有运行时过渡预设覆盖
+ */
+export function clearTransitionOverrides(): void {
+  _runtimeOverrides = {}
+}
+
+/**
+ * 获取当前生效的过渡预设（优先使用运行时覆盖）
+ */
+export function getEffectivePreset(name: TransitionPresetName): TransitionPreset {
+  return _runtimeOverrides[name] || TRANSITION_PRESETS[name]
+}
+
 export const TRANSITION_PRESETS: Record<TransitionPresetName, TransitionPreset> = {
   fade: {
     name: 'ws-fade',
@@ -215,11 +251,11 @@ export const TRANSITION_PRESETS: Record<TransitionPresetName, TransitionPreset> 
 }
 
 export function getPreset(name: TransitionPresetName): TransitionPreset {
-  return TRANSITION_PRESETS[name]
+  return getEffectivePreset(name)
 }
 
 export function getTransitionName(name: TransitionPresetName): string {
-  return TRANSITION_PRESETS[name].name
+  return getEffectivePreset(name).name
 }
 
 export function getAllPresetNames(): TransitionPresetName[] {

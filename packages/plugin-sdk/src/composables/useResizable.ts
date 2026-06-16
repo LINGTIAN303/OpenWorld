@@ -1,4 +1,4 @@
-import { ref, onBeforeUnmount } from 'vue'
+import { ref, computed, onBeforeUnmount, type Ref } from 'vue'
 
 const STORAGE_PREFIX = 'worldsmith_panel_width_'
 
@@ -30,13 +30,15 @@ function saveWidth(panelId: string, width: number) {
   } catch { /* ignore */ }
 }
 
-export function useResizable(options: ResizableOptions) {
+export function useResizable(options: ResizableOptions & { sideRef?: Ref<'left' | 'right'> }) {
   const {
     panelId,
     defaultWidth,
     minWidth = 200,
     side = 'right',
   } = options
+
+  const effectiveSide = computed(() => options.sideRef?.value || side)
 
   const width = ref(loadWidth(panelId, defaultWidth))
   const isResizing = ref(false)
@@ -59,7 +61,7 @@ export function useResizable(options: ResizableOptions) {
     if (!isResizing.value) return
     const dx = e.clientX - startX
     let newWidth: number
-    if (side === 'left') {
+    if (effectiveSide.value === 'left') {
       newWidth = startWidth - dx
     } else {
       newWidth = startWidth + dx

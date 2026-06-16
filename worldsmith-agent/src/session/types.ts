@@ -107,6 +107,12 @@ export interface AgentSession {
     toolCallCount: number
     usage?: SessionUsage
   }
+  /** 会话锁定的聊天模式（首次发送消息时锁定） */
+  chatMode?: 'normal' | 'deep' | 'explore'
+  /** 深度模式虚拟段落（持久化以支持刷新后恢复） */
+  deepSegments?: unknown[]
+  /** 深度模式最终结论区（持久化以支持刷新后恢复） */
+  finalOutput?: unknown
   /** 是否已固定（收藏），固定的会话不会被自动清理 */
   pinned?: boolean
 }

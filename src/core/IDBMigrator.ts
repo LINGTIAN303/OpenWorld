@@ -1,6 +1,5 @@
-import { db } from './database'
-import { storage } from './StorageBackend'
-import { isTauri } from './StorageBackend'
+import { db as legacyDb } from '@worldsmith/entity-core/core'
+import { storage, isTauri } from '@worldsmith/entity-core/core'
 
 export interface MigrationReport {
   entitiesMigrated: number
@@ -30,8 +29,8 @@ export async function migrateIndexedDBToSQLite(): Promise<MigrationReport> {
   }
 
   try {
-    const entities = await db.entities.toArray()
-    const relations = await db.relations.toArray()
+    const entities = await legacyDb.entities.toArray()
+    const relations = await legacyDb.relations.toArray()
 
     if (entities.length === 0 && relations.length === 0) {
       localStorage.setItem('worldsmith_idb_migrated', 'true')
@@ -46,8 +45,8 @@ export async function migrateIndexedDBToSQLite(): Promise<MigrationReport> {
     const entityCount = await storage.importEntities(entities)
     const relationCount = await storage.importRelations(relations)
 
-    await db.entities.clear()
-    await db.relations.clear()
+    await legacyDb.entities.clear()
+    await legacyDb.relations.clear()
 
     localStorage.setItem('worldsmith_idb_migrated', 'true')
 

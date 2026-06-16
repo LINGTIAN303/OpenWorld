@@ -1,346 +1,187 @@
-import { ref, computed } from 'vue'
-import { useEntityStore, useRelationStore } from '@worldsmith/entity-core'
-import { useCustomModuleStore } from '../stores/customModuleStore'
-import { usePluginStore } from '@worldsmith/entity-core'
-import { getExportController, getImportController } from '../utils/io_export'
-import type { WorldSmithPack } from '../core/WorldSmithPack'
+/**
+ * useFileSystemProject — 项目目录绑定与导出
+ *
+ * 改造后对接 FileStorageBackend 体系：
+ * - "打开文件夹" → 绑定本地目录到当前项目（setStorageProjectDir + FsWatcher）
+ * - "保存到文件夹" → 导出项目到指定目录（ProjectFS.exportProjectToDir）
+ *
+ * 不再使用浏览器 File System Access API（pack.json 格式），
+ * 改为 Tauri 后端文件操作 + FileStorageBackend 目录结构。
+ */
 
-const dirHandle = ref<FileSystemDirectoryHandle | null>(null)
+import { ref, computed } from 'vue'
+import { getProjectManager, setStorageProjectDir, getFileStorageBackend, isTauri } from '@worldsmith/entity-core/core'
+import { useEntityStore, useRelationStore } from '@worldsmith/entity-core'
+import { useFsWatcher } from './useFsWatcher'
+
+/** 当前绑定的项目目录路径 */
+const boundDir = ref<string | null>(null)
 const saving = ref(false)
 const loading = ref(false)
 const lastError = ref('')
 
-const projectName = computed(() => dirHandle.value?.name ?? '')
-const isProjectOpen = computed(() => dirHandle.value !== null)
-const isSupported = computed(() => typeof window !== 'undefined' && 'showDirectoryPicker' in window)
+const dirName = computed(() => {
+  if (!boundDir.value) return ''
+  const sep = boundDir.value.includes('\\') ? '\\' : '/'
+  const parts = boundDir.value.split(sep).filter(Boolean)
+  return parts[parts.length - 1] || ''
+})
 
-const HANDLE_DB = 'WorldSmith-FSHandles'
-const HANDLE_STORE = 'handles'
-const HANDLE_KEY = 'project-dir'
+const isProjectOpen = computed(() => boundDir.value !== null)
 
-function openHandleDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(HANDLE_DB, 1)
-    req.onupgradeneeded = () => {
-      req.result.createObjectStore(HANDLE_STORE)
-    }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
-  })
-}
+/** 是否在 Tauri 桌面端（支持文件系统操作） */
+const isSupported = computed(() => isTauri())
 
-async function persistHandle(handle: FileSystemDirectoryHandle): Promise<void> {
-  const db = await openHandleDB()
-  const tx = db.transaction(HANDLE_STORE, 'readwrite')
-  tx.objectStore(HANDLE_STORE).put(handle, HANDLE_KEY)
-  await new Promise<void>((resolve, reject) => {
-    tx.oncomplete = () => resolve()
-    tx.onerror = () => reject(tx.error)
-  })
-}
-
-async function loadPersistedHandle(): Promise<FileSystemDirectoryHandle | null> {
+/** 打开 Tauri 目录选择对话框 */
+async function openDirDialog(title: string): Promise<string | null> {
   try {
-    const db = await openHandleDB()
-    const tx = db.transaction(HANDLE_STORE, 'readonly')
-    const req = tx.objectStore(HANDLE_STORE).get(HANDLE_KEY)
-    return new Promise((resolve) => {
-      req.onsuccess = () => resolve(req.result ?? null)
-      req.onerror = () => resolve(null)
-    })
+    const { open } = await import('@tauri-apps/plugin-dialog')
+    const selected = await open({ directory: true, title, multiple: false })
+    return selected as string | null
   } catch {
     return null
   }
-}
-
-async function clearPersistedHandle(): Promise<void> {
-  try {
-    const db = await openHandleDB()
-    const tx = db.transaction(HANDLE_STORE, 'readwrite')
-    tx.objectStore(HANDLE_STORE).delete(HANDLE_KEY)
-    await new Promise<void>((resolve, reject) => {
-      tx.oncomplete = () => resolve()
-      tx.onerror = () => reject(tx.error)
-    })
-  } catch { /* ignore */ }
-}
-
-async function readFileText(handle: FileSystemDirectoryHandle, path: string): Promise<string | null> {
-  try {
-    const parts = path.split('/')
-    let h: FileSystemDirectoryHandle | FileSystemFileHandle = handle
-    for (let i = 0; i < parts.length - 1; i++) {
-      h = await (h as FileSystemDirectoryHandle).getDirectoryHandle(parts[i])
-    }
-    const fileHandle = await (h as FileSystemDirectoryHandle).getFileHandle(parts[parts.length - 1])
-    const file = await fileHandle.getFile()
-    return await file.text()
-  } catch {
-    return null
-  }
-}
-
-async function writeFileText(handle: FileSystemDirectoryHandle, path: string, content: string): Promise<void> {
-  const parts = path.split('/')
-  let h: FileSystemDirectoryHandle = handle
-  for (let i = 0; i < parts.length - 1; i++) {
-    h = await h.getDirectoryHandle(parts[i], { create: true })
-  }
-  const fileHandle = await h.getFileHandle(parts[parts.length - 1], { create: true })
-  const writable = await fileHandle.createWritable()
-  await writable.write(content)
-  await writable.close()
-}
-
-async function writeBlob(handle: FileSystemDirectoryHandle, path: string, blob: Blob): Promise<void> {
-  const parts = path.split('/')
-  let h: FileSystemDirectoryHandle = handle
-  for (let i = 0; i < parts.length - 1; i++) {
-    h = await h.getDirectoryHandle(parts[i], { create: true })
-  }
-  const fileHandle = await h.getFileHandle(parts[parts.length - 1], { create: true })
-  const writable = await fileHandle.createWritable()
-  await writable.write(blob)
-  await writable.close()
 }
 
 export function useFileSystemProject() {
-  async function tryRestoreProject(): Promise<boolean> {
-    if (!isSupported.value) return false
-    const handle = await loadPersistedHandle()
-    if (!handle) return false
-    try {
-      const perm = await handle.queryPermission({ mode: 'readwrite' })
-      if (perm === 'granted') {
-        dirHandle.value = handle
-        return true
-      }
-      const requested = await handle.requestPermission({ mode: 'readwrite' })
-      if (requested === 'granted') {
-        dirHandle.value = handle
-        return true
-      }
-    } catch { /* permission denied or handle invalidated */ }
-    await clearPersistedHandle()
-    return false
-  }
-
+  /**
+   * 绑定本地目录到当前项目。
+   * 选择目录后，调用 setStorageProjectDir 激活 FileStorageBackend，
+   * 并启动文件监听。如果目录中已有数据，FileStorageBackend 会自动加载。
+   */
   async function openFolder(): Promise<boolean> {
     if (!isSupported.value) {
-      lastError.value = '当前浏览器不支持文件系统访问 API，请使用 Chrome 或 Edge'
+      lastError.value = '文件系统操作需要 Tauri 桌面端环境'
       return false
     }
     lastError.value = ''
     try {
-      const handle = await window.showDirectoryPicker({ mode: 'readwrite' })
-      dirHandle.value = handle
-      await persistHandle(handle)
+      const dirPath = await openDirDialog('选择项目目录')
+      if (!dirPath) return false // 用户取消
 
-      const packText = await readFileText(handle, 'pack.json')
-      if (packText) {
-        await loadFromFolder()
-      }
-
-      return true
-    } catch (err: any) {
-      if (err.name === 'AbortError') return false
-      lastError.value = err.message
-      return false
-    }
-  }
-
-  async function loadFromFolder(): Promise<boolean> {
-    if (!dirHandle.value) return false
-    loading.value = true
-    lastError.value = ''
-    try {
-      const packText = await readFileText(dirHandle.value, 'pack.json')
-      if (!packText) {
-        lastError.value = '文件夹中没有 pack.json，请先保存数据到该文件夹'
+      const pm = getProjectManager()
+      const projectId = pm.getCurrentProjectId()
+      if (!projectId) {
+        lastError.value = '请先创建或选择一个项目'
         return false
       }
 
-      const pack: WorldSmithPack = JSON.parse(packText)
+      // 绑定目录到项目
+      await pm.setProjectDir(projectId, dirPath)
+      // 激活 FileStorageBackend
+      await setStorageProjectDir(dirPath)
+      // 启动文件监听
+      const { startWatching } = useFsWatcher()
+      await startWatching()
 
-      const customModuleStore = useCustomModuleStore()
-      const pluginStore = usePluginStore()
-      getExportController(
-        {
-          modules: customModuleStore.modules,
-          addModule: customModuleStore.addModule,
-          updateModule: customModuleStore.updateModule,
-          removeModule: customModuleStore.removeModule,
-        },
-        { views: pluginStore.views },
-      )
+      // 更新内存状态
+      boundDir.value = dirPath
 
-      const ic = getImportController()
-      const report = await ic.importPack(pack, 'overwrite')
-
-      if (report.success) {
+      // 如果 FileStorageBackend 已就绪，重新加载数据
+      const fsb = getFileStorageBackend()
+      if (fsb.isReady) {
         const entityStore = useEntityStore()
         const relationStore = useRelationStore()
         await entityStore.loadAll()
         await relationStore.loadAll()
       }
 
-      return report.success
+      return true
     } catch (err: any) {
-      lastError.value = err.message
+      lastError.value = err.message ?? '绑定目录失败'
       return false
-    } finally {
-      loading.value = false
     }
   }
 
+  /**
+   * 导出当前项目到指定目录。
+   * 使用 ProjectFS.exportProjectToDir 格式（entities/ + relations/ 目录结构）。
+   */
   async function saveToFolder(): Promise<boolean> {
-    if (!dirHandle.value) return false
+    if (!isSupported.value) {
+      lastError.value = '文件系统操作需要 Tauri 桌面端环境'
+      return false
+    }
     saving.value = true
     lastError.value = ''
     try {
-      const customModuleStore = useCustomModuleStore()
-      const pluginStore = usePluginStore()
-      const entityStore = useEntityStore()
-
-      const ec = getExportController(
-        {
-          modules: customModuleStore.modules,
-          addModule: customModuleStore.addModule,
-          updateModule: customModuleStore.updateModule,
-          removeModule: customModuleStore.removeModule,
-        },
-        { views: pluginStore.views },
-      )
-
-      const pack = await ec.collectAll()
-      const packJson = JSON.stringify(pack, null, 2)
-      await writeFileText(dirHandle.value, 'pack.json', packJson)
-
-      const manifest = {
-        formatVersion: 1,
-        exportedAt: pack.manifest.exportedAt,
-        appVersion: pack.manifest.appVersion,
-        name: pack.manifest.description,
-        summary: buildSummary(pack),
-        mediaIndex: {} as Record<string, string>,
+      const { exportProjectToDir } = await import('../core/ProjectFS')
+      const result = await exportProjectToDir()
+      if (result) {
+        return true
       }
-      await writeFileText(dirHandle.value, 'manifest.json', JSON.stringify(manifest, null, 2))
-
-      await writeMediaFiles(dirHandle.value, entityStore.entities)
-
-      return true
+      lastError.value = '导出取消或失败'
+      return false
     } catch (err: any) {
-      lastError.value = err.message
+      lastError.value = err.message ?? '导出失败'
       return false
     } finally {
       saving.value = false
     }
   }
 
+  /**
+   * 取消当前项目的目录绑定。
+   */
   async function closeProject(): Promise<void> {
-    dirHandle.value = null
-    await clearPersistedHandle()
+    const pm = getProjectManager()
+    const projectId = pm.getCurrentProjectId()
+    if (projectId) {
+      await pm.setProjectDir(projectId, null)
+    }
+    await setStorageProjectDir(null)
+    const { stopWatching } = useFsWatcher()
+    await stopWatching()
+    boundDir.value = null
+  }
+
+  /**
+   * 项目切换时调用。从 ProjectManager 读取新项目的目录绑定状态。
+   */
+  async function onProjectSwitched(): Promise<void> {
+    const pm = getProjectManager()
+    const projectId = pm.getCurrentProjectId()
+    if (!projectId) {
+      boundDir.value = null
+      return
+    }
+
+    const dirPath = await pm.getProjectDir(projectId)
+    boundDir.value = dirPath ?? null
+  }
+
+  /**
+   * 初始化时尝试恢复当前项目的目录绑定状态。
+   * 由 Shell.vue onMounted 调用。
+   */
+  async function tryRestoreProject(): Promise<boolean> {
+    if (!isSupported.value) return false
+    try {
+      const pm = getProjectManager()
+      const projectId = pm.getCurrentProjectId()
+      if (!projectId) return false
+
+      const dirPath = await pm.getProjectDir(projectId)
+      if (!dirPath) return false
+
+      boundDir.value = dirPath
+      return true
+    } catch {
+      return false
+    }
   }
 
   return {
-    dirHandle,
-    projectName,
+    dirName,
     isProjectOpen,
     isSupported,
     saving,
     loading,
     lastError,
     openFolder,
-    loadFromFolder,
     saveToFolder,
     closeProject,
     tryRestoreProject,
+    onProjectSwitched,
   }
-}
-
-function buildSummary(pack: WorldSmithPack) {
-  const s = pack.serializers
-  const count = (key: string, field: string) => {
-    const d = s[key] as any
-    return d?.total ?? d?.[field]?.length ?? 0
-  }
-  return {
-    entities: count('entities', 'entities'),
-    relations: count('relations', 'relations'),
-    entityTypes: count('entity-types', 'schemas'),
-    relationTypes: count('relation-types', 'schemas'),
-    customModules: count('custom-modules', 'modules'),
-    mediaFiles: 0,
-  }
-}
-
-async function writeMediaFiles(handle: FileSystemDirectoryHandle, entities: any[]) {
-  const seen = new Set<string>()
-  for (const entity of entities) {
-    if (entity.avatar && !seen.has(entity.avatar)) {
-      seen.add(entity.avatar)
-      const blob = await tryFetchBlob(entity.avatar)
-      if (blob) {
-        const ext = guessExt(entity.avatar, blob.type)
-        await writeBlob(handle, `media/avatars/${entity.id}${ext}`, blob)
-      }
-    }
-    if (entity.properties) {
-      for (const [, value] of Object.entries(entity.properties)) {
-        if (typeof value === 'string' && isLikelyUrl(value) && !seen.has(value)) {
-          seen.add(value)
-          const blob = await tryFetchBlob(value)
-          if (blob) {
-            const ext = guessExt(value, blob.type)
-            await writeBlob(handle, `media/attachments/${entity.id}${ext}`, blob)
-          }
-        }
-      }
-    }
-  }
-}
-
-function isLikelyUrl(s: string): boolean {
-  return s.startsWith('http://') || s.startsWith('https://') || s.startsWith('data:') || s.startsWith('blob:')
-}
-
-async function tryFetchBlob(url: string): Promise<Blob | null> {
-  try {
-    if (url.startsWith('data:') || url.startsWith('blob:')) {
-      const res = await fetch(url)
-      return res.ok ? await res.blob() : null
-    }
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      const res = await fetch(url, { mode: 'cors' })
-      return res.ok ? await res.blob() : null
-    }
-    return null
-  } catch {
-    return null
-  }
-}
-
-function guessExt(url: string, mimeType: string): string {
-  if (mimeType) {
-    const map: Record<string, string> = {
-      'image/png': '.png',
-      'image/jpeg': '.jpg',
-      'image/gif': '.gif',
-      'image/svg+xml': '.svg',
-      'image/webp': '.webp',
-      'image/bmp': '.bmp',
-    }
-    if (map[mimeType]) return map[mimeType]
-  }
-  if (url.startsWith('data:')) {
-    const m = url.match(/^data:image\/(\w+)/)
-    if (m) return '.' + (m[1] === 'jpeg' ? 'jpg' : m[1])
-  }
-  try {
-    const u = new URL(url)
-    const segs = u.pathname.split('/').filter(Boolean)
-    const last = segs[segs.length - 1]
-    if (last && last.includes('.')) return '.' + last.split('.').pop()
-  } catch { /* ignore */ }
-  return '.bin'
 }

@@ -8,10 +8,19 @@ import { DefaultToolBus } from './toolbus/toolbus'
 import type { ToolBus } from './toolbus/toolbus'
 import { MCPManager } from './mcp/mcp-manager'
 import { recallMemory, formatMemoryForPrompt } from './tools/memory'
+import { retryWithBackoff, isRetryableError } from './group-chat/flow-control'
 import { kbSearchKeyword, kbList } from './kb/kb-store'
 import { semanticSearchKB, isEmbeddingReady as isKBEmbeddingReady } from './kb/kb-indexer'
 import { extractFromConversation, extractShortMemory } from './kb/kb-extractor'
 import { streamSimple } from '@earendil-works/pi-ai'
+import {
+  getProviderManifest,
+  detectVisionSupport,
+  detectThinkingSupport,
+  resolveModelId as registryResolveModelId,
+  buildProxyEndpoint,
+  getDomesticProviderIds,
+} from './providers/provider-registry'
 
 export type {
   PromptOptions,
@@ -107,54 +116,27 @@ export class CoreBackend implements IAgentBackend {
     return typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173'
   }
 
-  private static PROVIDER_BASE_URLS: Record<string, string> = {
-    anthropic: '/api/anthropic',
-    openai: '/api/openai/v1',
-    google: '/api/google',
-    deepseek: '/api/deepseek',
-    groq: '/api/groq/openai/v1',
-    openrouter: '/api/openrouter/api/v1',
-    zhipu: '/api/zhipu/api/paas/v4',
-    qwen: '/api/qwen/compatible-mode/v1',
-    minimax: '/api/minimax/v1',
-    kimi: '/api/kimi/v1',
-  }
-
   private static resolveProxyUrl(proxyPath: string): string {
     return `${CoreBackend.getOrigin()}${proxyPath}`
-  }
-
-  private static VISION_MODEL_PATTERNS: Record<string, (modelId: string) => boolean> = {
-    anthropic: () => true,
-    openai: () => true,
-    google: () => true,
-    deepseek: () => false,
-    zhipu: (id) => /\d+v/i.test(id),
-    qwen: (id) => id.includes('vl') || id.includes('VL') || id.includes('3.6-plus') || id.includes('3.6-flash') || id.includes('3.5-plus') || id.includes('3.5-flash'),
-    minimax: (id) => id.includes('vl') || id.includes('VL'),
-    kimi: (id) => id.startsWith('kimi-k2.5'),
-    groq: (id) => id.includes('scout') && id.includes('vision'),
   }
 
   private checkVisionSupport(provider: string, modelId: string): boolean {
     const cfg = this.config.providerConfig as any
     if (cfg.supportsVision !== undefined) return !!cfg.supportsVision
-    const checker = CoreBackend.VISION_MODEL_PATTERNS[provider]
-    if (checker) return checker(modelId)
-    return false
+    return detectVisionSupport(provider, modelId)
   }
 
   private async buildModel(): Promise<any> {
     const { getModel } = await import('@earendil-works/pi-ai')
     const cfg = this.config.providerConfig as any
-    const isDomestic = ['deepseek', 'zhipu', 'qwen', 'minimax', 'kimi'].includes(cfg.provider)
+    const manifest = getProviderManifest(cfg.provider)
+    const isDomestic = manifest?.isDomestic ?? false
 
     if (cfg.mode === 'cloud' && !isDomestic) {
       try {
         const model = getModel(cfg.provider, cfg.modelId)
         if (model) {
-          const proxyBase = CoreBackend.PROVIDER_BASE_URLS[cfg.provider]
-          if (proxyBase) model.baseUrl = CoreBackend.resolveProxyUrl(proxyBase)
+          if (manifest) model.baseUrl = buildProxyEndpoint(cfg.provider)
           return model
         }
       } catch { /* fall through to custom */ }
@@ -172,14 +154,12 @@ export class CoreBackend implements IAgentBackend {
   }
 
   private buildCustomModel(provider: string, modelId: string, baseUrl?: string, apiKey?: string): any {
-    const isAnthropic = provider.includes('anthropic')
-    const isGoogle = provider === 'google' || provider === 'google-vertex'
-    let api = 'openai-completions'
-    if (isAnthropic) api = 'anthropic-messages'
-    else if (isGoogle) api = 'google-generative-ai'
+    const manifest = getProviderManifest(provider)
+    const isAnthropic = manifest?.apiType === 'anthropic-messages' || provider.includes('anthropic')
+    const isGoogle = manifest?.apiType === 'google-generative-ai' || provider === 'google-vertex'
+    const api = manifest?.apiType || (isAnthropic ? 'anthropic-messages' : isGoogle ? 'google-generative-ai' : 'openai-completions')
 
-    const providerBaseUrl = CoreBackend.PROVIDER_BASE_URLS[provider]
-    let resolvedBaseUrl = baseUrl || (providerBaseUrl ? CoreBackend.resolveProxyUrl(providerBaseUrl) : '') || (provider === 'ollama' ? 'http://localhost:11434/v1' : '')
+    let resolvedBaseUrl = baseUrl || (manifest ? buildProxyEndpoint(provider) : '') || (provider === 'ollama' ? 'http://localhost:11434/v1' : '')
 
     const isCustomRemote = baseUrl && /^https?:\/\//.test(baseUrl)
     let customProxyHeaders: Record<string, string> | undefined
@@ -194,18 +174,13 @@ export class CoreBackend implements IAgentBackend {
       } catch {}
     }
 
-    const isDeepSeek = provider === 'deepseek' || (baseUrl || '').includes('deepseek.com')
-    const isZhipu = provider === 'zhipu'
-    const isQwen = provider === 'qwen'
-    const isMinimax = provider === 'minimax'
-    const isKimi = provider === 'kimi'
+    // DeepSeek 特殊处理：URL 中包含 deepseek.com 也视为 DeepSeek
+    const isDeepSeekByUrl = (baseUrl || '').includes('deepseek.com')
+    const isDeepSeek = provider === 'deepseek' || isDeepSeekByUrl
 
-    let resolvedModelId = modelId
-    if (isDeepSeek && resolvedModelId.includes('/')) {
-      resolvedModelId = resolvedModelId.split('/').pop()!
-    }
-
+    const resolvedModelId = registryResolveModelId(provider, modelId)
     const supportsVision = this.checkVisionSupport(provider, resolvedModelId)
+    const supportsThinking = detectThinkingSupport(provider, resolvedModelId)
 
     const model: any = {
       id: resolvedModelId,
@@ -213,77 +188,27 @@ export class CoreBackend implements IAgentBackend {
       api,
       provider: isDeepSeek ? 'deepseek' : provider,
       baseUrl: resolvedBaseUrl,
-      reasoning: false,
+      reasoning: supportsThinking,
       input: supportsVision ? ['text', 'image'] : ['text'],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: (this.config.providerConfig as any).contextWindow || 1048576,
       maxTokens: (this.config.providerConfig as any).maxTokens || 65536,
     }
 
-    if (isDeepSeek) {
-      model.api = 'openai-completions'
-      model.reasoning = true
-      model.compat = {
-        maxTokensField: 'max_tokens',
-        supportsUsageInStreaming: false,
-        supportsStore: false,
-        supportsDeveloperRole: false,
-        supportsReasoningEffort: false,
-        supportsStrictMode: false,
-        thinkingFormat: 'deepseek',
-        requiresReasoningContentOnAssistantMessages: true,
-      }
-      model.thinkingLevelMap = { off: null, minimal: null, low: null, medium: null, high: 'high', xhigh: 'max' }
-    } else if (isZhipu) {
-      model.api = 'openai-completions'
-      model.compat = {
-        maxTokensField: 'max_tokens',
-        supportsStrictMode: false,
-        supportsUsageInStreaming: true,
-      }
-      const isThinking = resolvedModelId.startsWith('glm-5') || resolvedModelId.startsWith('glm-4.5')
-      if (isThinking) {
-        model.reasoning = true
-        model.compat.thinkingFormat = 'reasoning_content'
-      }
-    } else if (isQwen) {
-      model.api = 'openai-completions'
-      model.compat = {
-        maxTokensField: 'max_tokens',
-        supportsStrictMode: false,
-        supportsUsageInStreaming: true,
-      }
-      const isThinking = resolvedModelId.includes('qwen3')
-      if (isThinking) {
-        model.reasoning = true
-        model.compat.thinkingFormat = 'reasoning_content'
-      }
-    } else if (isMinimax) {
-      model.api = 'openai-completions'
-      model.compat = {
-        maxTokensField: 'max_tokens',
-        supportsStrictMode: false,
-        supportsUsageInStreaming: true,
-      }
-      const isThinking = resolvedModelId.startsWith('MiniMax-M2')
-      if (isThinking) {
-        model.reasoning = true
-        model.compat.thinkingFormat = 'reasoning_content'
-      }
-    } else if (isKimi) {
-      model.api = 'openai-completions'
-      model.compat = {
-        maxTokensField: 'max_tokens',
-        supportsStrictMode: false,
-        supportsUsageInStreaming: true,
-      }
-      const isThinking = resolvedModelId.startsWith('kimi-k2')
-      if (isThinking) {
-        model.reasoning = true
-        model.compat.thinkingFormat = 'reasoning_content'
+    // 从 manifest 读取 compat 配置
+    if (manifest?.compat) {
+      model.compat = { ...manifest.compat }
+      // 思考格式：如果模型支持思考且 manifest 定义了 thinkingFormat
+      if (supportsThinking && manifest.thinkingFormat && !model.compat.thinkingFormat) {
+        model.compat.thinkingFormat = manifest.thinkingFormat
       }
     } else if (!isAnthropic && !isGoogle) {
       model.compat = { maxTokensField: 'max_tokens', supportsStrictMode: false, supportsUsageInStreaming: true }
+    }
+
+    // 思考级别映射
+    if (manifest?.thinkingLevelMap) {
+      model.thinkingLevelMap = manifest.thinkingLevelMap
     }
 
     if (apiKey) {
@@ -317,33 +242,30 @@ export class CoreBackend implements IAgentBackend {
       parameters: this.convertParamsToJsonSchema(t.parameters),
       execute: async (toolCallId: string, params: unknown, _signal?: AbortSignal, _onUpdate?: any) => {
         const args = params as Record<string, unknown>
-        this.emit({
-          type: 'tool_execution_start',
-          toolCall: { id: toolCallId, name: t.name, args },
-        })
+        // 注意：PI 框架会自动发射 tool_execution_start / tool_execution_end 事件，
+        // 这里不再手动发射，避免双重发射导致 useAgent 收到重复事件
+        const ctx: typeof this.config.toolContext = {
+          ...this.config.toolContext,
+          reportProgress: (progress: number, status?: string) => {
+            this.emit({
+              type: 'tool_execution_update',
+              toolCallId,
+              progress,
+              status,
+            })
+          },
+        }
         try {
-          const res = await t.execute(args, this.config.toolContext)
+          const res = await t.execute(args, ctx)
           if (t.name.startsWith('output_') && this.config.toolContext.appendBlock) {
             console.log('[Agent] output tool executed:', t.name, 'result:', res)
           }
-          this.emit({
-            type: 'tool_execution_end',
-            toolCallId,
-            result: res,
-            success: true,
-          })
           return {
             content: [{ type: 'text' as const, text: res }],
             details: { success: true },
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
-          this.emit({
-            type: 'tool_execution_end',
-            toolCallId,
-            result: msg,
-            success: false,
-          })
           return {
             content: [{ type: 'text' as const, text: msg }],
             details: { error: true },
@@ -431,7 +353,7 @@ export class CoreBackend implements IAgentBackend {
       },
       beforeToolCall: async (ctx: any) => {
         if (this.config.beforeToolCall) {
-          const result = await this.config.beforeToolCall({ toolCall: { name: ctx.toolName, args: ctx.args } })
+          const result = await this.config.beforeToolCall({ toolCall: { id: ctx.toolCall?.id, name: ctx.toolCall?.name, args: ctx.args } })
           if (result?.block) return { block: true, reason: result.reason }
         }
         return undefined
@@ -474,7 +396,7 @@ export class CoreBackend implements IAgentBackend {
           const lastAssistant = agentEndMessages[agentEndMessages.length - 1]
           this._lastAssistantText = lastAssistant.content || ''
         }
-        if (this._lastUserText && this._lastAssistantText && this._currentChatMode !== 'normal') {
+        if (this._lastUserText && this._lastAssistantText && this._currentChatMode !== 'normal' && this._currentChatMode !== 'group-chat') {
           const userText = this._lastUserText
           const asstText = this._lastAssistantText
           Promise.all([
@@ -522,7 +444,8 @@ export class CoreBackend implements IAgentBackend {
         return {
           type: 'tool_execution_update',
           toolCallId: event.toolCallId,
-          progress: 50,
+          progress: event.progress,
+          status: event.status,
         }
       case 'tool_execution_end':
         return {
@@ -627,6 +550,7 @@ export class CoreBackend implements IAgentBackend {
       normal: 'off',
       deep: 'high',
       explore: 'medium',
+      'group-chat': 'medium',
     }
     this.updateThinkingLevel(thinkingLevelMap[chatMode])
 
@@ -735,15 +659,18 @@ export class CoreBackend implements IAgentBackend {
         const fileSections = options.files.map(f => `--- ${f.name} ---\n${f.content}\n---`).join('\n\n')
         promptText += `\n\n${fileSections}`
       }
-      if (options?.images && options.images.length > 0) {
-        await agent.prompt(promptText, options.images.map(img => ({
-          type: 'image' as const,
-          data: img.data,
-          mimeType: img.mimeType,
-        })))
-      } else {
-        await agent.prompt(promptText)
-      }
+      // 使用通用退避重试包装，429/503/529 自动重试
+      await retryWithBackoff(async () => {
+        if (options?.images && options.images.length > 0) {
+          await agent.prompt(promptText, options.images.map(img => ({
+            type: 'image' as const,
+            data: img.data,
+            mimeType: img.mimeType,
+          })))
+        } else {
+          await agent.prompt(promptText)
+        }
+      })
     } catch (err: any) {
       this._state.isStreaming = false
       console.error('[Agent] prompt() failed:', err)
@@ -781,7 +708,24 @@ export class CoreBackend implements IAgentBackend {
   }
 
   async abort(): Promise<void> {
-    if (this.agent) this.agent.abort()
+    if (this.agent) {
+      // 保存当前对话历史，abort 后 agent 内部锁可能未释放
+      const savedMessages = [...(this.agent.state?.messages || [])]
+      this.agent.abort()
+      // 销毁 agent 以释放内部锁，下次 ensureAgent 会重建
+      if (this.unsub) this.unsub()
+      this.agent = null
+      this.agentInitPromise = null
+      // 重建 agent 后恢复对话历史
+      try {
+        const newAgent = await this.ensureAgent()
+        if (savedMessages.length > 0) {
+          newAgent.state.messages = savedMessages
+        }
+      } catch (err) {
+        console.warn('[Agent] abort: failed to rebuild agent:', err)
+      }
+    }
   }
 
   async updateModel(provider: string, modelId: string, baseUrl?: string, apiKey?: string, contextWindow?: number, maxTokens?: number, temperature?: number): Promise<void> {
@@ -795,12 +739,13 @@ export class CoreBackend implements IAgentBackend {
     }
     console.log('[Agent] updateModel called:', { provider, modelId, baseUrl: baseUrl?.slice(0, 60), hasApiKey: !!apiKey, contextWindow, maxTokens, temperature })
     let model: any = null
-    const isDomestic = ['deepseek', 'zhipu', 'qwen', 'minimax', 'kimi'].includes(provider)
+    const isDomestic = ['deepseek', 'zhipu', 'qwen', 'minimax', 'kimi', 'agnes'].includes(provider)
     const isCustomApi = ['openai-compatible', 'anthropic-compatible'].includes(provider)
     if (!isDomestic && !isCustomApi && !baseUrl) {
       try {
         const { getModel } = await import('@earendil-works/pi-ai')
-        model = getModel(provider, modelId)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        model = getModel(provider as any, modelId)
         if (model) {
           const proxyBase = CoreBackend.PROVIDER_BASE_URLS[provider]
           if (proxyBase) model.baseUrl = CoreBackend.resolveProxyUrl(proxyBase)

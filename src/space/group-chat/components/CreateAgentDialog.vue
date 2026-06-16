@@ -1,7 +1,8 @@
 <template>
   <Teleport to="body">
     <div class="dialog-backdrop" @click.self="$emit('close')"></div>
-    <div class="create-agent-dialog">
+    <div class="dialog-wrapper" :style="wrapperStyle">
+      <div class="create-agent-dialog">
       <div class="dialog-title">{{ isEdit ? '编辑 Agent' : '创建 Agent' }}</div>
 
       <div class="avatar-section">
@@ -66,33 +67,169 @@
         <textarea class="prompt-input" v-model="systemPrompt" placeholder="描述这个 Agent 的人格、说话风格、知识背景..." rows="5"></textarea>
       </div>
 
-      <div class="model-section">
-        <div class="section-label">模型</div>
-        <select class="model-select" v-model="modelId">
-          <option value="">默认模型</option>
-          <option v-for="m in modelOptions" :key="m.id" :value="m.id">{{ m.name }}</option>
-        </select>
+      <div class="baselayer-section">
+        <div class="section-label">基础层</div>
+        <div class="baselayer-desc">决定 Agent 的知识基础和工具能力</div>
+        <div class="baselayer-options">
+          <div class="baselayer-option" :class="{ active: baseLayerMode === 'empty' }" @click="baseLayerMode = 'empty'">
+            <span class="baselayer-option-title">空</span>
+            <span class="baselayer-option-desc">纯聊天 NPC，不使用任何工具</span>
+          </div>
+          <div class="baselayer-option" :class="{ active: baseLayerMode === 'shared' }" @click="baseLayerMode = 'shared'">
+            <span class="baselayer-option-title">共享</span>
+            <span class="baselayer-option-desc">标准基础层 + 全部工具能力</span>
+          </div>
+          <div class="baselayer-option" :class="{ active: baseLayerMode === 'custom' }" @click="baseLayerMode = 'custom'">
+            <span class="baselayer-option-title">自定义</span>
+            <span class="baselayer-option-desc">手动配置基础层和工具</span>
+          </div>
+        </div>
+        <textarea
+          v-if="baseLayerMode === 'custom'"
+          class="baselayer-input"
+          v-model="customBaseLayer"
+          placeholder="输入自定义基础层内容（如工具使用规则、输出格式要求、项目知识等）"
+          rows="5"
+        ></textarea>
       </div>
 
-      <div class="tools-section">
-        <div class="section-label">工具与技能</div>
-        <div class="tools-placeholder">即将支持</div>
+      <!-- 能力配置卡片：仅自定义基础层时显示 -->
+      <div v-if="baseLayerMode === 'custom'" class="capability-section">
+        <div class="capability-card" :class="{ 'panel-open': showCapabilityDrawer }" @click="openCapabilityDrawer">
+          <div class="capability-card-header">
+            <WsIcon name="zap" size="xs" class="capability-icon" />
+            <span class="capability-title">能力配置</span>
+            <WsIcon name="chevron-right" size="xs" class="capability-arrow" />
+          </div>
+          <div class="capability-summary">
+            <template v-if="enabledSkills.length > 0">
+              <span class="capability-skills">
+                {{ enabledSkills.length }} 个技能
+              </span>
+              <span class="capability-divider">·</span>
+              <span class="capability-tools">
+                {{ skillDerivedToolNames.length }} 个工具
+              </span>
+              <span v-if="toolSource === 'manual'" class="capability-manual-badge">已自定义</span>
+            </template>
+            <template v-else>
+              <span class="capability-empty">未配置技能，点击选择</span>
+            </template>
+          </div>
+          <div v-if="enabledSkills.length > 0" class="capability-skill-tags">
+            <span v-for="sid in enabledSkills.slice(0, 5)" :key="sid" class="capability-skill-tag">
+              {{ getSkillName(sid) }}
+            </span>
+            <span v-if="enabledSkills.length > 5" class="capability-skill-more">
+              +{{ enabledSkills.length - 5 }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="model-section">
+        <div class="section-label">模型</div>
+        <div class="model-picker" ref="modelPickerAnchor">
+          <div class="picker-trigger" @click="toggleModelPicker">
+            <img v-if="selectedProvider && getProviderIconUrl(selectedProvider)" class="picker-icon" :src="getProviderIconUrl(selectedProvider)" alt="" />
+            <span class="picker-value" v-if="modelId">{{ getModelName(modelId) }}</span>
+            <span class="picker-placeholder" v-else>默认模型</span>
+            <WsIcon name="chevron-down" size="xs" />
+          </div>
+        </div>
+      </div>
+
+      <div class="provider-section">
+        <div class="section-label">Provider 来源</div>
+        <select class="provider-select" v-model="providerSource">
+          <option value="default">默认（跟随全局配置）</option>
+          <option v-for="slot in availableSlots" :key="slot.id" :value="`slot:${slot.id}`">
+            {{ slot.name }}（{{ slot.entries.length }} 个条目）
+          </option>
+        </select>
+        <div v-if="availableSlots.length === 0" class="provider-hint">
+          在群信息面板的 Provider 池中管理配置
+        </div>
+      </div>
+
+      <div class="font-section">
+        <div class="section-label">输出字体</div>
+        <select class="provider-select" v-model="fontFamily" @change="onAgentFontFamilyChange">
+          <option value="">跟随全局 Agent 字体</option>
+          <option v-for="e in fontLibraryEntries" :key="e.id" :value="e.family">{{ e.displayName }}</option>
+        </select>
+        <div v-if="fontFamily && agentFontVariants.length > 1" class="font-variant-row">
+          <select class="provider-select provider-select--sm" v-model="agentVariantKey">
+            <option v-for="v in agentFontVariants" :key="`${v.weight}-${v.style}`" :value="`${v.weight}-${v.style}`">{{ weightLabel(v.weight) }} {{ v.style === 'italic' ? '斜体' : '' }}</option>
+          </select>
+        </div>
       </div>
 
       <button class="create-btn" :disabled="!canCreate" @click="onCreate">
         {{ isEdit ? '保存修改' : '创建 Agent' }}
       </button>
     </div>
+
+    <!-- 能力配置面板：同级弹窗，紧贴主弹窗右侧 -->
+    <Transition name="panel-slide">
+      <AgentCapabilityDrawer
+        v-if="showCapabilityDrawer"
+        :enabled-skills="enabledSkills"
+        :enabled-tools="enabledTools"
+        :tool-source="toolSource"
+        @close="closeCapabilityDrawer"
+        @update:enabled-skills="enabledSkills = $event"
+        @update:enabled-tools="enabledTools = $event"
+        @update:tool-source="toolSource = $event"
+      />
+    </Transition>
+    </div>
+
+    <!-- 模型选择下拉面板 -->
+    <div v-if="showModelPicker" class="picker-backdrop" @click="closeModelPicker"></div>
+    <div v-if="showModelPicker && modelPickerStyle" class="model-picker-dropdown" :style="modelPickerStyle">
+      <input
+        class="picker-search"
+        v-model="modelSearchQuery"
+        placeholder="搜索模型..."
+        @keydown.escape="closeModelPicker"
+        ref="modelSearchRef"
+      />
+      <div class="picker-list">
+        <div class="picker-item picker-item-default" :class="{ selected: !modelId }" @click="selectModelItem(null)">
+          <span class="picker-item-name">默认模型</span>
+          <span class="picker-item-id">跟随全局配置</span>
+        </div>
+        <div
+          v-for="m in filteredModelList"
+          :key="m.id"
+          class="picker-item"
+          :class="{ selected: modelId === m.id }"
+          @click="selectModelItem(m)"
+        >
+          <img v-if="getProviderIconUrl(m.provider)" class="picker-item-icon" :src="getProviderIconUrl(m.provider)" alt="" />
+          <span class="picker-item-name">{{ m.name }}</span>
+          <span class="picker-item-id">{{ m.id }}</span>
+        </div>
+        <div v-if="filteredModelList.length === 0" class="picker-empty">无匹配模型</div>
+      </div>
+    </div>
+
   </Teleport>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useEntityStore, type Entity } from '@worldsmith/entity-core'
-import { MODEL_REGISTRY } from '../../../agent/modelRegistry'
-import { AGENT_COLORS } from '../types'
+import { MODEL_REGISTRY, getModelPresets, getModelInfo } from '../../../agent/modelRegistry'
+import { getProviderIconUrl } from '../../../assets/providerIcons'
+import { AGENT_COLORS, type BaseLayerMode, type ToolSource } from '../types'
 import type { ChatAgent } from '../types'
+import { getEnabledSkills, resolveToolNames, ALWAYS_AVAILABLE_TOOLS } from '@agent/index'
 import WsIcon from '../../../ui/WsIcon.vue'
+import { useAgentProfileStore } from '../../../stores/agentProfileStore'
+import { useFontLibraryStore } from '../../../stores/fontLibraryStore'
+import AgentCapabilityDrawer from './AgentCapabilityDrawer.vue'
 
 const props = defineProps<{
   agent?: ChatAgent
@@ -104,6 +241,42 @@ const emit = defineEmits<{
   updated: [agent: ChatAgent]
 }>()
 
+const profileStore = useAgentProfileStore()
+const availableSlots = computed(() => profileStore.slots)
+
+const fontLibraryStore = useFontLibraryStore()
+const fontLibraryEntries = computed(() => fontLibraryStore.getAllEntries())
+
+const agentFontVariants = computed(() => {
+  if (!fontFamily.value) return []
+  const entry = fontLibraryEntries.value.find(e => e.family === fontFamily.value)
+  return entry?.variants ?? []
+})
+
+const agentVariantKey = computed({
+  get: () => `${fontWeight.value}-${fontStyle.value}`,
+  set: (key: string) => {
+    const [w, s] = key.split('-')
+    fontWeight.value = Number(w)
+    fontStyle.value = s
+  },
+})
+
+const WEIGHT_LABELS: Record<number, string> = {
+  100: '极细', 200: '超细', 300: '细体', 400: '常规',
+  500: '中等', 600: '半粗', 700: '粗体', 800: '超粗', 900: '极粗',
+}
+
+function weightLabel(w: number): string {
+  return WEIGHT_LABELS[w] ?? `${w}`
+}
+
+function onAgentFontFamilyChange() {
+  // 切换字体时重置变体为默认
+  fontWeight.value = 400
+  fontStyle.value = 'normal'
+}
+
 const isEdit = computed(() => !!props.agent)
 
 const agentName = ref(props.agent?.name || '')
@@ -114,6 +287,86 @@ const selectedEntityId = ref(props.agent?.sourceEntityId || '')
 const systemPrompt = ref(props.agent?.systemPrompt || '')
 const modelId = ref(props.agent?.modelId || '')
 const entitySearch = ref('')
+const enabledSkills = ref<string[]>(props.agent?.enabledSkills || [])
+
+// 基础层配置
+const baseLayerMode = ref<BaseLayerMode>(props.agent?.baseLayerMode || 'empty')
+const customBaseLayer = ref(props.agent?.customBaseLayer || '')
+
+// 工具来源
+const toolSource = ref<ToolSource>(props.agent?.toolSource || 'derived')
+const enabledTools = ref<string[]>(props.agent?.enabledTools || [])
+
+// 输出字体
+const fontFamily = ref(props.agent?.fontFamily || '')
+const fontWeight = ref(props.agent?.fontWeight ?? 400)
+const fontStyle = ref(props.agent?.fontStyle ?? 'normal')
+
+// 能力面板
+const showCapabilityDrawer = ref(false)
+// 面板是否正在显示或动画中（用于 wrapper 定位，避免关闭动画期间主弹窗跳位）
+const panelVisibleForLayout = ref(false)
+
+// 面板尺寸常量
+const MAIN_DIALOG_WIDTH = 420
+const PANEL_WIDTH = 380
+const PANEL_GAP = 12
+
+// wrapper 居中定位：面板展开时两面板居中，收起时主弹窗居中
+// 使用 panelVisibleForLayout 而非 showCapabilityDrawer，避免关闭动画期间跳位
+const wrapperStyle = computed(() => {
+  if (panelVisibleForLayout.value) {
+    const half = (MAIN_DIALOG_WIDTH + PANEL_GAP + PANEL_WIDTH) / 2
+    return { left: `calc(50% - ${half}px)` }
+  }
+  return { left: `calc(50% - ${MAIN_DIALOG_WIDTH / 2}px)` }
+})
+
+function openCapabilityDrawer(): void {
+  showCapabilityDrawer.value = true
+  panelVisibleForLayout.value = true
+}
+
+function closeCapabilityDrawer(): void {
+  showCapabilityDrawer.value = false
+  // 延迟重置布局标记，等面板关闭动画（0.2s）结束后再移动主弹窗
+  setTimeout(() => {
+    if (!showCapabilityDrawer.value) {
+      panelVisibleForLayout.value = false
+    }
+  }, 220)
+}
+
+// Provider 来源
+const providerSource = ref<string>(
+  props.agent?.providerSlotId ? `slot:${props.agent.providerSlotId}` : 'default'
+)
+
+// 从选中技能派生的工具名列表
+const derivedToolNames = computed(() => {
+  return resolveToolNames(enabledSkills.value)
+})
+
+// 始终可用的工具集合
+const alwaysAvailableSet = new Set(ALWAYS_AVAILABLE_TOOLS)
+
+// 仅来自技能派生的工具（排除始终可用的基线工具，用于UI展示）
+const skillDerivedToolNames = computed(() => {
+  return derivedToolNames.value.filter(n => !alwaysAvailableSet.has(n))
+})
+
+// 技能名称映射
+const skillNameMap = computed(() => {
+  const map = new Map<string, string>()
+  for (const s of getEnabledSkills()) {
+    map.set(s.id, s.name)
+  }
+  return map
+})
+
+function getSkillName(id: string): string {
+  return skillNameMap.value.get(id) || id
+}
 
 watch(sourceType, (newType) => {
   if (newType === 'custom') {
@@ -121,11 +374,106 @@ watch(sourceType, (newType) => {
   }
 })
 
+// 切换基础层模式时清理技能/工具状态，并关闭能力面板
+watch(baseLayerMode, (mode) => {
+  if (mode !== 'custom') {
+    enabledSkills.value = []
+    enabledTools.value = []
+    toolSource.value = 'derived'
+    if (showCapabilityDrawer.value) {
+      closeCapabilityDrawer()
+    }
+  }
+})
+
+// 技能变更时：重置为派生模式，同步 enabledTools 缓存
+watch(enabledSkills, () => {
+  toolSource.value = 'derived'
+  enabledTools.value = [...derivedToolNames.value]
+}, { deep: true })
+
 const entityStore = useEntityStore()
 
-const modelOptions = computed(() => {
-  return MODEL_REGISTRY.map(m => ({ id: m.id, name: m.name }))
+// 模型选择器
+const modelPresets = getModelPresets()
+const showModelPicker = ref(false)
+const modelSearchQuery = ref('')
+const modelSearchRef = ref<HTMLInputElement | null>(null)
+const modelPickerAnchor = ref<HTMLElement | null>(null)
+const modelPickerStyle = ref<Record<string, string> | null>(null)
+
+interface FlatModel { id: string; name: string; provider: string }
+const allFlatModels = computed<FlatModel[]>(() => {
+  const list: FlatModel[] = []
+  for (const g of modelPresets) {
+    for (const m of g.models) {
+      list.push({ id: m.id, name: m.name, provider: m.provider })
+    }
+  }
+  return list
 })
+
+const filteredModelList = computed(() => {
+  const q = modelSearchQuery.value.toLowerCase().trim()
+  if (!q) return allFlatModels.value
+  return allFlatModels.value.filter(m =>
+    m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q) || m.provider.toLowerCase().includes(q)
+  )
+})
+
+const selectedProvider = computed(() => {
+  if (!modelId.value) return ''
+  const info = getModelInfo(modelId.value)
+  return info?.provider || ''
+})
+
+function getModelName(id: string): string {
+  if (!id) return ''
+  const info = getModelInfo(id)
+  return info?.name || id
+}
+
+function toggleModelPicker(): void {
+  if (showModelPicker.value) {
+    closeModelPicker()
+  } else {
+    showModelPicker.value = true
+    modelSearchQuery.value = ''
+    nextTick(() => {
+      const trigger = modelPickerAnchor.value?.querySelector('.picker-trigger') as HTMLElement
+      if (trigger) {
+        const rect = trigger.getBoundingClientRect()
+        const dropdownH = 320
+        const spaceBelow = window.innerHeight - rect.bottom - 8
+        const top = spaceBelow >= dropdownH
+          ? rect.bottom + 4
+          : Math.max(8, rect.top - dropdownH - 4)
+        modelPickerStyle.value = {
+          position: 'fixed',
+          left: `${rect.left}px`,
+          top: `${top}px`,
+          width: `${Math.max(rect.width, 280)}px`,
+        }
+      }
+      modelSearchRef.value?.focus()
+    })
+  }
+}
+
+function closeModelPicker(): void {
+  showModelPicker.value = false
+  modelSearchQuery.value = ''
+  modelPickerStyle.value = null
+}
+
+function selectModelItem(m: FlatModel | null): void {
+  if (m) {
+    modelId.value = m.id
+  } else {
+    modelId.value = ''
+  }
+  closeModelPicker()
+}
 
 const filteredEntities = computed(() => {
   let list = entityStore.entities
@@ -193,6 +541,10 @@ function onCreate(): void {
   if (!canCreate.value) return
 
   const now = Date.now()
+  const isSlot = providerSource.value.startsWith('slot:')
+  const slotId = isSlot ? providerSource.value.slice(5) : undefined
+
+  const finalTools = toolSource.value === 'derived' ? [...derivedToolNames.value] : enabledTools.value
 
   if (isEdit.value && props.agent) {
     const updated: ChatAgent = {
@@ -202,8 +554,18 @@ function onCreate(): void {
       color: selectedColor.value,
       systemPrompt: systemPrompt.value.trim(),
       modelId: modelId.value || undefined,
+      providerConfig: undefined,
+      providerSlotId: slotId || undefined,
       sourceType: sourceType.value,
       sourceEntityId: sourceType.value === 'entity' ? selectedEntityId.value : undefined,
+      enabledTools: finalTools,
+      enabledSkills: enabledSkills.value,
+      baseLayerMode: baseLayerMode.value,
+      customBaseLayer: baseLayerMode.value === 'custom' ? customBaseLayer.value : undefined,
+      toolSource: toolSource.value,
+      fontFamily: fontFamily.value || undefined,
+      fontWeight: fontFamily.value ? fontWeight.value : undefined,
+      fontStyle: fontFamily.value ? fontStyle.value : undefined,
       updatedAt: now,
     }
     emit('updated', updated)
@@ -216,10 +578,18 @@ function onCreate(): void {
       role: agentRole.value.trim(),
       systemPrompt: systemPrompt.value.trim(),
       modelId: modelId.value || undefined,
+      providerConfig: undefined,
+      providerSlotId: slotId || undefined,
       sourceType: sourceType.value,
       sourceEntityId: sourceType.value === 'entity' ? selectedEntityId.value : undefined,
-      enabledTools: [],
-      enabledSkills: [],
+      enabledTools: finalTools,
+      enabledSkills: enabledSkills.value,
+      baseLayerMode: baseLayerMode.value,
+      customBaseLayer: baseLayerMode.value === 'custom' ? customBaseLayer.value : undefined,
+      toolSource: toolSource.value,
+      fontFamily: fontFamily.value || undefined,
+      fontWeight: fontFamily.value ? fontWeight.value : undefined,
+      fontStyle: fontFamily.value ? fontStyle.value : undefined,
       createdAt: now,
       updatedAt: now,
     }
@@ -229,8 +599,21 @@ function onCreate(): void {
 </script>
 
 <style scoped>
-.dialog-backdrop { position: fixed; inset: 0; z-index: 9998; }
-.create-agent-dialog { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--color-surface-elevated); border: 1px solid var(--color-border); border-radius: 12px; padding: 20px; min-width: 380px; max-height: 80vh; overflow-y: auto; z-index: 9999; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+.dialog-backdrop { position: fixed; inset: 0; z-index: 10000; }
+
+/* wrapper：flex 容器，居中定位，面板展开时左推动画 */
+.dialog-wrapper {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 10001;
+}
+
+.create-agent-dialog { width: 420px; max-height: 80vh; overflow-y: auto; background: var(--color-surface-elevated); border: 1px solid var(--color-border); border-radius: 12px; padding: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); flex-shrink: 0; }
 .dialog-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; text-align: center; }
 
 .avatar-section { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
@@ -270,12 +653,157 @@ function onCreate(): void {
 .prompt-input { width: 100%; border: 1px solid var(--color-border); border-radius: 8px; padding: 8px; font-size: 12px; resize: vertical; outline: none; background: var(--color-surface); min-height: 80px; }
 .prompt-input:focus { border-color: var(--color-primary); }
 
-.model-section { margin-bottom: 14px; }
-.model-select { width: 100%; padding: 6px 10px; border: 1px solid var(--color-border); border-radius: 8px; font-size: 12px; background: var(--color-surface); outline: none; }
+.baselayer-section { margin-bottom: 14px; }
+.baselayer-desc { font-size: 10px; color: var(--color-text-tertiary); margin-bottom: 6px; }
+.baselayer-options { display: flex; gap: 6px; }
+.baselayer-option { flex: 1; padding: 8px 6px; border: 2px solid var(--color-border); border-radius: 8px; cursor: pointer; text-align: center; transition: all 0.15s; }
+.baselayer-option:hover { border-color: var(--color-primary); }
+.baselayer-option.active { border-color: var(--color-primary); background: rgba(108,92,231,0.06); }
+.baselayer-option-title { display: block; font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+.baselayer-option-desc { display: block; font-size: 9px; color: var(--color-text-tertiary); line-height: 1.3; }
+.baselayer-input { width: 100%; border: 1px solid var(--color-border); border-radius: 8px; padding: 8px; font-size: 12px; resize: vertical; outline: none; background: var(--color-surface); min-height: 80px; margin-top: 8px; }
+.baselayer-input:focus { border-color: var(--color-primary); }
 
-.tools-section { margin-bottom: 16px; }
-.tools-placeholder { padding: 8px; border: 1px dashed var(--color-border); border-radius: 8px; font-size: 11px; color: var(--color-text-tertiary); text-align: center; }
+/* 能力配置卡片 */
+.capability-section { margin-bottom: 14px; }
+.capability-card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.capability-card:hover {
+  border-color: var(--color-primary);
+  background: rgba(108,92,231,0.03);
+}
+.capability-card.panel-open {
+  border-color: var(--color-primary);
+  background: rgba(108,92,231,0.06);
+}
+.capability-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.capability-icon { color: var(--color-primary); flex-shrink: 0; }
+.capability-title { font-size: 12px; font-weight: 600; flex: 1; }
+.capability-arrow { color: var(--color-text-tertiary); flex-shrink: 0; }
+.capability-summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+}
+.capability-skills { color: var(--color-text); font-weight: 500; }
+.capability-divider { color: var(--color-text-tertiary); }
+.capability-tools { color: var(--color-text-secondary); }
+.capability-manual-badge {
+  font-size: 9px;
+  background: rgba(108,92,231,0.12);
+  color: var(--color-primary);
+  padding: 0px 5px;
+  border-radius: 6px;
+  font-weight: 600;
+  margin-left: 4px;
+}
+.capability-empty { color: var(--color-text-tertiary); font-style: italic; }
+.capability-skill-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.capability-skill-tag {
+  font-size: 9px;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.capability-skill-more {
+  font-size: 9px;
+  color: var(--color-text-tertiary);
+  padding: 1px 4px;
+}
+
+.model-section { margin-bottom: 14px; }
+
+/* 模型选择器 */
+.model-picker { position: relative; }
+.picker-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  cursor: pointer;
+  min-height: 32px;
+  transition: border-color 0.15s;
+}
+.picker-trigger:hover { border-color: var(--color-primary); }
+.picker-icon { width: 16px; height: 16px; flex-shrink: 0; border-radius: 2px; }
+.picker-value { flex: 1; font-size: 12px; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-placeholder { flex: 1; font-size: 12px; color: var(--color-text-tertiary); }
+
+/* 下拉面板 */
+.picker-backdrop { position: fixed; inset: 0; z-index: 10002; }
+.model-picker-dropdown {
+  position: fixed;
+  max-height: 320px;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  z-index: 10003;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.picker-search {
+  margin: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12px;
+  outline: none;
+  flex-shrink: 0;
+}
+.picker-search:focus { border-color: var(--color-primary); }
+.picker-list { flex: 1; overflow-y: auto; padding: 0 4px 4px; }
+.picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.picker-item:hover { background: var(--color-surface); }
+.picker-item.selected { background: color-mix(in srgb, var(--color-primary) 12%, transparent); }
+.picker-item-default { border-bottom: 1px solid var(--color-border); margin-bottom: 2px; }
+.picker-item-icon { width: 16px; height: 16px; flex-shrink: 0; border-radius: 2px; }
+.picker-item-name { font-size: 12px; color: var(--color-text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-item-id { font-size: 9px; color: var(--color-text-tertiary); font-family: monospace; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-empty { padding: 16px; text-align: center; font-size: 12px; color: var(--color-text-tertiary); }
+
+.provider-section { margin-bottom: 14px; }
+.provider-select { width: 100%; padding: 6px 10px; border: 1px solid var(--color-border); border-radius: 8px; font-size: 12px; background: var(--color-surface); outline: none; margin-bottom: 6px; }
+.provider-hint { font-size: 10px; color: var(--color-text-tertiary); margin-top: 2px; }
+
+.font-section { margin-bottom: 14px; }
+.font-variant-row { margin-top: 6px; }
+.provider-select--sm { max-width: 160px; font-size: 12px; padding: 4px 6px; }
 
 .create-btn { width: 100%; padding: 10px; border: none; background: var(--color-primary); color: white; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600; }
 .create-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* 能力面板滑入动画 */
+.panel-slide-enter-active { transition: opacity 0.25s ease, transform 0.25s ease; }
+.panel-slide-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; }
+.panel-slide-enter-from { opacity: 0; transform: translateX(20px); }
+.panel-slide-leave-to { opacity: 0; transform: translateX(30px); }
 </style>

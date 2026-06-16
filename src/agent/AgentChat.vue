@@ -6,7 +6,7 @@
     @mousedown="onPanelMouseDown"
   >
     <div class="chat-header" @mousedown.left="onDragStart">
-      <span class="header-title" :style="{ fontFamily: fontFamily }" @click.stop="sessionDrawerOpen = !sessionDrawerOpen"><WsIcon name="profile" size="sm" /> AI 助手</span>
+      <span class="header-title" :style="{ fontFamily: agentFontFamily || undefined }" @click.stop="sessionDrawerOpen = !sessionDrawerOpen"><WsIcon name="profile" size="sm" /> AI 助手</span>
       <div class="context-bar" :title="`上下文窗口: ${contextUsage.used.toLocaleString()} / ${contextUsage.total.toLocaleString()} tokens (${Math.round(contextUsage.pct)}%)`">
         <div class="context-bar-fill" :style="{ width: contextUsage.pct + '%', background: profile.accentColor }" :class="{ warn: contextUsage.pct > 70, danger: contextUsage.pct > 90 }"></div>
         <span class="context-bar-text">{{ Math.round(contextUsage.pct) }}%</span>
@@ -36,11 +36,16 @@
         :last-assistant-has-thinking="lastAssistantHasThinking"
         :a2ui-surfaces="a2uiSurfaces"
         :resolve-data-binding="resolveDataBinding"
+        :chat-mode="activeChatMode"
+        :use-deep-layout="false"
         @a2ui-action="onA2UIAction"
         @copy="copyMessage"
         @retry="retryMessage"
         @block-action="onBlockAction"
+        @manuscript-local-action="onManuscriptLocalAction"
       />
+
+      <ManuscriptShelf :messages="messages" />
 
       <div v-if="subAgentList.length > 0" class="sub-agent-section">
         <div class="sub-agent-toggle" role="button" tabindex="0" @click="subAgentExpanded = !subAgentExpanded" @keydown.enter="subAgentExpanded = !subAgentExpanded" @keydown.space.prevent="subAgentExpanded = !subAgentExpanded">
@@ -137,6 +142,8 @@
     @pty-input="writePtyInput"
     @pty-resize="resizePty"
   />
+
+  <FontInstallConfirm ref="fontInstallConfirm" />
 </template>
 
 <script setup lang="ts">
@@ -160,10 +167,16 @@ import AgentSettingsPanel from './AgentSettingsPanel.vue'
 import AgentSessionDrawer from './AgentSessionDrawer.vue'
 import TerminalPanel from './TerminalPanel.vue'
 import SubAgentPanel from './SubAgentPanel.vue'
+import ManuscriptShelf from './blocks/ManuscriptShelf.vue'
+import FontInstallConfirm from '../ui/font/FontInstallConfirm.vue'
+import { setFontInstallConfirm } from './setFontTool'
 import { listSessions, deleteSession } from '@agent/index'
 import { useOrchestrator } from './composables/useOrchestrator'
 import { usePersonaFont } from '../space/composables/usePersonaFont'
+import { useFontStore } from '../stores/fontStore'
 const { fontFamily, profile } = usePersonaFont()
+const fontStore = useFontStore()
+const agentFontFamily = computed(() => fontStore.prefs.agent.family || fontFamily.value || '')
 
 const {
   messages, isStreaming, sendMessage, steer, sendBlockAction, abort, hide, newSession,
@@ -184,6 +197,12 @@ const subAgentExpanded = ref(true)
 
 const messageListRef = ref<InstanceType<typeof AgentMessageList>>()
 const inputBarRef = ref<InstanceType<typeof AgentInputBar>>()
+const fontInstallConfirm = ref<InstanceType<typeof FontInstallConfirm> | null>(null)
+
+setFontInstallConfirm(async (family: string) => {
+  if (!fontInstallConfirm.value) return false
+  return fontInstallConfirm.value.show(family)
+})
 
 const isMinimized = ref(false)
 const sessionDrawerOpen = ref(false)
@@ -290,9 +309,7 @@ const lastAssistantHasThinking = computed(() => {
   return false
 })
 
-const filteredCommands = computed(() => {
-  return commands.value
-})
+const filteredCommands = computed(() => [...commands.value])
 
 const calculatedCost = computed(() => {
   const breakdown = calculateCost(
@@ -327,6 +344,64 @@ function onBlockAction(event: { blockId: string; action: string; data?: Record<s
     : `[Block Action] block=${event.blockId} action=${event.action}`
   const displayText = formatBlockActionDisplay(event)
   sendBlockAction(steerText, displayText)
+}
+
+/** 文境本地操作：仅持久化到 block 数据，不发送到 Agent */
+function onManuscriptLocalAction(event: { blockId: string; action: string; data?: Record<string, unknown> }): void {
+  if (event.action === 'resize' && event.data) {
+    persistManuscriptResize(event.blockId, event.data)
+  } else if (event.action === 'layout_change' && event.data) {
+    persistManuscriptLayout(event.blockId, event.data)
+  } else if (event.action === 'shadow_cycle' && event.data) {
+    persistManuscriptShadow(event.blockId, event.data)
+  } else if (event.action === 'animation_cycle' && event.data) {
+    persistManuscriptAnimation(event.blockId, event.data)
+  }
+}
+
+function persistManuscriptResize(blockId: string, data: Record<string, unknown>): void {
+  for (const msg of messages.value) {
+    if (!msg.blocks) continue
+    const block = msg.blocks.find(b => b.id === blockId && b.type === 'manuscript')
+    if (block && block.type === 'manuscript') {
+      if (typeof data.width === 'number') block.width = data.width
+      if (typeof data.height === 'number') block.height = data.height
+      break
+    }
+  }
+}
+
+function persistManuscriptLayout(blockId: string, data: Record<string, unknown>): void {
+  for (const msg of messages.value) {
+    if (!msg.blocks) continue
+    const block = msg.blocks.find(b => b.id === blockId && b.type === 'manuscript')
+    if (block && block.type === 'manuscript') {
+      if (typeof data.layout === 'string') block.layout = data.layout as 'horizontal' | 'vertical'
+      break
+    }
+  }
+}
+
+function persistManuscriptShadow(blockId: string, data: Record<string, unknown>): void {
+  for (const msg of messages.value) {
+    if (!msg.blocks) continue
+    const block = msg.blocks.find(b => b.id === blockId && b.type === 'manuscript')
+    if (block && block.type === 'manuscript') {
+      if (typeof data.shadow === 'string') block.shadow = data.shadow as 'sunlight' | 'soft' | 'none'
+      break
+    }
+  }
+}
+
+function persistManuscriptAnimation(blockId: string, data: Record<string, unknown>): void {
+  for (const msg of messages.value) {
+    if (!msg.blocks) continue
+    const block = msg.blocks.find(b => b.id === blockId && b.type === 'manuscript')
+    if (block && block.type === 'manuscript') {
+      if (typeof data.animation === 'string') block.animation = data.animation as 'ink-drop' | 'brush-stroke' | 'fade-in' | 'float-up'
+      break
+    }
+  }
 }
 
 function formatBlockActionDisplay(event: { blockId: string; action: string; data?: Record<string, unknown> }): string {
@@ -442,6 +517,7 @@ function onMaxTokensChange(val: number) {
 function onPersonaChange(val: string) { personaPreset.value = val; saveAgentSettings() }
 
 async function onModelChange(provider: string, modelId: string): Promise<void> {
+  const oldModelId = currentModelId.value
   currentProvider.value = provider
   currentModelId.value = modelId
   settingsStore.aiCloudProvider = provider as any
@@ -450,14 +526,26 @@ async function onModelChange(provider: string, modelId: string): Promise<void> {
     settingsStore.aiProviderMode = 'cloud'
   }
   const info = getModelInfo(modelId)
+  const prevInfo = getModelInfo(oldModelId)
   const isCustom = ['openai-compatible', 'anthropic-compatible'].includes(provider)
   let contextWindow = isCustom ? 1048576 : 128000
   let maxOut = isCustom ? 65536 : 8192
   if (info) {
     contextWindow = info.contextLength
     maxOut = info.maxOutputTokens
-    contextLength.value = Math.min(contextLength.value, info.contextLength)
-    maxTokens.value = Math.min(maxTokens.value, info.maxOutputTokens)
+    // 如果当前 contextLength 等于旧模型上限（用户未手动调低），则跟随新模型上限
+    const oldMax = prevInfo?.contextLength || 128000
+    if (contextLength.value >= oldMax) {
+      contextLength.value = info.contextLength
+    } else {
+      contextLength.value = Math.min(contextLength.value, info.contextLength)
+    }
+    const oldMaxOut = prevInfo?.maxOutputTokens || 8192
+    if (maxTokens.value >= oldMaxOut) {
+      maxTokens.value = info.maxOutputTokens
+    } else {
+      maxTokens.value = Math.min(maxTokens.value, info.maxOutputTokens)
+    }
     const maxTemp = ['anthropic', 'zhipu', 'minimax'].includes(provider) ? 100 : 200
     temperature.value = Math.min(temperature.value, maxTemp)
     const validLevels = getThinkingLevels(modelId)
@@ -498,7 +586,7 @@ async function onSearchEngineChange(engine: string): Promise<void> {
   if (searchApiKey.value) {
     await storeApiKey('search_' + oldEngine, searchApiKey.value)
   } else {
-    removeApiKey('search_' + oldEngine)
+    await removeApiKey('search_' + oldEngine)
   }
 
   searchEngine.value = engine
@@ -585,7 +673,7 @@ async function saveSearchConfig(): Promise<void> {
   if (searchApiKey.value) {
     await storeApiKey('search_' + searchEngine.value, searchApiKey.value)
   } else {
-    removeApiKey('search_' + searchEngine.value)
+    await removeApiKey('search_' + searchEngine.value)
   }
   await refreshSearchConfig()
 }
@@ -719,12 +807,29 @@ async function onDrawerDelete(sessionId: string): Promise<void> {
   try {
     const isCurrent = sessionId === currentSessionId.value
     await deleteSession(sessionId)
+    // 级联删除：移除所有从该会话复制的文境副本
+    cascadeDeleteManuscriptClones(sessionId)
     await loadDrawerSessions()
     if (isCurrent) {
       await newSession()
       await loadDrawerSessions()
     }
   } catch {}
+}
+
+/** 级联删除：源会话删除时，移除当前会话中从该会话复制的文境副本 */
+function cascadeDeleteManuscriptClone(sourceSessionId: string): void {
+  for (const msg of messages.value) {
+    if (!msg.blocks) continue
+    const hadClone = msg.blocks.some(b => b.type === 'manuscript' && (b as any).sourceSessionId === sourceSessionId)
+    if (hadClone) {
+      msg.blocks = msg.blocks.filter(b => !(b.type === 'manuscript' && (b as any).sourceSessionId === sourceSessionId))
+    }
+  }
+}
+
+function cascadeDeleteManuscriptClones(sourceSessionId: string): void {
+  cascadeDeleteManuscriptClone(sourceSessionId)
 }
 
 async function onDrawerNewSession(): Promise<void> {
@@ -826,12 +931,12 @@ onUnmounted(() => {
   z-index: 9998;
   display: flex;
   flex-direction: column;
-  border-radius: var(--agent-radius, 14px);
+  border-radius: var(--agent-radius);
   background: transparent;
   border: none;
   box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 2px 12px rgba(0,0,0,0.2);
   overflow: clip;
-  transition: box-shadow var(--agent-transition, 0.2s);
+  transition: box-shadow var(--agent-transition);
   pointer-events: auto;
 }
 
@@ -846,9 +951,9 @@ onUnmounted(() => {
   padding: 8px 12px;
   cursor: grab;
   user-select: none;
-  border-bottom: 1px solid var(--agent-border, rgba(58, 58, 106, 0.3));
-  background: var(--agent-bg, rgba(26, 26, 46, 0.75));
-  backdrop-filter: blur(var(--agent-blur, 16px));
+  border-bottom: 1px solid var(--agent-border);
+  background: var(--agent-bg);
+  backdrop-filter: blur(var(--agent-blur));
   flex-shrink: 0;
 }
 
@@ -857,15 +962,15 @@ onUnmounted(() => {
 .header-title {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
-  color: var(--agent-text, #e0e0e0);
-  font-family: var(--agent-font, sans-serif);
+  color: var(--agent-text);
+  font-family: var(--agent-font);
   cursor: pointer;
   user-select: none;
   transition: color 0.15s;
 }
 
 .header-title:hover {
-  color: var(--agent-primary, #6c5ce7);
+  color: var(--agent-primary);
 }
 
 .header-actions {
@@ -880,17 +985,17 @@ onUnmounted(() => {
   font-size: var(--font-size-sm);
   padding: 2px 6px;
   border-radius: 6px;
-  color: var(--agent-text-secondary, #888);
+  color: var(--agent-text-secondary);
   transition: background 0.15s, color 0.15s;
 }
 
 .header-btn:hover {
-  background: var(--agent-hover-bg, rgba(255,255,255,0.06));
-  color: var(--agent-text, #e0e0e0);
+  background: var(--agent-hover-bg);
+  color: var(--agent-text);
 }
 
 .header-btn.active {
-  color: var(--agent-primary, #6c5ce7);
+  color: var(--agent-primary);
 }
 
 .resize-handle {
@@ -906,8 +1011,8 @@ onUnmounted(() => {
   position: absolute;
   right: 3px; bottom: 3px;
   width: 8px; height: 8px;
-  border-right: 2px solid var(--agent-text-secondary, #888);
-  border-bottom: 2px solid var(--agent-text-secondary, #888);
+  border-right: 2px solid var(--agent-text-secondary);
+  border-bottom: 2px solid var(--agent-text-secondary);
 }
 
 .minimized .chat-header { border-bottom: none }
@@ -916,7 +1021,7 @@ onUnmounted(() => {
   flex: 1;
   max-width: 120px;
   height: 4px;
-  background: var(--agent-bg-tertiary, rgba(255,255,255,0.08));
+  background: var(--agent-bg-tertiary);
   border-radius: 2px;
   overflow: hidden;
   position: relative;
@@ -926,7 +1031,7 @@ onUnmounted(() => {
 .context-bar-fill {
   height: 100%;
   border-radius: 2px;
-  background: var(--agent-primary, #6c5ce7);
+  background: var(--agent-primary);
   transition: width 0.3s ease, background 0.3s ease;
 }
 .context-bar-fill.warn {
@@ -940,14 +1045,14 @@ onUnmounted(() => {
   top: -14px;
   right: 0;
   font-size: var(--text-micro-font-size);
-  color: var(--agent-text-tertiary, #888);
+  color: var(--agent-text-tertiary);
   line-height: 1;
 }
 
 .sub-agent-section {
   flex-shrink: 0;
-  border-top: 1px solid var(--agent-border, rgba(58, 58, 106, 0.3));
-  background: var(--agent-bg, rgba(26, 26, 46, 0.75));
+  border-top: 1px solid var(--agent-border);
+  background: var(--agent-bg);
 }
 
 .sub-agent-toggle {
@@ -958,13 +1063,13 @@ onUnmounted(() => {
   cursor: pointer;
   user-select: none;
   font-size: var(--font-size-sm);
-  color: var(--agent-text-secondary, #888);
+  color: var(--agent-text-secondary);
   transition: color 0.15s, background 0.15s;
 }
 
 .sub-agent-toggle:hover {
-  color: var(--agent-text, #e0e0e0);
-  background: var(--agent-hover-bg, rgba(255,255,255,0.04));
+  color: var(--agent-text);
+  background: var(--agent-hover-bg);
 }
 
 .toggle-icon {
@@ -974,22 +1079,22 @@ onUnmounted(() => {
 
 .toggle-label {
   font-weight: var(--font-weight-medium);
-  font-family: var(--agent-font, sans-serif);
+  font-family: var(--agent-font);
 }
 
 .active-badge {
   font-size: var(--font-size-xs);
   padding: 1px 6px;
   border-radius: 4px;
-  background: rgba(99, 102, 241, 0.15);
-  color: #6366f1;
+  background: color-mix(in srgb, var(--agent-primary) 15%, transparent);
+  color: var(--agent-primary);
   animation: ws-pulse 1.5s infinite;
 }
 
 .sub-agent-panels {
   max-height: 300px;
   overflow-y: auto;
-  border-top: 1px solid var(--agent-border, rgba(58, 58, 106, 0.2));
+  border-top: 1px solid var(--agent-border);
 }
 
 

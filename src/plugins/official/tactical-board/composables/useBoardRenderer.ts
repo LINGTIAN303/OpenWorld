@@ -6,11 +6,20 @@ import {
   hitTestCell,
   type BoardCamera,
   type BoardRenderData,
+  type AnimOverride,
+  type FloatingNumber,
 } from './boardDraw'
+
+export interface AnimationProvider {
+  tick: (dt: number, cellSize: number) => boolean
+  getOverride: (unitId: string) => AnimOverride
+  floatingNumbers: { value: { x: number; y: number; text: string; alpha: number }[] }
+}
 
 export function useBoardRenderer(
   containerRef: Ref<HTMLElement | null>,
   renderData: Ref<BoardRenderData>,
+  animProvider?: AnimationProvider,
 ) {
   const canvas = shallowRef<HTMLCanvasElement | null>(null)
   const ctx = shallowRef<CanvasRenderingContext2D | null>(null)
@@ -22,6 +31,7 @@ export function useBoardRenderer(
   let _dirty = true
   let _forceRenderCount = 0
   let resizeObs: ResizeObserver | null = null
+  let lastTime = 0
 
   function init(): void {
     if (!containerRef.value) return
@@ -91,16 +101,26 @@ export function useBoardRenderer(
   function startRenderLoop(): void {
     isRunning = true
     _forceRenderCount = 3
-    function frame() {
+    lastTime = performance.now()
+    function frame(now: number) {
       if (!isRunning) return
-      if (_dirty || _forceRenderCount > 0) {
+      const dt = now - lastTime
+      lastTime = now
+
+      // Tick animations
+      let animActive = false
+      if (animProvider) {
+        animActive = animProvider.tick(dt, cellSize.value)
+      }
+
+      if (_dirty || _forceRenderCount > 0 || animActive) {
         render()
         _dirty = false
         if (_forceRenderCount > 0) _forceRenderCount--
       }
       animFrame = requestAnimationFrame(frame)
     }
-    frame()
+    frame(lastTime)
   }
 
   function render(): void {
@@ -111,7 +131,15 @@ export function useBoardRenderer(
     const h = rect.height
 
     ctx.value.setTransform(dpr, 0, 0, dpr, 0, 0)
-    drawBoard(ctx.value, w, h, renderData.value, camera.value, cellSize.value)
+
+    const getAnim = animProvider
+      ? (unitId: string) => animProvider.getOverride(unitId)
+      : undefined
+    const floats = animProvider
+      ? animProvider.floatingNumbers.value as FloatingNumber[]
+      : undefined
+
+    drawBoard(ctx.value, w, h, renderData.value, camera.value, cellSize.value, getAnim, floats)
   }
 
   function getCanvasElement(): HTMLCanvasElement | null {

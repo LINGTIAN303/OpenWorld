@@ -1,10 +1,13 @@
-import type { EntityTypeSchema } from '../types'
-import type { RelationTypeSchema } from '../types'
+import type { EntityTypeSchema, FieldSchema } from '../types'
+import type { RelationTypeSchema, RelationTypeSchemaV2 } from '../types'
 import type { PluginView } from '../types'
+import type { TraitRef, FacetDefinition } from '../types/trait'
 import { entitySchemaRegistry } from './EntitySchema'
 import { relationSchemaRegistry } from './RelationSchema'
 import { fieldRegistry } from './FieldRegistry'
 import { storage } from './StorageBackend'
+import { traitRegistry, facetRegistry, entitySchemaRegistryV2, compileEntitySchema } from './TraitRuntime'
+import { relationshipRegistry } from './RelationshipRegistry'
 
 export interface NodeTypeDefinition {
   type: string
@@ -51,13 +54,80 @@ class PluginAPIImpl {
     }
   }
 
+  /** @deprecated 使用 registerEntityV2 替代。旧版调用会自动包装为 V2 注册。 */
   registerEntityType(schema: EntityTypeSchema): void {
-    entitySchemaRegistry.register({ ...schema, pluginId: this.currentPluginId })
-    fieldRegistry.registerBuiltin(schema.type, schema.fields || [])
+    // 自动包装为 V2：将旧版 fields 全部作为 ownFields
+    this.registerEntityV2({
+      type: schema.type,
+      label: schema.label,
+      icon: schema.icon,
+      traits: [],
+      ownFields: schema.fields || [],
+    })
   }
 
+  /**
+   * V2: 基于 Trait 的实体注册。
+   * 编译 EntitySchemaV2，同时兼容旧版 entitySchemaRegistry 和 fieldRegistry。
+   */
+  registerEntityV2(params: {
+    type: string
+    label: string
+    icon?: string
+    traits: TraitRef[]
+    ownFields: FieldSchema[]
+    facets?: string[]
+  }): void {
+    const schemaV2 = compileEntitySchema({
+      ...params,
+      pluginId: this.currentPluginId,
+    })
+    entitySchemaRegistryV2.register(schemaV2)
+
+    // 兼容旧版：同时注册到旧版 entitySchemaRegistry 和 fieldRegistry
+    entitySchemaRegistry.register({
+      type: schemaV2.type,
+      label: schemaV2.label,
+      icon: schemaV2.icon,
+      fields: schemaV2._compiledFields,
+      pluginId: this.currentPluginId,
+    })
+    fieldRegistry.registerBuiltin(schemaV2.type, schemaV2._compiledFields)
+  }
+
+  /**
+   * 注册 Facet 定义。
+   */
+  registerFacet(facet: FacetDefinition): void {
+    facetRegistry.register(facet)
+  }
+
+  /** @deprecated 使用 registerRelationV2 替代。关系定义已统一到全局 relations/index.ts。 */
   registerRelationType(schema: RelationTypeSchema): void {
     relationSchemaRegistry.register({ ...schema, pluginId: this.currentPluginId })
+  }
+
+  /**
+   * V2: 注册关系到全局 RelationshipRegistry。
+   * 同时兼容旧版 relationSchemaRegistry。
+   * 如果关系已在全局定义文件中注册，此方法会跳过重复注册。
+   */
+  registerRelationV2(schema: RelationTypeSchemaV2): void {
+    // 如果全局已注册，跳过
+    if (relationshipRegistry.has(schema.type)) return
+    relationshipRegistry.register({ ...schema, pluginId: this.currentPluginId })
+
+    // 兼容旧版：同时注册到 relationSchemaRegistry
+    relationSchemaRegistry.register({
+      type: schema.type,
+      label: schema.label,
+      sourceTypes: schema.sourceTypes,
+      targetTypes: schema.targetTypes,
+      directed: !schema.symmetric,
+      inverseType: schema.inverseType,
+      properties: schema.properties,
+      pluginId: this.currentPluginId,
+    })
   }
 
   registerView(view: PluginView): void {
@@ -78,6 +148,11 @@ class PluginAPIImpl {
       return true
     }
     return false
+  }
+
+  /** 清空所有已注册的视图（项目切换时使用） */
+  clearViews(): void {
+    this._views.length = 0
   }
 
   unregisterHooksByPlugin(pluginId: string): number {

@@ -2,8 +2,9 @@
  * Agent 调度器工具集
  *
  * 通过 window CustomEvent 机制调度子 Agent 执行任务。
- * 支持 6 种子 Agent 类型：terminal-worker、review-worker、research-worker、
- * test-worker、doc-worker、git-worker。
+ * 支持 9 种子 Agent 类型：
+ *   开发型：terminal-worker、review-worker、research-worker、test-worker、doc-worker、git-worker
+ *   创作型：creation-worker、consistency-worker、batch-creation-worker
  *
  * 调度流程：
  * 1. list_sub_agent_types: 列出可用子 Agent 类型
@@ -25,6 +26,9 @@ const SUB_AGENT_TYPE_DESCRIPTIONS: Record<AgentType, string> = {
   'test-worker': '测试 Agent — 生成测试用例、运行测试、分析覆盖率。适合测试相关任务。',
   'doc-worker': '文档 Agent — 生成 API 文档、README、变更日志。适合文档生成任务。',
   'git-worker': 'Git Agent — 版本控制操作、分支管理、提交代码。适合 Git 相关任务。',
+  'creation-worker': '创作 Agent — 执行世界观创作任务，如设计地理、构建文化、生成角色等。拥有 worldbuilding 和 content-craft 技能。',
+  'consistency-worker': '校验 Agent — 执行世界观一致性校验，检查实体间的逻辑矛盾、属性合理性、关系完整性。拥有 worldbuilding 技能。',
+  'batch-creation-worker': '批量创作 Agent — 批量创建实体，如角色、物品、区域等。拥有 content-craft 技能。',
 }
 
 /** list_sub_agent_types — 列出所有可用子 Agent 类型及能力描述 */
@@ -61,7 +65,10 @@ const dispatchSubAgentTool: ToolDefinition = {
     type: {
       type: 'string',
       description: '子 Agent 类型',
-      enum: ['terminal-worker', 'review-worker', 'research-worker', 'test-worker', 'doc-worker', 'git-worker'],
+      enum: [
+        'terminal-worker', 'review-worker', 'research-worker', 'test-worker', 'doc-worker', 'git-worker',
+        'creation-worker', 'consistency-worker', 'batch-creation-worker',
+      ],
       required: true,
     },
     prompt: {

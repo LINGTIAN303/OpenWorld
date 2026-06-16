@@ -1,194 +1,254 @@
 <template>
   <div class="workflow-view">
-    <div class="workflow-tabs">
-      <div class="workflow-tabs__left">
-        <button
-          v-for="tab in tabs"
-          :key="tab.id"
-          :class="['tab-btn', { active: currentTab === tab.id }]"
-          @click="currentTab = tab.id"
-        >
-          <WsIcon :name="tab.icon" size="xs" /> {{ tab.label }}
-        </button>
-      </div>
-      <div class="workflow-tabs__right">
-        <NewWorkflowDropdown
-          @create-blank="handleCreateBlank"
-          @create-template="handleCreateTemplate"
-          @import="handleImport"
-        />
-        <button
-          class="tab-btn pref-trigger"
-          data-testid="prefs-trigger"
-          @click="prefsOpen = !prefsOpen"
-        >
-          <WsIcon name="settings" size="xs" /> 偏好
-        </button>
-      </div>
-    </div>
+    <!-- 列表视图 -->
+    <PipelineBoard
+      v-if="!selectedPipeline"
+      @select="handleSelect"
+    />
 
-    <Teleport to="body">
-      <div
-        v-if="prefsOpen"
-        class="prefs-overlay"
-        data-testid="prefs-overlay"
-        @click.self="prefsOpen = false"
-      >
-        <div class="prefs-dialog" data-testid="prefs-dialog">
-          <button
-            type="button"
-            class="prefs-close"
-            data-testid="prefs-close"
-            @click="prefsOpen = false"
-          >
-            ×
-          </button>
-          <EditorPreferencesCard @save="prefsOpen = false" />
+    <!-- 详情视图 -->
+    <template v-else>
+      <div class="wv-layout">
+        <div class="wv-main">
+          <PipelineDetail
+            :pipeline="selectedPipeline"
+            :current-step="currentStep"
+            :progress="progress"
+            :execution-log="executionLog"
+            @back="handleBack"
+            @run-agent="handleRunAgent"
+            @confirm-step="confirmReview"
+            @skip-step="skipStep"
+            @delete="handleDelete"
+            @save-template="showSaveTemplate = true"
+            @send-prompt="handleSendPrompt"
+            @remove-step="handleRemoveStep"
+            @update-step="handleUpdateStep"
+            @reorder-steps="handleReorderSteps"
+            @change-status="handleChangeStatus"
+            @add-step="handleAddStep"
+            @add-connection="handleAddConnection"
+            @remove-connection="handleRemoveConnection"
+            @retry-step="handleRetryStep"
+          />
         </div>
+        <aside class="wv-sidebar" v-if="showSidebar">
+          <StepLibrary @add-step="handleAddStep" />
+        </aside>
       </div>
-    </Teleport>
+    </template>
 
-    <div class="workflow-content">
-      <WorkflowList
-        v-if="currentTab === 'list'"
-        :workflows="workflowList"
-        @launch="handleLaunch"
-        @edit="handleEdit"
-        @delete="handleDelete"
-      />
-      <WorkflowEditorView
-        v-else-if="currentTab === 'editor' && currentWorkflowId"
-        :workflow-id="currentWorkflowId"
-        @toast="handleToast"
-      />
-      <div v-else-if="currentTab === 'editor'" class="workflow-empty">
-        <p>请先在「工作流」标签页选择一个工作流进行编辑</p>
-      </div>
-      <WorkflowProgress
-        v-if="currentTab === 'progress'"
-        :runs="runs"
-        :active-run="getActiveRun()"
-        @pause="handlePause"
-        @resume="handleResume"
-        @cancel="handleCancel"
-      />
-    </div>
+    <!-- 保存为模板对话框 -->
+    <SaveAsTemplate
+      v-if="showSaveTemplate && selectedPipeline"
+      :pipeline="selectedPipeline"
+      @close="showSaveTemplate = false"
+      @save="handleSaveTemplate"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import WsIcon from '../../../ui/WsIcon.vue'
-import WorkflowList from './components/WorkflowList.vue'
-import WorkflowEditorView from './components/WorkflowEditorView.vue'
-import WorkflowProgress from './components/WorkflowProgress.vue'
-import NewWorkflowDropdown from './components/NewWorkflowDropdown.vue'
-import EditorPreferencesCard from './components/editor/EditorPreferencesCard.vue'
-import { useWorkflow } from './composables/useWorkflow'
-import { useNewWorkflow } from './composables/useNewWorkflow'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+import PipelineBoard from './views/PipelineBoard.vue'
+import PipelineDetail from './views/PipelineDetail.vue'
+import StepLibrary from './views/StepLibrary.vue'
+import SaveAsTemplate from './components/SaveAsTemplate.vue'
+import { usePipeline } from './composables/usePipeline'
+import { usePipelineExecution } from './composables/usePipelineExecution'
+import { usePipelineTemplates } from './composables/usePipelineTemplates'
+import type { StepLibraryItem, PipelineStep, PipelineStatus, StepConnection } from './types'
 
-const { runs, workflowList, getActiveRun, updateRunStatus, removeWorkflow, addWorkflow } =
-  useWorkflow()
-const { createBlank, createFromTemplate, commit } = useNewWorkflow()
+const {
+  selectedPipeline,
+  selectPipeline,
+  addStep,
+  removeStep,
+  updateStep,
+  reorderSteps,
+  updatePipeline,
+  deletePipeline,
+  addConnection,
+  removeConnection,
+  updateStepStatus,
+} = usePipeline()
 
-const currentTab = ref('list')
-const prefsOpen = ref(false)
-// Phase 4.8：编辑/运行 tab 需要知道当前 workflowId（外层 state）
-const currentWorkflowId = ref<string | null>(null)
+const {
+  currentStep,
+  progress,
+  executionLog,
+  executeStep,
+  confirmReview,
+  skipStep,
+  findNextPendingStep,
+  continueToNextStep,
+} = usePipelineExecution()
 
-const tabs = [
-  { id: 'list', icon: 'outline', label: '工作流' },
-  { id: 'editor', icon: 'edit', label: '编辑器' },
-  { id: 'progress', icon: 'dashboard', label: '进度' },
-]
+const { saveAsTemplate } = usePipelineTemplates()
 
-function handleLaunch(workflowId: string) {
-  currentWorkflowId.value = workflowId
-  currentTab.value = 'progress'
+const showSidebar = ref(true)
+const showSaveTemplate = ref(false)
+
+function handleSelect(id: string) {
+  selectPipeline(id)
 }
 
-function handleEdit(workflowId: string) {
-  currentWorkflowId.value = workflowId
-  currentTab.value = 'editor'
+function handleBack() {
+  selectPipeline(null)
 }
 
-function handleDelete(workflowId: string) {
-  removeWorkflow(workflowId)
-  if (currentWorkflowId.value === workflowId) {
-    currentWorkflowId.value = null
-    currentTab.value = 'list'
-  }
+/** 「交给 Agent 执行」按钮 — 通过 sub-agent 通道派发，带 pipelineContext 实现自动状态回传 */
+function handleRunAgent() {
+  const pipeline = selectedPipeline.value
+  if (!pipeline) return
+
+  const nextIdx = findNextPendingStep(pipeline)
+  if (nextIdx < 0) return
+
+  const step = pipeline.steps[nextIdx]
+
+  // 先在前端日志中记录
+  executeStep(step.id)
+
+  // 更新 Pipeline 状态为 running，设置 currentStepId
+  updatePipeline(pipeline.id, { status: 'running', currentStepId: step.id })
+
+  // 通过 sub-agent 派发，携带 pipelineContext，完成后 autoUpdatePipelineStep 自动回写
+  window.dispatchEvent(new CustomEvent('worldsmith:dispatch-sub-agent', {
+    detail: {
+      taskId: `pipeline-${pipeline.id}-${step.id}-${Date.now()}`,
+      type: 'creation',
+      prompt: `/skill:creation-orchestrator 执行创作计划「${pipeline.name}」的步骤「${step.title}」。\n\n步骤类型：${step.type}\n步骤配置：${JSON.stringify(step.config)}\n\n请按照步骤配置完成创作任务。`,
+      skillIds: (step.config as any).skillIds ?? [],
+      timeout: 120000,
+      pipelineContext: {
+        pipelineId: pipeline.id,
+        stepId: step.id,
+      },
+    },
+  }))
 }
 
-function handleCreateBlank(name: string) {
-  const def = createBlank(name)
-  commit(def)
-  // commit 已派发 worldsmith:workflow-list → useWorkflow 已 addWorkflow
-  // 直接尝试 addWorkflow(防止 addWorkflow 不可用时 list 不更新)
-  addWorkflow({
-    id: def.id,
-    latestVersion: 1,
-    name: def.name,
-    category: def.category || 'custom',
-    description: def.description ?? null,
-    updatedAt: Date.now(),
+/** 聊天框发送指令 — 已由 PipelineChat 内部处理 plugin-action，这里只做日志 */
+function handleSendPrompt(_prompt: string) {
+  // PipelineChat 已经通过 plugin-action 发送给 Agent
+}
+
+async function handleAddStep(item: StepLibraryItem) {
+  const pipeline = selectedPipeline.value
+  if (!pipeline) return
+  await addStep(pipeline.id, {
+    type: item.type,
+    title: item.label,
+    config: { ...item.defaultConfig },
   })
-  // 切到编辑器
-  currentWorkflowId.value = def.id
-  currentTab.value = 'editor'
 }
 
-function handleCreateTemplate(detail: { templateId: string; name: string }) {
-  const def = createFromTemplate(detail.templateId, { name: detail.name })
-  commit(def)
-  addWorkflow({
-    id: def.id,
-    latestVersion: 1,
-    name: def.name,
-    category: 'template',
-    description: null,
-    updatedAt: Date.now(),
-  })
-  currentWorkflowId.value = def.id
-  currentTab.value = 'editor'
+async function handleRemoveStep(stepId: string) {
+  const pipeline = selectedPipeline.value
+  if (!pipeline) return
+  await removeStep(pipeline.id, stepId)
 }
 
-function handleImport() {
-  // 占位:实际场景应弹出文件选择 dialog → 解析 JSON → commit
-  // P2 范围内仅占位,P3 可接真实文件选择
-  handleToast('导入 JSON:该功能将在 P3 实装文件选择', 'info')
+async function handleUpdateStep(stepId: string, changes: Partial<Pick<PipelineStep, 'title' | 'config'>>) {
+  const pipeline = selectedPipeline.value
+  if (!pipeline) return
+  await updateStep(pipeline.id, stepId, changes)
 }
 
-function handleToast(message: string, type: 'info' | 'error' | 'success') {
-  // Phase 4.8 简化：仅 console 提示（后续可接全局 toast store）
-  const tag = `[workflow ${type}]`
-  if (type === 'error') console.error(tag, message)
-  else console.log(tag, message)
+async function handleReorderSteps(fromIndex: number, toIndex: number) {
+  const pipeline = selectedPipeline.value
+  if (!pipeline) return
+  // 重排：取出 fromIndex 的步骤，插入到 toIndex 位置
+  const ids = pipeline.steps.map(s => s.id)
+  const [moved] = ids.splice(fromIndex, 1)
+  ids.splice(toIndex, 0, moved)
+  await reorderSteps(pipeline.id, ids)
 }
 
-function handlePause(runId: string) {
-  const event = new CustomEvent('worldsmith:workflow-control', {
-    detail: { action: 'pause', runId },
-  })
-  window.dispatchEvent(event)
-  updateRunStatus(runId, { status: 'paused' })
+async function handleChangeStatus(status: PipelineStatus) {
+  const pipeline = selectedPipeline.value
+  if (!pipeline) return
+  await updatePipeline(pipeline.id, { status })
 }
 
-function handleResume(runId: string) {
-  const event = new CustomEvent('worldsmith:workflow-control', {
-    detail: { action: 'resume', runId },
-  })
-  window.dispatchEvent(event)
-  updateRunStatus(runId, { status: 'running' })
+async function handleDelete() {
+  const pipeline = selectedPipeline.value
+  if (!pipeline) return
+  await deletePipeline(pipeline.id)
+  selectPipeline(null)
 }
 
-function handleCancel(runId: string) {
-  const event = new CustomEvent('worldsmith:workflow-control', {
-    detail: { action: 'cancel', runId },
-  })
-  window.dispatchEvent(event)
-  updateRunStatus(runId, { status: 'cancelled' })
+async function handleAddConnection(connection: StepConnection) {
+  const pipeline = selectedPipeline.value
+  if (!pipeline) return
+  await addConnection(pipeline.id, connection)
 }
+
+async function handleRemoveConnection(from: string, to: string) {
+  const pipeline = selectedPipeline.value
+  if (!pipeline) return
+  await removeConnection(pipeline.id, from, to)
+}
+
+/** 重试失败步骤：重置为 pending，然后通过 sub-agent 重新执行 */
+async function handleRetryStep(stepId: string) {
+  const pipeline = selectedPipeline.value
+  if (!pipeline) return
+
+  const step = pipeline.steps.find(s => s.id === stepId)
+  if (!step || step.status !== 'failed') return
+
+  // 先重置步骤状态为 pending
+  await updateStepStatus(pipeline.id, stepId, 'pending', null)
+
+  // 更新 Pipeline 状态为 running
+  await updatePipeline(pipeline.id, { status: 'running', currentStepId: stepId })
+
+  // 等待状态更新完成后再派发子 Agent
+  const stepConfig = step.config as any
+  window.dispatchEvent(new CustomEvent('worldsmith:dispatch-sub-agent', {
+    detail: {
+      taskId: `pipeline-${pipeline.id}-retry-${stepId}-${Date.now()}`,
+      type: 'creation',
+      prompt: `/skill:creation-orchestrator 重新执行创作计划「${pipeline.name}」的步骤「${step.title}」。\n\n步骤类型：${step.type}\n步骤配置：${JSON.stringify(step.config)}\n\n请按照步骤配置完成创作任务。`,
+      skillIds: stepConfig.skillIds ?? [],
+      timeout: 120000,
+      pipelineContext: {
+        pipelineId: pipeline.id,
+        stepId,
+      },
+    },
+  }))
+
+  executeStep(stepId)
+}
+
+function handleSaveTemplate(params: {
+  name: string
+  description?: string
+  icon?: string
+  tags?: string[]
+  steps: any[]
+  connections: any[]
+}) {
+  saveAsTemplate(params as any)
+  showSaveTemplate.value = false
+}
+
+// ─── 监听 Pipeline 步骤完成事件，自动继续执行 ────────────────────────
+function onPipelineStepCompleted(e: Event) {
+  const { pipelineId, stepId } = (e as CustomEvent).detail
+  continueToNextStep(pipelineId, stepId)
+}
+
+onMounted(() => {
+  window.addEventListener('worldsmith:pipeline-step-completed', onPipelineStepCompleted as EventListener)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('worldsmith:pipeline-step-completed', onPipelineStepCompleted as EventListener)
+})
 </script>
 
 <style scoped>
@@ -197,89 +257,21 @@ function handleCancel(runId: string) {
   display: flex;
   flex-direction: column;
 }
-.workflow-tabs {
+
+.wv-layout {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--color-border-default);
-}
-.workflow-tabs__left {
-  display: flex;
-  gap: var(--space-1);
-}
-.workflow-tabs__right {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-.tab-btn {
-  padding: 6px 14px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm, 6px);
-  background: transparent;
-  cursor: pointer;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  transition: all var(--duration-fast) var(--ease-default);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-.tab-btn:hover {
-  background: var(--color-bg-hover);
-}
-.tab-btn.active {
-  background: var(--color-primary-subtle);
-  color: var(--color-primary);
-  border-color: var(--color-primary);
-}
-.workflow-content {
-  flex: 1;
-  overflow: hidden;
-}
-.workflow-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   height: 100%;
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-sm);
 }
-.prefs-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--color-overlay-strong);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9000;
-  padding: 24px;
-  box-sizing: border-box;
+
+.wv-main {
+  flex: 1;
+  overflow: auto;
 }
-.prefs-dialog {
-  position: relative;
-  max-width: 640px;
-  width: 100%;
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border-default);
-  border-radius: 8px;
-  padding: 16px;
-  box-shadow: 0 8px 32px var(--color-shadow-medium);
-}
-.prefs-close {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background: transparent;
-  border: none;
-  font-size: 18px;
-  cursor: pointer;
-  color: var(--color-text-tertiary);
-  padding: 0 4px;
-}
-.prefs-close:hover {
-  color: var(--color-text-primary);
+
+.wv-sidebar {
+  width: 240px;
+  border-left: 1px solid var(--border, #30363d);
+  overflow: auto;
+  flex-shrink: 0;
 }
 </style>

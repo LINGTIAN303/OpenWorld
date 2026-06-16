@@ -10,12 +10,41 @@
       </div>
       <span class="speaker-name">{{ msg.speakerName || 'Agent' }}</span>
     </div>
-    <div class="msg-body" :style="msg.role === 'assistant' ? { borderLeftColor: msg.speakerColor || 'var(--color-border)' } : undefined">
+    <div class="msg-body" :style="msgBodyStyle">
       <div v-if="msg.thinking" class="msg-thinking" :style="{ '--speaker-color': msg.speakerColor || 'var(--color-primary)' }">
         <details>
           <summary>思考过程</summary>
           <div class="thinking-content">{{ msg.thinking }}</div>
         </details>
+      </div>
+      <!-- Layer 2: 动作标签行 -->
+      <div v-if="msg.toolCalls && msg.toolCalls.length > 0" class="msg-tool-calls">
+        <span
+          v-for="tc in msg.toolCalls"
+          :key="tc.id"
+          class="tool-call-tag"
+          :class="[tc.status, getToolImportanceClass(tc.name)]"
+          @click="toggleToolDetail(tc.id)"
+        >
+          <WsIcon v-if="tc.status === 'running'" name="loader" size="xs" class="tc-spin" />
+          <WsIcon v-else-if="tc.status === 'completed'" name="check" size="xs" />
+          <WsIcon v-else name="x" size="xs" />
+          <WsIcon :name="getToolIcon(tc.name)" size="xs" />
+          {{ getToolLabel(tc.name) }}
+        </span>
+      </div>
+      <!-- 工具调用详情（折叠） -->
+      <div v-for="tc in msg.toolCalls" :key="`detail-${tc.id}`">
+        <div v-if="expandedToolId === tc.id" class="tool-detail">
+          <div v-if="tc.args && Object.keys(tc.args).length > 0" class="tool-detail-section">
+            <span class="tool-detail-label">参数</span>
+            <pre class="tool-detail-content">{{ formatToolArgs(tc.args) }}</pre>
+          </div>
+          <div v-if="tc.result" class="tool-detail-section">
+            <span class="tool-detail-label">结果</span>
+            <pre class="tool-detail-content">{{ tc.result }}</pre>
+          </div>
+        </div>
       </div>
       <div class="msg-text" :class="{ 'has-uncertainty': hasUncertainty }">
         <div v-if="msg.role === 'assistant'" class="msg-text-content" :class="{ 'text-collapsed': !textExpanded && isLong }">
@@ -36,11 +65,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { AgentMessage } from '@agent/index'
 import { hasUncertaintyMarkers } from '../HallucinationGuard'
 import { useMessageRender } from '../composables/useMessageRender'
 import { useMessageTime } from '../composables/useMessageTime'
+import { getToolLabel, getToolIcon, getToolImportance } from '../types'
 import WsIcon from '../../../ui/WsIcon.vue'
 
 const props = defineProps<{ msg: AgentMessage }>()
@@ -48,9 +78,28 @@ const props = defineProps<{ msg: AgentMessage }>()
 const { renderContent, isTextLong, textExpanded } = useMessageRender()
 const { formatTime } = useMessageTime()
 
+const expandedToolId = ref<string | null>(null)
+
 const hasUncertainty = computed(() =>
   props.msg.role === 'assistant' ? hasUncertaintyMarkers(props.msg.content ?? '') : false
 )
+
+const msgBodyStyle = computed(() => {
+  if (props.msg.role !== 'assistant') return undefined
+  const style: Record<string, string> = {}
+  if (props.msg.speakerColor) style.borderLeftColor = props.msg.speakerColor
+  else style.borderLeftColor = 'var(--color-border)'
+  if (props.msg.speakerFontFamily) {
+    style.fontFamily = `"${props.msg.speakerFontFamily}", sans-serif`
+    if (props.msg.speakerFontWeight && props.msg.speakerFontWeight !== 400) {
+      style.fontWeight = String(props.msg.speakerFontWeight)
+    }
+    if (props.msg.speakerFontStyle && props.msg.speakerFontStyle !== 'normal') {
+      style.fontStyle = props.msg.speakerFontStyle
+    }
+  }
+  return style
+})
 
 const isLong = computed(() =>
   props.msg.role === 'assistant' ? isTextLong(props.msg.content ?? '') : false
@@ -71,6 +120,25 @@ const renderedUserContent = computed(() => {
     .replace(/>/g, '&gt;')
     .replace(/\n/g, '<br>')
 })
+
+function getToolImportanceClass(toolName: string): string {
+  const importance = getToolImportance(toolName)
+  if (importance === 'world-change') return 'importance-high'
+  if (importance === 'output-gen') return 'importance-medium'
+  return 'importance-low'
+}
+
+function toggleToolDetail(toolCallId: string): void {
+  expandedToolId.value = expandedToolId.value === toolCallId ? null : toolCallId
+}
+
+function formatToolArgs(args: Record<string, unknown>): string {
+  try {
+    return JSON.stringify(args, null, 2)
+  } catch {
+    return String(args)
+  }
+}
 
 function onCopy() {
   const text = props.msg.content ?? ''
@@ -265,6 +333,82 @@ function onCopy() {
 }
 .msg-text :deep(a) { color: var(--color-primary); text-decoration: underline }
 .msg-text :deep(hr) { border: none; border-top: 1px solid var(--color-border); margin: 8px 0 }
+
+/* Layer 2: 动作标签行 */
+.msg-tool-calls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.tool-call-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tool-call-tag:hover { filter: brightness(1.05); }
+
+.tool-call-tag.running { border-color: var(--color-primary); color: var(--color-primary); }
+.tool-call-tag.completed { border-color: rgba(16, 185, 129, 0.3); color: #10b981; }
+.tool-call-tag.failed { border-color: rgba(239, 68, 68, 0.3); color: #ef4444; }
+
+.tool-call-tag.importance-high {
+  background: rgba(108, 92, 231, 0.08);
+  border-color: rgba(108, 92, 231, 0.25);
+  font-weight: 500;
+}
+.tool-call-tag.importance-medium {
+  background: var(--color-surface);
+}
+.tool-call-tag.importance-low {
+  opacity: 0.75;
+}
+
+.tc-spin { animation: spin 1s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* 工具调用详情（折叠） */
+.tool-detail {
+  margin-bottom: 6px;
+  padding: 6px 8px;
+  background: var(--color-surface);
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  font-size: 11px;
+}
+
+.tool-detail-section { margin-bottom: 4px; }
+.tool-detail-section:last-child { margin-bottom: 0; }
+.tool-detail-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+  display: block;
+}
+.tool-detail-content {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  max-height: 120px;
+  overflow-y: auto;
+  font-family: inherit;
+}
 
 .text-expand-btn {
   display: inline-block;

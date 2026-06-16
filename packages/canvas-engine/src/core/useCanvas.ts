@@ -25,7 +25,8 @@ export function useCanvas() {
   }
 
   function getDrawPos(e: MouseEvent) {
-    const canvas = canvasRef.value!
+    const canvas = canvasRef.value
+    if (!canvas) return { x: 0, y: 0 }
     const rect = canvas.getBoundingClientRect()
     return {
       x: (e.clientX - rect.left) * (canvas.width / rect.width),

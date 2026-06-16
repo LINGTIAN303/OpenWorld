@@ -24,7 +24,7 @@ export const moduleBuilderAddComponentTool: ToolDefinition = {
     zoneIndex: { type: 'number', description: '目标区域索引（默认0）', required: false },
     config: { type: 'object', description: '组件配置（如 {entityType: "character", showDescription: true}）', required: false },
   },
-  execute: async (args, ctx) => {
+  execute: async (args, _ctx) => {
     const moduleId = String(args.moduleId)
     const slotId = String(args.slotId)
     const componentType = String(args.componentType)

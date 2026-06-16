@@ -20,7 +20,7 @@ import {
   Skull, LayoutList, ClipboardList, Coffee, Wrench, Loader, Coins,
   Moon, Hand, Type, Flower, Leaf, FlaskConical, Gem, Droplet, Construction, PawPrint,
   HardDrive, GitCompare, Activity, StickyNote, Paperclip, Glasses,
-  ArrowLeftRight,
+  ArrowLeftRight, ListChecks, SkipForward, Square, Bot, VolumeOff, Volume2,
 } from 'lucide-vue-next'
 
 const LUCIDE_MAP: Record<string, Component> = {
@@ -215,6 +215,12 @@ const LUCIDE_MAP: Record<string, Component> = {
   handshake: Handshake,
   landmark: Landmark,
   'arrow-left-right': ArrowLeftRight,
+  'task-plan': ListChecks,
+  'skip-forward': SkipForward,
+  square: Square,
+  bot: Bot,
+  'volume-off': VolumeOff,
+  'volume-on': Volume2,
 }
 
 export function resolveLucideIcon(name: string): Component | null {

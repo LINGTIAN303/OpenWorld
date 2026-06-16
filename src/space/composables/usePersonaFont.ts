@@ -107,19 +107,22 @@ export function usePersonaFont() {
           const cssUrl = `https://app.windfonts.com/api/css?family=${encodeURIComponent(family)}&weight=${encodeURIComponent(weight)}&version=zh-common`
           await injectCssLink(p.id, cssUrl)
         } else if (p.fontSource.type === 'wsfont') {
-          const { unpackWsFont } = await import('@worldsmith/font-kit')
-          const { manifest, files } = await unpackWsFont(p.fontSource.path!)
-          for (const variant of manifest.variants) {
-            const data = files.get(variant.file)
-            if (!data) continue
-            await register({
-              id: `${p.id}-${variant.weight}`,
-              family: manifest.family,
-              weight: variant.weight,
-              style: variant.style,
-              source: { type: 'buffer', buffer: data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) },
-            })
-            await loadFont(`${p.id}-${variant.weight}`)
+          const { restoreFromDB, installFromWsfont } = await import('../../composables/fontInstaller')
+          const { useFontLibraryStore } = await import('../../stores/fontLibraryStore')
+          const libraryStore = useFontLibraryStore()
+          const path = p.fontSource.path ?? ''
+          if (path.startsWith('wsfont:')) {
+            const manifestId = path.slice(7)
+            const entry = libraryStore.getEntry(manifestId)
+            if (entry) {
+              await restoreFromDB(entry)
+            }
+          } else if (path) {
+            const resp = await fetch(path)
+            if (!resp.ok) throw new Error(`字体包加载失败: ${resp.status}`)
+            const buffer = await resp.arrayBuffer()
+            const { entry } = await installFromWsfont(buffer)
+            libraryStore.addEntry(entry)
           }
         } else if (p.fontSource.type === 'system') {
           const { scanSystemFonts, readFontFile } = await import('@worldsmith/font-kit')

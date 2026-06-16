@@ -2,14 +2,14 @@
   <div class="casual-input-bar">
     <div v-if="replyTarget" class="reply-bar">
       <span class="reply-hint">↩ {{ replyTarget.name }}：{{ replyTarget.text }}</span>
-      <button class="reply-cancel" @click="$emit('cancelReply')">✕</button>
+      <button class="reply-cancel" @click="$emit('cancelReply')"><WsIcon name="x" size="xs" /></button>
     </div>
     <div v-if="mentionQuery != null" class="mention-popup">
       <div
         v-for="m in filteredMembers"
         :key="m.id"
         class="mention-item"
-        @click="$emit('selectMention', m)"
+        @click="onSelectMention(m)"
       >
         <div class="mention-avatar" :style="{ background: m.color }">{{ m.name[0] }}</div>
         <span class="mention-name">{{ m.name }}</span>
@@ -56,6 +56,7 @@ const emit = defineEmits<{
   openMention: []
   closeMention: []
   selectMention: [member: GroupMember]
+  updateMentionQuery: [query: string]
 }>()
 
 const text = ref('')
@@ -82,9 +83,56 @@ function send(): void {
 
 function onInput(): void {
   autoResize()
-  if (text.value.endsWith('@')) {
+  const el = inputRef.value
+  if (!el) return
+
+  const cursorPos = el.selectionStart ?? text.value.length
+  const charBeforeCursor = text.value[cursorPos - 1]
+
+  if (charBeforeCursor === '@') {
     emit('openMention')
   }
+
+  // 实时更新 mentionQuery
+  if (props.mentionQuery != null) {
+    const textBeforeCursor = text.value.slice(0, cursorPos)
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@')
+    if (lastAtIndex === -1) {
+      // 光标前没有 @，关闭 mention popup
+      emit('closeMention')
+    } else if (lastAtIndex === cursorPos - 1) {
+      // @ 刚输入，query 为空
+      emit('updateMentionQuery', '')
+    } else {
+      const query = textBeforeCursor.slice(lastAtIndex + 1)
+      // 如果 query 中包含空格，说明光标已移出 @ 区域
+      if (query.includes(' ') || query.includes('\n')) {
+        emit('closeMention')
+      } else {
+        emit('updateMentionQuery', query)
+      }
+    }
+  }
+}
+
+function onSelectMention(member: GroupMember): void {
+  const el = inputRef.value
+  if (el) {
+    const cursorPos = el.selectionStart ?? text.value.length
+    const textBeforeCursor = text.value.slice(0, cursorPos)
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@')
+    if (lastAtIndex !== -1) {
+      const before = text.value.slice(0, lastAtIndex)
+      const after = text.value.slice(cursorPos)
+      const insertText = `@${member.name} `
+      text.value = before + insertText + after
+      nextTick(() => {
+        const newPos = before.length + insertText.length
+        el.setSelectionRange(newPos, newPos)
+      })
+    }
+  }
+  emit('selectMention', member)
 }
 
 function onEsc(): void {
@@ -99,6 +147,12 @@ function autoResize(): void {
   el.style.height = 'auto'
   el.style.height = Math.min(el.scrollHeight, 120) + 'px'
 }
+
+function focusInput(): void {
+  inputRef.value?.focus()
+}
+
+defineExpose({ focusInput })
 </script>
 
 <style scoped>

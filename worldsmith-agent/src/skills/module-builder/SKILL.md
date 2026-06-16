@@ -8,10 +8,10 @@ capabilities:
   internal:
     - entity.list
     - entity.get
-    - module_builder_add_component
-    - module_builder_remove_component
-    - module_builder_update_config
-    - module_builder_suggest_layout
+    - module_builder(action='add_component')
+    - module_builder(action='remove_component')
+    - module_builder(action='update_config')
+    - module_builder(action='suggest_layout')
   cli: []
   mcp: []
 ---

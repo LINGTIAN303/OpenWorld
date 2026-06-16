@@ -9,5 +9,9 @@
     ".": "./src/index.ts",
     "./components": "./src/components/index.ts",
     "./composables": "./src/composables/index.ts"
+  },
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.build.json --noEmit"
   }
 }

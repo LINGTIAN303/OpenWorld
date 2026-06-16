@@ -1,9 +1,9 @@
 <template>
   <div class="session-sidebar">
     <div class="sidebar-header">
-      <h3 class="sidebar-title">群聊</h3>
-      <button class="new-session-btn" @click="onNewSession" title="新建群聊">+</button>
-      <button class="sidebar-close-btn" @click="emit('close')" title="关闭">✕</button>
+      <h3 class="sidebar-title">群聊 <span class="title-count">{{ sessionCount }}</span></h3>
+      <button class="new-session-btn" @click="onNewSession" title="新建群聊"><WsIcon name="plus" size="xs" /></button>
+      <button class="sidebar-close-btn" @click="emit('close')" title="关闭"><WsIcon name="x" size="xs" /></button>
     </div>
 
     <div class="sidebar-search">
@@ -30,7 +30,10 @@
           @click="onSelect(s.id)"
           @contextmenu.prevent="onContextMenu($event, s)"
         >
-          <div class="session-name">{{ s.name }}</div>
+          <div v-if="renamingId === s.id" class="session-name">
+            <input :ref="captureRenameInput" class="session-name-input" :value="s.name" @click.stop @keyup.enter="submitRename(s.id)" @keyup.esc="cancelRename" @blur="submitRename(s.id)" />
+          </div>
+          <div v-else class="session-name" @dblclick="startRename(s.id)">{{ s.name }}</div>
           <div class="session-meta">
             <span class="session-state">{{ stateLabel(s.state) }}</span>
             <span class="session-count">{{ s.participants.length }}人 · {{ s.messages.length }}条</span>
@@ -48,7 +51,10 @@
           @click="onSelect(s.id)"
           @contextmenu.prevent="onContextMenu($event, s)"
         >
-          <div class="session-name">{{ s.name }}</div>
+          <div v-if="renamingId === s.id" class="session-name">
+            <input :ref="captureRenameInput" class="session-name-input" :value="s.name" @click.stop @keyup.enter="submitRename(s.id)" @keyup.esc="cancelRename" @blur="submitRename(s.id)" />
+          </div>
+          <div v-else class="session-name" @dblclick="startRename(s.id)">{{ s.name }}</div>
           <div class="session-meta">
             <span class="session-state">{{ stateLabel(s.state) }}</span>
             <span class="session-count">{{ s.participants.length }}人 · {{ s.messages.length }}条</span>
@@ -64,6 +70,7 @@
         :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
         @click="contextMenu.visible = false"
       >
+        <button class="ctx-item" @click="onRename">重命名</button>
         <button v-if="!contextMenu.pinned" class="ctx-item" @click="onPin">固定</button>
         <button v-else class="ctx-item" @click="onUnpin">取消固定</button>
         <button class="ctx-item ctx-danger" @click="onDelete">删除</button>
@@ -73,16 +80,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import {
   listGroupSessions,
   getGroupSession,
   deleteGroupSession,
   pinGroupSession,
   unpinGroupSession,
+  renameGroupSession,
 } from '../GroupSessionManager'
 import type { GroupSession, GroupChatState } from '../types'
 import { useGroupChatStore } from '../GroupChatStore'
+import WsIcon from '../../../ui/WsIcon.vue'
 
 const emit = defineEmits<{ close: [] }>()
 
@@ -91,6 +100,7 @@ const store = useGroupChatStore()
 const loading = ref(true)
 const sessions = ref<GroupSession[]>([])
 const searchQuery = ref('')
+const sessionCount = ref(0)
 
 const currentId = computed(() => store.currentSessionId)
 
@@ -121,6 +131,7 @@ function stateLabel(state: GroupChatState): string {
 async function refresh() {
   try {
     sessions.value = await listGroupSessions()
+    sessionCount.value = sessions.value.length
   } catch {}
   loading.value = false
 }
@@ -149,6 +160,40 @@ function onContextMenu(e: MouseEvent, s: GroupSession) {
     sessionId: s.id,
     pinned: !!s.pinned,
   }
+}
+
+const renamingId = ref<string | null>(null)
+const renameInputEl = ref<HTMLInputElement | null>(null)
+
+function captureRenameInput(el: any) {
+  if (el) renameInputEl.value = el as HTMLInputElement
+}
+
+function startRename(id: string) {
+  renamingId.value = id
+  nextTick(() => {
+    renameInputEl.value?.focus()
+    renameInputEl.value?.select()
+  })
+}
+
+async function submitRename(id: string) {
+  if (!renamingId.value) return
+  const val = renameInputEl.value?.value?.trim()
+  renamingId.value = null
+  if (val) {
+    await renameGroupSession(id, val)
+    await refresh()
+  }
+}
+
+function cancelRename() {
+  renamingId.value = null
+}
+
+function onRename() {
+  startRename(contextMenu.value.sessionId)
+  contextMenu.value.visible = false
 }
 
 async function onPin() {
@@ -212,6 +257,13 @@ watch(currentId, () => {
   font-weight: 600;
   margin: 0;
   flex: 1;
+}
+
+.title-count {
+  font-size: var(--font-size-2xs);
+  font-weight: 500;
+  color: var(--color-text-tertiary);
+  margin-left: 4px;
 }
 
 .new-session-btn {
@@ -301,13 +353,32 @@ watch(currentId, () => {
   border-radius: 8px;
   cursor: pointer;
   margin-bottom: 2px;
-  transition: background 0.15s;
+  position: relative;
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.session-item::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  background: var(--color-primary);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
 }
 .session-item:hover {
   background: var(--color-surface-elevated);
+  transform: translateX(2px);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.session-item:hover::after {
+  opacity: 0.04;
 }
 .session-item.active {
   background: var(--color-primary-muted);
+}
+.session-item.active:hover {
+  background: rgba(108,92,231,0.15);
 }
 
 .session-name {
@@ -317,6 +388,18 @@ watch(currentId, () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.session-name-input {
+  width: 100%;
+  padding: 2px 4px;
+  border: 1px solid var(--color-primary);
+  border-radius: 4px;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+  outline: none;
 }
 
 .session-meta {

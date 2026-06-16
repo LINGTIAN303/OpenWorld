@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, watch, computed, type Ref } from 'vue'
 import { useTheme } from '../composables/useTheme'
 
+import { getProjectManager } from '@worldsmith/entity-core/core'
+
 export interface PluginToggle {
   id: string
   label: string
@@ -50,27 +52,37 @@ const STORAGE_KEY_AI_DANGER_CONFIRM = 'worldsmith_ai_danger_confirm'
 const STORAGE_KEY_VISION_SUB_AGENT_PROVIDER = 'worldsmith_vision_sub_agent_provider'
 const STORAGE_KEY_VISION_SUB_AGENT_MODEL = 'worldsmith_vision_sub_agent_model'
 const STORAGE_KEY_OUTLINE_INLINE_EDIT = 'worldsmith_outline_inline_edit'
-const STORAGE_KEY_VIDEO_MODE_ENABLED = 'worldsmith_video_mode_enabled'
-const STORAGE_KEY_VIDEO_MODE_DURATION = 'worldsmith_video_mode_duration'
-const STORAGE_KEY_VIDEO_MODE_PERSONA_TRANSITION = 'worldsmith_video_mode_persona_transition'
-const STORAGE_KEY_VIDEO_MODE_DEBOUNCE = 'worldsmith_video_mode_debounce'
-const STORAGE_KEY_VIDEO_MODE_TIMEOUT = 'worldsmith_video_mode_timeout'
-const STORAGE_KEY_VIDEO_MODE_MAX_FAILURES = 'worldsmith_video_mode_max_failures'
-const STORAGE_KEY_VIDEO_MODE_CROSS_PLUGIN = 'worldsmith_video_mode_cross_plugin'
-const STORAGE_KEY_VIDEO_MODE_PERSONA_SWITCH_CHANCE = 'worldsmith_video_mode_persona_switch_chance'
-const STORAGE_KEY_VIDEO_MODE_PAUSE_THRESHOLD = 'worldsmith_video_mode_pause_threshold'
-const STORAGE_KEY_VIDEO_MODE_SENTENCE_TRIGGER = 'worldsmith_video_mode_sentence_trigger'
-const STORAGE_KEY_VIDEO_MODE_CHAR_THRESHOLD = 'worldsmith_video_mode_char_threshold'
-const STORAGE_KEY_VIDEO_MODE_LUCK_ENABLED = 'worldsmith_video_mode_luck_enabled'
-const STORAGE_KEY_VIDEO_MODE_LUCK_RESET_MINUTES = 'worldsmith_video_mode_luck_reset_minutes'
-const STORAGE_KEY_VIDEO_MODE_LUCK_RESET_OPS = 'worldsmith_video_mode_luck_reset_ops'
-const STORAGE_KEY_VIDEO_MODE_POSITION_CONTEXT = 'worldsmith_video_mode_position_context'
-const STORAGE_KEY_VIDEO_MODE_CLICK_PIN = 'worldsmith_video_mode_click_pin'
-const STORAGE_KEY_VIDEO_MODE_SCENE_PROBS = 'worldsmith_video_mode_scene_probs'
+const STORAGE_KEY_COMPANION_MODE_ENABLED = 'worldsmith_companion_mode_enabled'
+const STORAGE_KEY_COMPANION_MODE_DURATION = 'worldsmith_companion_mode_duration'
+const STORAGE_KEY_COMPANION_MODE_PERSONA_TRANSITION = 'worldsmith_companion_mode_persona_transition'
+const STORAGE_KEY_COMPANION_MODE_DEBOUNCE = 'worldsmith_companion_mode_debounce'
+const STORAGE_KEY_COMPANION_MODE_TIMEOUT = 'worldsmith_companion_mode_timeout'
+const STORAGE_KEY_COMPANION_MODE_MAX_FAILURES = 'worldsmith_companion_mode_max_failures'
+const STORAGE_KEY_COMPANION_MODE_CROSS_PLUGIN = 'worldsmith_companion_mode_cross_plugin'
+const STORAGE_KEY_COMPANION_MODE_PERSONA_SWITCH_CHANCE = 'worldsmith_companion_mode_persona_switch_chance'
+const STORAGE_KEY_COMPANION_MODE_PAUSE_THRESHOLD = 'worldsmith_companion_mode_pause_threshold'
+const STORAGE_KEY_COMPANION_MODE_SENTENCE_TRIGGER = 'worldsmith_companion_mode_sentence_trigger'
+const STORAGE_KEY_COMPANION_MODE_CHAR_THRESHOLD = 'worldsmith_companion_mode_char_threshold'
+const STORAGE_KEY_COMPANION_MODE_LUCK_ENABLED = 'worldsmith_companion_mode_luck_enabled'
+const STORAGE_KEY_COMPANION_MODE_LUCK_RESET_MINUTES = 'worldsmith_companion_mode_luck_reset_minutes'
+const STORAGE_KEY_COMPANION_MODE_LUCK_RESET_OPS = 'worldsmith_companion_mode_luck_reset_ops'
+const STORAGE_KEY_COMPANION_MODE_POSITION_CONTEXT = 'worldsmith_companion_mode_position_context'
+const STORAGE_KEY_COMPANION_MODE_CLICK_PIN = 'worldsmith_companion_mode_click_pin'
+const STORAGE_KEY_COMPANION_MODE_SCENE_PROBS = 'worldsmith_companion_mode_scene_probs'
+const STORAGE_KEY_COMPANION_MODE_CUSTOM_MODEL = 'worldsmith_companion_mode_custom_model'
+const STORAGE_KEY_COMPANION_MODE_PROVIDER_KEY = 'worldsmith_companion_mode_provider_key'
+const STORAGE_KEY_COMPANION_MODE_MODEL_ID = 'worldsmith_companion_mode_model_id'
+const STORAGE_KEY_COMPANION_MODE_SILENT_IN_SPACE = 'worldsmith_companion_mode_silent_in_space'
+const STORAGE_KEY_SIDEBAR_POSITION = 'worldsmith_sidebar_position'
+const STORAGE_KEY_DETAIL_PANEL_POSITION = 'worldsmith_detail_panel_position'
 const STORAGE_KEY_TIMELINE_DRAG_ENABLED = 'worldsmith_timeline_drag_enabled'
 const STORAGE_KEY_TIMELINE_DEFAULT_MODE = 'worldsmith_timeline_default_mode'
 const STORAGE_KEY_TIMELINE_DEFAULT_GROUP = 'worldsmith_timeline_default_group'
 const STORAGE_KEY_TIMELINE_COMPACT_MODE = 'worldsmith_timeline_compact_mode'
+const STORAGE_KEY_GROUP_CHAT_MAX_AGENTS = 'worldsmith_group_chat_max_agents'
+const STORAGE_KEY_GROUP_CHAT_DEFAULT_STRATEGY = 'worldsmith_group_chat_default_strategy'
+const STORAGE_KEY_GROUP_CHAT_GLOBAL_RPM = 'worldsmith_group_chat_global_rpm'
+const STORAGE_KEY_GROUP_CHAT_GLOBAL_CONCURRENT = 'worldsmith_group_chat_global_concurrent'
 
 const DEFAULT_PLUGINS: PluginToggle[] = [
   { id: 'official.characters', label: '人物志', icon: 'character', active: true },
@@ -103,6 +115,8 @@ const DEFAULT_PLUGINS: PluginToggle[] = [
 ]
 
 function loadPlugins(): PluginToggle[] {
+  // 优先从项目 DB 的 project_settings 表读取
+  // 同步初始化时先从 localStorage 加载，异步加载项目 DB 数据后更新
   try {
     const raw = localStorage.getItem(STORAGE_KEY_PLUGINS)
     if (!raw) return DEFAULT_PLUGINS.map(p => ({ ...p }))
@@ -116,8 +130,38 @@ function loadPlugins(): PluginToggle[] {
   }
 }
 
+/**
+ * 异步加载项目级插件开关。
+ * 从项目 DB 的 project_settings 表读取，更新 plugins ref。
+ * 切换项目后调用。
+ */
+async function loadProjectPlugins(): Promise<PluginToggle[] | null> {
+  try {
+    const pm = getProjectManager()
+    const db = pm.getCurrentProjectDb()
+    const entry = await db.table('project_settings').get('plugin_toggles')
+    if (!entry) return null
+    const saved = JSON.parse((entry as any).value) as { id: string; active: boolean }[]
+    return DEFAULT_PLUGINS.map(def => {
+      const found = saved.find((s: any) => s.id === def.id)
+      return { ...def, active: found ? found.active : def.active }
+    })
+  } catch {
+    return null
+  }
+}
+
 function savePlugins(plugins: PluginToggle[]) {
-  localStorage.setItem(STORAGE_KEY_PLUGINS, JSON.stringify(plugins.map(p => ({ id: p.id, active: p.active }))))
+  const data = JSON.stringify(plugins.map(p => ({ id: p.id, active: p.active })))
+  // 同时写入 localStorage（回退）和项目 DB
+  localStorage.setItem(STORAGE_KEY_PLUGINS, data)
+  try {
+    const pm = getProjectManager()
+    const db = pm.getCurrentProjectDb()
+    db.table('project_settings').put({ key: 'plugin_toggles', value: data })
+  } catch {
+    // 项目系统未初始化，仅保存到 localStorage
+  }
 }
 
 function loadCustomProviders(): CustomProviderEntry[] {
@@ -133,19 +177,22 @@ function saveCustomProviders(providers: CustomProviderEntry[]): void {
   localStorage.setItem(STORAGE_KEY_AI_CUSTOM_PROVIDERS, JSON.stringify(providers))
 }
 
-function persistedRef<T extends string | number | boolean>(key: string, defaultValue: T): Ref<T> {
+function persistedRef<T extends string | number | boolean>(key: string, defaultValue: T): Ref<T extends boolean ? boolean : T extends number ? number : string> {
   const raw = localStorage.getItem(key)
   let initial: T = defaultValue
   if (raw !== null) {
     if (typeof defaultValue === 'boolean') {
-      initial = (defaultValue ? raw !== 'false' : raw === 'true') as T
+      if (raw === 'true') initial = true as T
+      else if (raw === 'false') initial = false as T
+      // 无法识别的值回退到默认值
     } else if (typeof defaultValue === 'number') {
-      initial = (Number(raw) || defaultValue) as T
+      const parsed = Number(raw)
+      initial = (Number.isFinite(parsed) ? parsed : defaultValue) as T
     } else {
       initial = raw as T
     }
   }
-  const val = ref(initial) as Ref<T>
+  const val = ref(initial) as Ref<T extends boolean ? boolean : T extends number ? number : string>
   watch(val, (v) => {
     localStorage.setItem(key, String(v))
   })
@@ -247,22 +294,32 @@ export const useSettingsStore = defineStore('settings', () => {
   const visionSubAgentProvider = persistedRef(STORAGE_KEY_VISION_SUB_AGENT_PROVIDER, '')
   const visionSubAgentModel = persistedRef(STORAGE_KEY_VISION_SUB_AGENT_MODEL, '')
   const outlineInlineEdit = persistedRef(STORAGE_KEY_OUTLINE_INLINE_EDIT, true)
-  const videoModeEnabled = persistedRef(STORAGE_KEY_VIDEO_MODE_ENABLED, false)
-  const videoModeDuration = persistedRef(STORAGE_KEY_VIDEO_MODE_DURATION, 5)
-  const videoModePersonaTransition = persistedRef(STORAGE_KEY_VIDEO_MODE_PERSONA_TRANSITION, true)
-  const videoModeDebounce = persistedRef(STORAGE_KEY_VIDEO_MODE_DEBOUNCE, 5)
-  const videoModeTimeout = persistedRef(STORAGE_KEY_VIDEO_MODE_TIMEOUT, 3)
-  const videoModeMaxFailures = persistedRef(STORAGE_KEY_VIDEO_MODE_MAX_FAILURES, 3)
-  const videoModeCrossPlugin = persistedRef(STORAGE_KEY_VIDEO_MODE_CROSS_PLUGIN, false)
-  const videoModePersonaSwitchChance = persistedRef(STORAGE_KEY_VIDEO_MODE_PERSONA_SWITCH_CHANCE, 30)
-  const videoModePauseThreshold = persistedRef(STORAGE_KEY_VIDEO_MODE_PAUSE_THRESHOLD, 2)
-  const videoModeSentenceTrigger = persistedRef(STORAGE_KEY_VIDEO_MODE_SENTENCE_TRIGGER, true)
-  const videoModeCharThreshold = persistedRef(STORAGE_KEY_VIDEO_MODE_CHAR_THRESHOLD, 20)
-  const videoModeLuckEnabled = persistedRef(STORAGE_KEY_VIDEO_MODE_LUCK_ENABLED, true)
-  const videoModeLuckResetMinutes = persistedRef(STORAGE_KEY_VIDEO_MODE_LUCK_RESET_MINUTES, 5)
-  const videoModeLuckResetOps = persistedRef(STORAGE_KEY_VIDEO_MODE_LUCK_RESET_OPS, 10)
-  const videoModePositionContext = persistedRef(STORAGE_KEY_VIDEO_MODE_POSITION_CONTEXT, true)
-  const videoModeClickPin = persistedRef(STORAGE_KEY_VIDEO_MODE_CLICK_PIN, true)
+  const companionModeEnabled = persistedRef(STORAGE_KEY_COMPANION_MODE_ENABLED, false)
+  const companionModeDuration = persistedRef(STORAGE_KEY_COMPANION_MODE_DURATION, 5)
+  const companionModePersonaTransition = persistedRef(STORAGE_KEY_COMPANION_MODE_PERSONA_TRANSITION, true)
+  const companionModeDebounce = persistedRef(STORAGE_KEY_COMPANION_MODE_DEBOUNCE, 5)
+  const companionModeTimeout = persistedRef(STORAGE_KEY_COMPANION_MODE_TIMEOUT, 3)
+  const companionModeMaxFailures = persistedRef(STORAGE_KEY_COMPANION_MODE_MAX_FAILURES, 3)
+  const companionModeCrossPlugin = persistedRef(STORAGE_KEY_COMPANION_MODE_CROSS_PLUGIN, false)
+  const companionModePersonaSwitchChance = persistedRef(STORAGE_KEY_COMPANION_MODE_PERSONA_SWITCH_CHANCE, 30)
+  const companionModePauseThreshold = persistedRef(STORAGE_KEY_COMPANION_MODE_PAUSE_THRESHOLD, 2)
+  const companionModeSentenceTrigger = persistedRef(STORAGE_KEY_COMPANION_MODE_SENTENCE_TRIGGER, true)
+  const companionModeCharThreshold = persistedRef(STORAGE_KEY_COMPANION_MODE_CHAR_THRESHOLD, 20)
+  const companionModeLuckEnabled = persistedRef(STORAGE_KEY_COMPANION_MODE_LUCK_ENABLED, true)
+  const companionModeLuckResetMinutes = persistedRef(STORAGE_KEY_COMPANION_MODE_LUCK_RESET_MINUTES, 5)
+  const companionModeLuckResetOps = persistedRef(STORAGE_KEY_COMPANION_MODE_LUCK_RESET_OPS, 10)
+  const companionModePositionContext = persistedRef(STORAGE_KEY_COMPANION_MODE_POSITION_CONTEXT, true)
+  const companionModeClickPin = persistedRef(STORAGE_KEY_COMPANION_MODE_CLICK_PIN, true)
+
+  const companionModeCustomModel = persistedRef(STORAGE_KEY_COMPANION_MODE_CUSTOM_MODEL, false)
+  const companionModeProviderKey = persistedRef(STORAGE_KEY_COMPANION_MODE_PROVIDER_KEY, '')
+  const companionModeModelId = persistedRef(STORAGE_KEY_COMPANION_MODE_MODEL_ID, '')
+  const companionModeSilentInSpace = persistedRef(STORAGE_KEY_COMPANION_MODE_SILENT_IN_SPACE, true)
+
+  const groupChatMaxAgents = persistedRef(STORAGE_KEY_GROUP_CHAT_MAX_AGENTS, 5)
+  const groupChatDefaultStrategy = persistedRef(STORAGE_KEY_GROUP_CHAT_DEFAULT_STRATEGY, 'speaking-desire')
+  const groupChatGlobalRpm = persistedRef(STORAGE_KEY_GROUP_CHAT_GLOBAL_RPM, 60)
+  const groupChatGlobalConcurrent = persistedRef(STORAGE_KEY_GROUP_CHAT_GLOBAL_CONCURRENT, 5)
 
   const DEFAULT_SCENE_PROBS: Record<string, number> = {
     entity_create: 80,
@@ -285,15 +342,17 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  const videoModeSceneProbs = ref<Record<string, number>>(loadSceneProbs())
+  const companionModeSceneProbs = ref<Record<string, number>>(loadSceneProbs())
 
+  const sidebarPosition = persistedRef(STORAGE_KEY_SIDEBAR_POSITION, 'left')
+  const detailPanelPosition = persistedRef(STORAGE_KEY_DETAIL_PANEL_POSITION, 'right')
   const timelineDragEnabled = persistedRef(STORAGE_KEY_TIMELINE_DRAG_ENABLED, false)
   const timelineDefaultMode = persistedRef(STORAGE_KEY_TIMELINE_DEFAULT_MODE, 'vertical' as string)
   const timelineDefaultGroup = persistedRef(STORAGE_KEY_TIMELINE_DEFAULT_GROUP, 'none' as string)
   const timelineCompactMode = persistedRef(STORAGE_KEY_TIMELINE_COMPACT_MODE, false)
 
   watch(customProviders, v => saveCustomProviders(v), { deep: true })
-  watch(videoModeSceneProbs, v => localStorage.setItem(STORAGE_KEY_VIDEO_MODE_SCENE_PROBS, JSON.stringify(v)), { deep: true })
+  watch(companionModeSceneProbs, v => localStorage.setItem(STORAGE_KEY_COMPANION_MODE_SCENE_PROBS, JSON.stringify(v)), { deep: true })
 
   function togglePlugin(id: string) {
     const p = plugins.value.find(p => p.id === id)
@@ -352,7 +411,7 @@ export const useSettingsStore = defineStore('settings', () => {
     return deriveKeyStoreId(baseUrl)
   }
 
-  return { plugins, theme, togglePlugin, setTheme, isActive, getActivePluginIds,
+  return { plugins, theme, togglePlugin, setTheme, isActive, getActivePluginIds, loadProjectPlugins,
            shortcutOverrides, getShortcut, setShortcut, resetShortcut, resetAllShortcuts,
            SHORTCUT_DEFAULTS, undoHistoryLimit, multiStepRedo, maxCenterNodes, panelLimitEnabled,
            smoothCaretEnabled, smoothCaretDuration, smoothCaretVariant,
@@ -363,12 +422,16 @@ export const useSettingsStore = defineStore('settings', () => {
            customProviders, addCustomProvider, removeCustomProvider, getCustomKeyStoreId,
            visionSubAgentProvider, visionSubAgentModel,
            outlineInlineEdit,
-           videoModeEnabled, videoModeDuration, videoModePersonaTransition,
-           videoModeDebounce, videoModeTimeout, videoModeMaxFailures,
-           videoModeCrossPlugin, videoModePersonaSwitchChance,
-           videoModePauseThreshold, videoModeSentenceTrigger, videoModeCharThreshold,
-           videoModeLuckEnabled, videoModeLuckResetMinutes, videoModeLuckResetOps,
-           videoModePositionContext, videoModeClickPin, videoModeSceneProbs,
-           timelineDragEnabled, timelineDefaultMode, timelineDefaultGroup, timelineCompactMode,
+           companionModeEnabled, companionModeDuration, companionModePersonaTransition,
+           companionModeDebounce, companionModeTimeout, companionModeMaxFailures,
+           companionModeCrossPlugin, companionModePersonaSwitchChance,
+           companionModePauseThreshold, companionModeSentenceTrigger, companionModeCharThreshold,
+           companionModeLuckEnabled, companionModeLuckResetMinutes, companionModeLuckResetOps,
+           companionModePositionContext, companionModeClickPin, companionModeSceneProbs,
+           companionModeCustomModel, companionModeProviderKey, companionModeModelId,
+           companionModeSilentInSpace,
+           groupChatMaxAgents, groupChatDefaultStrategy, groupChatGlobalRpm, groupChatGlobalConcurrent,
+             sidebarPosition, detailPanelPosition,
+            timelineDragEnabled, timelineDefaultMode, timelineDefaultGroup, timelineCompactMode,
            DEFAULT_SCENE_PROBS }
 })

@@ -181,14 +181,115 @@ interface DepNode {
   deps: string[]
 }
 
+/* ─── 简易 semver 兼容性检查 ─── */
+
 /**
- * 拓扑排序 + 依赖检查
+ * 解析 semver 字符串为 [major, minor, patch]
+ * 不严格要求完整格式，允许 "1"、"1.2"、"1.2.3"
+ */
+function parseSemver(v: string): [number, number, number] | null {
+  const m = v.replace(/^v/i, '').match(/^(\d+)(?:\.(\d+))?(?:\.(\d+))?/)
+  if (!m) return null
+  return [Number(m[1]), m[2] !== undefined ? Number(m[2]) : 0, m[3] !== undefined ? Number(m[3]) : 0]
+}
+
+/**
+ * 检查 installed 版本是否满足 required 版本约束
+ * 支持：">=1.0.0"、"^1.2"、">2.0.0 <3.0.0"、"1.x"、"2.3.x" 等常见模式
+ * 对于无操作符前缀的版本，默认检查 major 版本匹配
+ */
+function isVersionCompatible(required: string, installed: string): boolean {
+  const installedVer = parseSemver(installed)
+  if (!installedVer) return true // 无法解析安装版本时跳过检查
+
+  const requiredTrimmed = required.trim()
+
+  // 多约束（空格分隔），如 ">2.0.0 <3.0.0"
+  if (/\s/.test(requiredTrimmed)) {
+    return requiredTrimmed.split(/\s+/).every(constraint =>
+      isVersionCompatible(constraint, installed),
+    )
+  }
+
+  // ^1.2.3 — 兼容版本（同 major）
+  const caretMatch = requiredTrimmed.match(/^\^(\d+)(?:\.(\d+))?(?:\.(\d+))?$/)
+  if (caretMatch) {
+    const reqMajor = Number(caretMatch[1])
+    const reqMinor = caretMatch[2] !== undefined ? Number(caretMatch[2]) : 0
+    const reqPatch = caretMatch[3] !== undefined ? Number(caretMatch[3]) : 0
+    if (installedVer[0] !== reqMajor) return false
+    if (installedVer[1] < reqMinor) return false
+    if (installedVer[1] === reqMinor && installedVer[2] < reqPatch) return false
+    return true
+  }
+
+  // >=1.0.0 — 大于等于
+  const gteMatch = requiredTrimmed.match(/^>=?(\d+)(?:\.(\d+))?(?:\.(\d+))?$/)
+  if (gteMatch) {
+    const reqVer: [number, number, number] = [
+      Number(gteMatch[1]),
+      gteMatch[2] !== undefined ? Number(gteMatch[2]) : 0,
+      gteMatch[3] !== undefined ? Number(gteMatch[3]) : 0,
+    ]
+    for (let i = 0; i < 3; i++) {
+      if (installedVer[i] > reqVer[i]) return true
+      if (installedVer[i] < reqVer[i]) return false
+    }
+    return true
+  }
+
+  // <=2.0.0 — 小于等于
+  const lteMatch = requiredTrimmed.match(/^<=?(\d+)(?:\.(\d+))?(?:\.(\d+))?$/)
+  if (lteMatch) {
+    const reqVer: [number, number, number] = [
+      Number(lteMatch[1]),
+      lteMatch[2] !== undefined ? Number(lteMatch[2]) : 0,
+      lteMatch[3] !== undefined ? Number(lteMatch[3]) : 0,
+    ]
+    for (let i = 0; i < 3; i++) {
+      if (installedVer[i] < reqVer[i]) return true
+      if (installedVer[i] > reqVer[i]) return false
+    }
+    return true
+  }
+
+  // x.x 通配，如 "1.x"、"2.3.x"
+  const xMatch = requiredTrimmed.match(/^(\d+)(?:\.(?:x|\*))?(?:\.(?:x|\*))?$/i)
+  if (xMatch) {
+    return installedVer[0] === Number(xMatch[1])
+  }
+
+  // 裸版本号 — 默认 major 必须匹配
+  const reqVer = parseSemver(requiredTrimmed)
+  if (reqVer) {
+    if (reqVer[0] === 0) {
+      // 0.x 版本，minor 也必须匹配
+      return installedVer[0] === 0 && installedVer[1] === reqVer[1]
+    }
+    return installedVer[0] === reqVer[0]
+  }
+
+  // 无法解析约束，跳过检查
+  return true
+}
+
+/** 版本不兼容的依赖信息 */
+interface VersionMismatch {
+  moduleId: string
+  depId: string
+  required: string
+  installed: string
+}
+
+/**
+ * 拓扑排序 + 依赖检查 + 版本兼容性检查
  * 返回按依赖顺序排列的模块 id 列表（被依赖的在前）
  */
 async function resolveDependencies(moduleIds: string[]): Promise<{
   sorted: string[]
   missing: string[]
   circular: string[]
+  versionMismatches: VersionMismatch[]
 }> {
   const allInstances = await moduleStore.getAll()
   const instanceMap = new Map<string, ModuleInstance>()
@@ -205,6 +306,25 @@ async function resolveDependencies(moduleIds: string[]): Promise<{
       .filter(d => !d.optional)
       .map(d => d.moduleId)
     nodes.set(id, { id, instance: inst, deps })
+  }
+
+  // 版本兼容性检查
+  const versionMismatches: VersionMismatch[] = []
+  for (const [id, node] of nodes) {
+    for (const dep of node.instance.manifest.dependencies) {
+      if (!dep.version) continue
+      const depInst = instanceMap.get(dep.moduleId)
+      if (!depInst) continue // 缺失的依赖由 missing 处理
+      const installedVersion = depInst.manifest.version
+      if (!isVersionCompatible(dep.version, installedVersion)) {
+        versionMismatches.push({
+          moduleId: id,
+          depId: dep.moduleId,
+          required: dep.version,
+          installed: installedVersion,
+        })
+      }
+    }
   }
 
   // 拓扑排序（Kahn 算法）
@@ -250,11 +370,11 @@ async function resolveDependencies(moduleIds: string[]): Promise<{
 
   const circular = moduleIds.filter(id => nodes.has(id) && !sorted.includes(id))
 
-  return { sorted, missing, circular }
+  return { sorted, missing, circular, versionMismatches }
 }
 
 /**
- * 确保所有依赖都被激活
+ * 确保所有依赖都被激活，并检查版本兼容性
  */
 async function ensureDependencies(instance: ModuleInstance): Promise<void> {
   const allInstances = await moduleStore.getAll()
@@ -264,6 +384,15 @@ async function ensureDependencies(instance: ModuleInstance): Promise<void> {
     if (!depInst) {
       console.warn(`[ModuleRegistry] 缺少依赖: ${dep.moduleId}`)
       continue
+    }
+    // 版本兼容性检查
+    if (dep.version && depInst.manifest.version) {
+      if (!isVersionCompatible(dep.version, depInst.manifest.version)) {
+        console.warn(
+          `[ModuleRegistry] 依赖版本不兼容: ${instance.id} 需要 ${dep.moduleId}@${dep.version}，` +
+          `但安装的是 ${dep.moduleId}@${depInst.manifest.version}`,
+        )
+      }
     }
     if (!depInst.active) {
       await activateModule(depInst)
@@ -301,7 +430,7 @@ async function initialize(): Promise<void> {
 
   const active = await moduleStore.getActive()
   const ids = active.map(m => m.id)
-  const { sorted, missing, circular } = await resolveDependencies(ids)
+  const { sorted, missing, circular, versionMismatches } = await resolveDependencies(ids)
 
   if (missing.length > 0) {
     console.warn('[ModuleRegistry] 依赖缺失:', missing)
@@ -309,18 +438,26 @@ async function initialize(): Promise<void> {
   if (circular.length > 0) {
     console.warn('[ModuleRegistry] 循环依赖:', circular)
   }
+  if (versionMismatches.length > 0) {
+    for (const vm of versionMismatches) {
+      console.warn(
+        `[ModuleRegistry] 版本不兼容: ${vm.moduleId} 需要 ${vm.depId}@${vm.required}，` +
+        `但安装的是 ${vm.depId}@${vm.installed}`,
+      )
+    }
+  }
 
-  // 按拓扑顺序激活
+  // 按拓扑顺序激活（注册 schema 和视图到内存）
   for (const id of sorted) {
     const inst = active.find(m => m.id === id)
-    if (inst && !inst.active) {
+    if (inst) {
       await activateModule(inst)
     }
   }
 
   // 激活在排序中但不在 sorted 中的（独立无依赖的模块）
   for (const inst of active) {
-    if (!sorted.includes(inst.id) && inst.active) {
+    if (!sorted.includes(inst.id)) {
       await activateModule(inst)
     }
   }

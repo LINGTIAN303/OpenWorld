@@ -5,14 +5,15 @@ export function createContextExtension(ctx: WorldSmithToolContext) {
   return {
     name: 'worldsmith-context',
 
-    onPromptStart(_text: string): string {
-      const summary = buildProjectSummary(ctx)
+    async onPromptStart(_text: string): Promise<string> {
+      const summary = await buildProjectSummary(ctx)
       const injection = formatSummaryForPrompt(summary)
       return injection
     },
 
-    getSystemPromptSuffix(): string {
-      return `\n\n[当前项目状态] ${formatSummaryForPrompt(buildProjectSummary(ctx))}`
+    async getSystemPromptSuffix(): Promise<string> {
+      const summary = await buildProjectSummary(ctx)
+      return `\n\n[当前项目状态] ${formatSummaryForPrompt(summary)}`
     },
   }
 }

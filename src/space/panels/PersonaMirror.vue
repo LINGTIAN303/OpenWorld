@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="persona-mirror">
     <div class="panel-header">
       <h3 class="panel-title" :style="{ fontFamily: fontFamily }">人格镜</h3>
@@ -85,9 +85,10 @@ import PersonaAvatarCanvas from '../components/PersonaAvatarCanvas.vue'
 import FontSelectorDropdown from '../components/FontSelectorDropdown.vue'
 import { usePersonaFontStore } from '../stores/persona-font-store'
 import WsIcon from '../../ui/WsIcon.vue'
-import { loadMemory } from '../../../worldsmith-agent/src/tools/memory-internal'
-import { kbList } from '../../../worldsmith-agent/src/kb/kb-store'
-import type { KBEntry } from '../../../worldsmith-agent/src/kb/kb-store'
+import { loadMemory } from '@agent/tools/memory-internal'
+import { kbList } from '@agent/kb/kb-store'
+import type { KBEntry } from '@agent/kb/kb-store'
+import type { FontLibraryEntry } from '../../composables/fontInstaller'
 
 const emit = defineEmits<{ close: [] }>()
 
@@ -164,31 +165,51 @@ function onWindFontsSelected(font: WindFontsItem) {
 async function installWsfont() {
   const input = document.createElement('input')
   input.type = 'file'
-  input.accept = '.wsfont,.zip'
+  input.accept = '.wsfont,.zip,.ttf,.otf,.woff,.woff2'
   input.onchange = async () => {
     const file = input.files?.[0]
     if (!file) return
     try {
       const buffer = await file.arrayBuffer()
-      const { unpackWsFont, register, loadFont } = await import('@worldsmith/font-kit')
-      const { manifest } = await unpackWsFont(buffer)
-      const profileId = `custom-${Date.now()}`
-      fontStore.addCustomProfile({
-        id: profileId,
-        name: manifest.displayName || manifest.family,
-        fontFamily: manifest.family,
-        fallbackFamily: 'sans-serif',
-        fontCategory: 'display',
-        sizeScale: 1.0,
-        weightDefault: 'medium',
-        letterSpacing: 'normal',
-        animationStyle: { messageEnter: 'fadeIn', panelTransition: 'smooth', notificationStyle: 'pulse' },
-        accentColor: profile.accentColor,
-        fontSource: { type: 'wsfont', path: file.name },
-      })
-      fontStore.setActiveProfile(profileId)
+      const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+      const { installFromWsfont, installFromRawFont } = await import('../../composables/fontInstaller')
+      const { useFontLibraryStore } = await import('../../stores/fontLibraryStore')
+      const libraryStore = useFontLibraryStore()
+
+      let entry: FontLibraryEntry | undefined
+
+      if (ext === 'wsfont' || ext === 'zip') {
+        const result = await installFromWsfont(buffer)
+        entry = result.entry
+      } else if (['ttf', 'otf', 'woff', 'woff2'].includes(ext)) {
+        const result = await installFromRawFont(buffer, file.name)
+        entry = result.entry
+      }
+
+      if (entry) {
+        const addResult = libraryStore.addEntry(entry)
+        if (!addResult.ok) {
+          console.error(addResult.reason)
+          return
+        }
+        const profileId = `custom-${entry.id}`
+        fontStore.addCustomProfile({
+          id: profileId,
+          name: entry.displayName,
+          fontFamily: entry.family,
+          fallbackFamily: 'sans-serif',
+          fontCategory: 'display',
+          sizeScale: 1.0,
+          weightDefault: 'medium',
+          letterSpacing: 'normal',
+          animationStyle: { messageEnter: 'fadeIn', panelTransition: 'smooth', notificationStyle: 'pulse' },
+          accentColor: profile.accentColor,
+          fontSource: { type: 'wsfont', path: `wsfont:${entry.id}` },
+        })
+        fontStore.setActiveProfile(profileId)
+      }
     } catch (err) {
-      console.error('字体包安装失败:', err)
+      console.error('字体安装失败:', err)
     }
   }
   input.click()

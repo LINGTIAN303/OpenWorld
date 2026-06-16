@@ -12,6 +12,10 @@ export const manifest = {
     { action: 'create_entity', description: '创建自定义实体', params: ['name', 'type'] },
     { action: 'update_entity', description: '更新自定义实体', params: ['entityId', 'changes'] },
   ],
+  permissions: [
+    { name: 'schema:register', description: '注册实体类型和关系类型' },
+    { name: 'views:register', description: '注册视图' },
+  ],
 }
 
 export function activate(api: PluginAPIType) {

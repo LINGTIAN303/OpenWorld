@@ -1,4 +1,4 @@
-import { ref, computed, watch, type Ref } from 'vue'
+import { ref, computed, type Ref } from 'vue'
 import type { TacticalEngineAPI, WasmBattleUnit } from './useTacticalEngine'
 import type { BattlePhase, BattleLogEntry } from './useBattleManager'
 
@@ -19,10 +19,10 @@ export function useAIController(
   battlePhase: Ref<BattlePhase>,
   currentUnit: Ref<WasmBattleUnit | null>,
   addLog: (text: string, type: BattleLogEntry['type']) => void,
-  refreshUnits: () => void,
+  _refreshUnits: () => void,
   beginMoveAction: () => void,
   beginAttackAction: () => void,
-  executeAction: (x: number, y: number) => boolean,
+  executeAction: (x: number, y: number) => boolean | Promise<boolean>,
   waitAction: () => void,
 ) {
   const aiTeams = ref<Map<string, AiControlState>>(new Map())
@@ -30,7 +30,7 @@ export function useAIController(
   const aiSpeed = ref(600)
   const aiStepCount = ref(0)
 
-  let aiTimer: ReturnType<typeof setTimeout> | null = null
+  let abortController: AbortController | null = null
 
   const aiTeamList = computed(() => {
     const result: { team: string; enabled: boolean }[] = []
@@ -62,7 +62,14 @@ export function useAIController(
     return isAIControlled(currentUnit.value.team)
   }
 
-  function executeAIAction(): boolean {
+  function delay(ms: number, signal: AbortSignal): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(resolve, ms)
+      signal.addEventListener('abort', () => { clearTimeout(timer); reject(new DOMException('Aborted', 'AbortError')) }, { once: true })
+    })
+  }
+
+  async function executeAIAction(): Promise<boolean> {
     if (!engine.value || !currentUnit.value) return false
     const unit = currentUnit.value
     const team = unit.team
@@ -85,20 +92,18 @@ export function useAIController(
       if (action.action_type === 'move' && action.move_to) {
         beginMoveAction()
         const moveTo = action.move_to
-        setTimeout(() => {
-          if (!aiRunning.value) return
-          executeAction(moveTo.x, moveTo.y)
-        }, 50)
+        await delay(50, abortController?.signal ?? new AbortController().signal)
+        if (!aiRunning.value) return false
+        await executeAction(moveTo.x, moveTo.y)
         return true
       }
 
       if (action.action_type === 'attack' && action.target) {
         beginAttackAction()
         const targetPos = action.target
-        setTimeout(() => {
-          if (!aiRunning.value) return
-          executeAction(targetPos.x, targetPos.y)
-        }, 50)
+        await delay(50, abortController?.signal ?? new AbortController().signal)
+        if (!aiRunning.value) return false
+        await executeAction(targetPos.x, targetPos.y)
         return true
       }
 
@@ -106,6 +111,7 @@ export function useAIController(
       waitAction()
       return true
     } catch (e) {
+      if ((e as Error).name === 'AbortError') return false
       console.warn('[AI] decide failed', e)
       addLog(`[AI] ${unit.name} 待机`, 'system')
       waitAction()
@@ -113,40 +119,58 @@ export function useAIController(
     }
   }
 
+  async function runAILoop() {
+    abortController = new AbortController()
+    const signal = abortController.signal
+
+    try {
+      while (aiRunning.value && battlePhase.value === 'battle') {
+        if (shouldAIAct()) {
+          aiStepCount.value++
+          await executeAIAction()
+          await delay(aiSpeed.value, signal)
+        } else {
+          // Wait for currentUnit to change instead of blind polling
+          await waitForUnitChange(signal)
+        }
+      }
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') {
+        console.warn('[AI] loop error', e)
+      }
+    }
+    aiRunning.value = false
+  }
+
+  function waitForUnitChange(signal: AbortSignal): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const checkInterval = setInterval(() => {
+        if (!aiRunning.value || battlePhase.value !== 'battle') {
+          clearInterval(checkInterval)
+          resolve()
+          return
+        }
+        if (shouldAIAct()) {
+          clearInterval(checkInterval)
+          resolve()
+        }
+      }, 50)
+      signal.addEventListener('abort', () => { clearInterval(checkInterval); reject(new DOMException('Aborted', 'AbortError')) }, { once: true })
+    })
+  }
+
   function startAI() {
     if (aiRunning.value) return
     aiRunning.value = true
     aiStepCount.value = 0
-    scheduleNextAIStep()
+    runAILoop()
   }
 
   function stopAI() {
     aiRunning.value = false
-    if (aiTimer) {
-      clearTimeout(aiTimer)
-      aiTimer = null
-    }
-  }
-
-  function scheduleNextAIStep() {
-    if (!aiRunning.value) return
-    if (battlePhase.value !== 'battle') {
-      aiRunning.value = false
-      return
-    }
-
-    if (shouldAIAct()) {
-      aiTimer = setTimeout(() => {
-        if (!aiRunning.value) return
-        aiStepCount.value++
-        executeAIAction()
-        scheduleNextAIStep()
-      }, aiSpeed.value)
-    } else {
-      aiTimer = setTimeout(() => {
-        if (!aiRunning.value) return
-        scheduleNextAIStep()
-      }, 100)
+    if (abortController) {
+      abortController.abort()
+      abortController = null
     }
   }
 

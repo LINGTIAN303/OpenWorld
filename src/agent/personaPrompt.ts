@@ -7,7 +7,7 @@ export interface PersonaSnapshot {
   relatedEntities: { name: string; type: string; relationType: string }[]
 }
 
-export interface VideoModeContext {
+export interface CompanionModeContext {
   currentView?: string
   editDurationSeconds?: number
   editCount?: number
@@ -20,7 +20,7 @@ export interface VideoModeContext {
   luckLabel?: string
 }
 
-export interface VideoModePromptInput {
+export interface CompanionModePromptInput {
   persona: PersonaSnapshot
   changeType: 'create' | 'update' | 'delete'
   sceneId?: string
@@ -28,7 +28,7 @@ export interface VideoModePromptInput {
   oldValues?: Record<string, unknown>
   newValues?: Record<string, unknown>
   sessionMemory: string[]
-  context?: VideoModeContext
+  context?: CompanionModeContext
 }
 
 const TYPE_PERSONA_MAP: Record<string, string> = {
@@ -78,7 +78,7 @@ function buildPersonaDescription(persona: PersonaSnapshot): string {
   return parts.join('\n')
 }
 
-function buildChangeDescription(input: VideoModePromptInput): string {
+function buildChangeDescription(input: CompanionModePromptInput): string {
   const sceneId = input.sceneId
   if (sceneId === 'view_switch') return '用户切换了视图。'
   if (sceneId === 'relation_create') return '你建立了新的关联。'
@@ -131,7 +131,7 @@ function buildChangeDescription(input: VideoModePromptInput): string {
   }
 }
 
-function buildContextSection(ctx: VideoModeContext): string {
+function buildContextSection(ctx: CompanionModeContext): string {
   const parts: string[] = []
 
   if (ctx.currentView) {
@@ -187,7 +187,7 @@ function buildContextSection(ctx: VideoModeContext): string {
   return parts.length > 0 ? parts.join('\n') : ''
 }
 
-export function buildVideoModePrompt(input: VideoModePromptInput): string {
+export function buildCompanionModePrompt(input: CompanionModePromptInput): string {
   const personaDesc = buildPersonaDescription(input.persona)
   const changeDesc = buildChangeDescription(input)
   const contextSection = input.context ? buildContextSection(input.context) : ''

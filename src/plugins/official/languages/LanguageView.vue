@@ -1,11 +1,7 @@
 <template>
   <div class="language-view">
     <div v-if="viewMode === 'tree'" class="lv-tree">
-      <div class="lv-back-bar">
-        <button class="btn-ghost" @click="viewMode = 'list'">← 返回列表</button>
-        <span class="lv-title">语系树</span>
-      </div>
-      <LanguageFamilyTreeView />
+      <LanguageFamilyTreeView @back="viewMode = 'list'" />
     </div>
     <SchemaRenderer v-else type-key="language" :detail-tabs="languageTabs">
       <template #toolbar-extra>
@@ -42,9 +38,5 @@ const languageTabs: RelationTabDef[] = [
   color: var(--color-text-primary); font-size: var(--font-size-sm); cursor: pointer; transition: all 0.15s; white-space: nowrap;
 }
 .lv-tree-btn:hover { background: var(--color-bg-hover); border-color: var(--color-text-secondary); color: var(--color-text-primary); }
-.lv-back-bar {
-  display: flex; align-items: center; gap: 12px; padding: 8px 16px;
-  border-bottom: 1px solid var(--border, #333);
-}
-.lv-title { font-weight: var(--font-weight-semibold); font-size: var(--font-size-base); }
+
 </style>

@@ -1,6 +1,6 @@
-import { ref } from 'vue'
-import { createExecutionAdapter, resetExecutionAdapter } from '../../../worldsmith-agent/src/execution'
-import type { ExecutionAdapter } from '../../../worldsmith-agent/src/execution/adapter'
+﻿import { ref } from 'vue'
+import { createExecutionAdapter, resetExecutionAdapter } from '@agent/execution'
+import type { ExecutionAdapter } from '@agent/execution/adapter'
 
 export function useTerminal() {
   const terminalVisible = ref(false)

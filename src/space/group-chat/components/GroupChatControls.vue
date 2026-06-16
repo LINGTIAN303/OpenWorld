@@ -9,13 +9,13 @@
       </div>
       <div class="controls-right">
         <button v-if="isRunning" class="ctrl-btn pause-btn" @click="$emit('pause')">
-          ⏸ 暂停
+          <WsIcon name="pause" size="xs" /> 暂停
         </button>
         <button v-if="isPaused" class="ctrl-btn resume-btn" @click="$emit('resume')">
-          ▶ 继续
+          <WsIcon name="play" size="xs" /> 继续
         </button>
         <button class="ctrl-btn stop-btn" @click="$emit('terminate')">
-          ⏹ 终止
+          <WsIcon name="square" size="xs" /> 终止
         </button>
         <button v-if="isRunning || isPaused" class="ctrl-btn inject-btn" @click="showInject = true">
           插话
@@ -46,6 +46,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import WsIcon from '../../../ui/WsIcon.vue'
 
 defineProps<{
   isRunning: boolean

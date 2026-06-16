@@ -53,7 +53,13 @@
   --font-family-base: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-family-mono: 'JetBrains Mono', 'Consolas', 'Fira Code', monospace;
   --font-family-serif: 'Noto Serif SC', 'Georgia', serif;
-  --font-family-display: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-family-display: 'Space Grotesk', 'Inter', 'Segoe UI', system-ui, sans-serif;
+
+  /* ─── Font Layers ─── */
+  --font-family-chrome: var(--font-family-base);
+  --font-family-editor-ui: var(--font-family-chrome);
+  --font-family-content: var(--font-family-serif);
+  --font-family-preview: var(--font-family-content);
 
   --text-display-font-size: var(--font-size-3xl);
   --text-display-font-weight: var(--font-weight-bold);
@@ -120,6 +126,12 @@
   --ease-toast: var(--ease-spring);
   --ease-list: var(--ease-out);
   --motion-scale: 1;
+
+  /* ─── Texture Tokens ─── */
+  --texture-bg: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  --texture-card: none;
+  --texture-button: none;
+  --texture-overlay: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
 }
 
 [data-theme="aurora-abyss"] {
@@ -174,6 +186,10 @@
   --font-weight-offset: 0;
   --line-height-scale: 1;
   --text-micro-font-size: var(--font-size-2xs);
+  --font-family-display: 'Outfit', 'Inter', 'Segoe UI', system-ui, sans-serif;
+
+  --texture-bg: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  --texture-card: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.02'/%3E%3C/svg%3E");
 }
 
 [data-theme="light"] {
@@ -210,7 +226,7 @@
   --icon-stroke-linecap: round;
   --icon-stroke-linejoin: round;
 
-  --font-family-display: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-family-display: 'DM Sans', 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-weight-offset: 0;
   --line-height-scale: 1;
 }
@@ -269,9 +285,12 @@
   --ease-list: var(--ease-out);
   --motion-scale: 0.9;
 
-  --font-family-display: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-family-display: 'Bitter', 'Georgia', 'Noto Serif SC', serif;
   --font-weight-offset: 100;
   --line-height-scale: 1.05;
+
+  --texture-bg: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='5' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+  --texture-card: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.5' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
 }
 
 [data-theme="ink-scroll"] {
@@ -322,6 +341,9 @@
   --text-micro-font-size: var(--font-size-2xs);
   --font-weight-offset: -100;
   --line-height-scale: 1.15;
+
+  --texture-bg: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.5' numOctaves='5' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
+  --texture-card: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
 }
 
 [data-theme="crystal-prism"] {
@@ -384,4 +406,20 @@
   --text-micro-font-size: var(--font-size-2xs);
   --font-weight-offset: 0;
   --line-height-scale: 0.95;
+
+  --texture-bg: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='2.0' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.02'/%3E%3C/svg%3E");
+  --texture-card: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='2.5' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.015'/%3E%3C/svg%3E");
+}
+
+/* ═══════════════════════════════════════════
+   派生短名令牌 — 组件代码常用缩写的统一映射
+   所有主题共享，无需在各主题块中重复声明
+   ═══════════════════════════════════════════ */
+:root {
+  --color-surface: var(--color-bg-surface);
+  --color-surface-elevated: var(--color-bg-elevated);
+  --color-surface-hover: var(--color-bg-hover);
+  --color-surface-active: var(--color-bg-active);
+  --color-text: var(--color-text-primary);
+  --color-inverse: var(--color-text-inverse);
 }

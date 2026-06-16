@@ -375,10 +375,10 @@ defineExpose({ inputRef, menuBtnRef })
   align-items: flex-end;
   gap: 6px;
   padding: 8px 12px;
-  background: var(--agent-bg, rgba(26, 26, 46, 0.75));
-  backdrop-filter: blur(var(--agent-blur, 16px));
-  border: 1px solid var(--agent-border, rgba(58, 58, 106, 0.4));
-  border-radius: var(--agent-radius, 14px);
+  background: var(--agent-bg);
+  backdrop-filter: blur(var(--agent-blur));
+  border: 1px solid var(--agent-border);
+  border-radius: var(--agent-radius);
   box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 4px 20px rgba(0,0,0,0.3);
   z-index: 9998;
   pointer-events: auto;
@@ -386,36 +386,36 @@ defineExpose({ inputRef, menuBtnRef })
 
 .menu-btn {
   width: 32px; height: 32px;
-  border: 1px solid var(--agent-border-color, #444);
-  border-radius: var(--agent-radius-sm, 10px);
-  background: var(--agent-hover-bg, rgba(255,255,255,0.04));
-  color: var(--agent-text, #e0e0e0); cursor: pointer; font-size: var(--font-size-lg);
+  border: 1px solid var(--agent-border-color);
+  border-radius: var(--agent-radius-sm);
+  background: var(--agent-hover-bg);
+  color: var(--agent-text); cursor: pointer; font-size: var(--font-size-lg);
   display: flex; align-items: center; justify-content: center;
   transition: border-color 0.15s;
   flex-shrink: 0;
 }
-.menu-btn:hover { border-color: var(--agent-primary, #6c5ce7) }
+.menu-btn:hover { border-color: var(--agent-primary) }
 .menu-btn.active {
-  border-color: var(--agent-primary, #6c5ce7);
-  color: var(--agent-primary, #6c5ce7);
-  background: var(--agent-accent-bg, rgba(108, 92, 231, 0.15));
+  border-color: var(--agent-primary);
+  color: var(--agent-primary);
+  background: var(--agent-accent-bg);
 }
 
 .input-wrap { flex: 1 }
 .input-wrap textarea {
   width: 100%; resize: none;
-  border: 1px solid var(--agent-border-color, rgba(255,255,255,0.15));
-  border-radius: var(--agent-radius-sm, 12px);
+  border: 1px solid var(--agent-border-color);
+  border-radius: var(--agent-radius-sm);
   padding: 8px 12px;
-  background: var(--agent-input-bg, rgba(255,255,255,0.06));
+  background: var(--agent-input-bg);
   backdrop-filter: blur(8px);
-  color: var(--agent-text, #e0e0e0);
+  color: var(--agent-text);
   font-size: var(--font-size-base); line-height: 1.4; outline: none;
-  font-family: var(--agent-font, sans-serif);
+  font-family: var(--agent-font);
   transition: border-color 0.15s;
 }
-.input-wrap textarea:focus { border-color: var(--agent-primary, #6c5ce7) }
-.input-wrap textarea::placeholder { color: var(--agent-text-tertiary, #666) }
+.input-wrap textarea:focus { border-color: var(--agent-primary) }
+.input-wrap textarea::placeholder { color: var(--agent-text-tertiary) }
 
 .attachments-preview {
   display: flex;
@@ -431,11 +431,11 @@ defineExpose({ inputRef, menuBtnRef })
   align-items: center;
   gap: 4px;
   padding: 3px 8px;
-  background: var(--agent-hover-bg, rgba(255,255,255,0.06));
-  border: 1px solid var(--agent-border, rgba(58, 58, 106, 0.3));
+  background: var(--agent-hover-bg);
+  border: 1px solid var(--agent-border);
   border-radius: 8px;
   font-size: var(--font-size-sm);
-  color: var(--agent-text-secondary, #aaa);
+  color: var(--agent-text-secondary);
   max-width: 160px;
   overflow: hidden;
 }
@@ -468,7 +468,7 @@ defineExpose({ inputRef, menuBtnRef })
 .att-remove {
   background: none;
   border: none;
-  color: var(--agent-text-tertiary, #666);
+  color: var(--agent-text-tertiary);
   cursor: pointer;
   font-size: var(--font-size-xs);
   padding: 0 2px;
@@ -477,26 +477,26 @@ defineExpose({ inputRef, menuBtnRef })
 }
 
 .att-remove:hover {
-  color: var(--danger, #e74c3c);
+  color: var(--agent-danger, #ef4444);
 }
 
 .send-btn, .stop-btn {
   flex-shrink: 0; width: 32px; height: 32px;
-  border: none; border-radius: var(--agent-radius-sm, 10px);
+  border: none; border-radius: var(--agent-radius-sm);
   cursor: pointer; font-size: var(--font-size-base);
   display: flex; align-items: center; justify-content: center;
 }
-.send-btn { background: var(--agent-primary, #6c5ce7); color: #fff }
+.send-btn { background: var(--agent-primary); color: #fff }
 .send-btn:disabled { opacity: 0.35; cursor: default }
-.stop-btn { background: var(--danger, #e74c3c); color: #fff }
+.stop-btn { background: var(--agent-danger, #ef4444); color: #fff }
 
 .slash-list {
   position: fixed;
   max-height: 240px;
   overflow-y: auto;
-  background: var(--agent-bg, rgba(26, 26, 46, 0.92));
-  border: 1px solid var(--agent-border, rgba(58, 58, 106, 0.4));
-  border-radius: var(--agent-radius-sm, 10px);
+  background: var(--agent-bg);
+  border: 1px solid var(--agent-border);
+  border-radius: var(--agent-radius-sm);
   box-shadow: var(--shadow-lg, 0 4px 20px rgba(0,0,0,0.4));
   z-index: 10002;
   pointer-events: auto;
@@ -504,19 +504,19 @@ defineExpose({ inputRef, menuBtnRef })
 .slash-item {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 12px; cursor: pointer; font-size: var(--font-size-sm);
-  color: var(--agent-text, #e0e0e0); transition: background 0.1s;
-  font-family: var(--agent-font, sans-serif);
+  color: var(--agent-text); transition: background 0.1s;
+  font-family: var(--agent-font);
 }
 .slash-item:first-child { border-radius: 10px 10px 0 0 }
 .slash-item:last-child { border-radius: 0 0 10px 10px }
-.slash-item.active { background: var(--agent-accent-bg, rgba(108,92,231,0.2)) }
+.slash-item.active { background: var(--agent-accent-bg) }
 .slash-icon { font-size: var(--font-size-base) }
 .slash-label { font-weight: var(--font-weight-medium) }
 .slash-desc { flex: 1; text-align: right; font-size: var(--font-size-xs); opacity: 0.5 }
 
 .chat-input-bar.drag-over {
-  border-color: var(--agent-primary, #6c5ce7);
-  box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.3), 0 4px 20px rgba(0,0,0,0.3);
+  border-color: var(--agent-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--agent-primary) 30%, transparent), 0 4px 20px rgba(0,0,0,0.3);
 }
 
 .vision-warning {
@@ -525,10 +525,10 @@ defineExpose({ inputRef, menuBtnRef })
   left: 50%;
   transform: translateX(-50%);
   padding: 6px 14px;
-  background: var(--agent-bg, rgba(26, 26, 46, 0.92));
-  border: 1px solid var(--warning, #f0ad4e);
+  background: var(--agent-bg);
+  border: 1px solid var(--agent-warning, #eab308);
   border-radius: 8px;
-  color: var(--warning, #f0ad4e);
+  color: var(--agent-warning, #eab308);
   font-size: var(--font-size-xs);
   white-space: nowrap;
   pointer-events: none;

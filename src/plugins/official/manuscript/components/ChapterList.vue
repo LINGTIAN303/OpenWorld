@@ -249,6 +249,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  font-family: var(--font-family-editor-ui);
 }
 .cl-header {
   display: flex;

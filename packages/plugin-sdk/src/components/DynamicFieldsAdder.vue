@@ -1,8 +1,9 @@
 <template>
   <div class="dynamic-fields">
-    <div class="df-header">
-      <span class="df-title">自定义字段</span>
-      <button class="df-add-btn" @click="showAdder = true">＋ 添加字段</button>
+    <!-- 图标长条：添加自定义字段 -->
+    <div class="df-strip" @click="showSmartAdder = true" role="button" tabindex="0" @keydown.enter="showSmartAdder = true">
+      <WsIcon name="plus" size="sm" class="df-strip-icon" />
+      <span class="df-strip-text">添加自定义字段</span>
     </div>
 
     <!-- 已有自定义字段（按定义渲染） -->
@@ -34,29 +35,24 @@
         <option value="">--</option>
         <option v-for="opt in def.options" :key="opt" :value="opt">{{ opt }}</option>
       </select>
-      <button class="df-remove" @click="removeField(def.key)" title="删除此字段">✕</button>
+      <button class="df-remove" @click="removeField(def.key)" title="删除此字段"><WsIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- 内联添加新字段 -->
-    <div v-if="showAdder" class="df-adder">
-      <input v-model="newKey" class="df-input df-input-key" placeholder="字段名" @keyup.enter="confirmAdd" />
-      <select v-model="newType" class="df-select">
-        <option value="text">文本</option>
-        <option value="textarea">长文本</option>
-        <option value="number">数字</option>
-        <option value="boolean">开关</option>
-        <option value="select">选项</option>
-      </select>
-      <input v-if="newType==='select'" v-model="newOptions" class="df-input" placeholder="用逗号分隔选项" />
-      <button class="df-confirm" @click="confirmAdd">确定</button>
-      <button class="df-cancel" @click="cancelAdd">取消</button>
-    </div>
+    <!-- 智能添加字段弹窗 -->
+    <SmartFieldAdder
+      :visible="showSmartAdder"
+      :entity-type="entityType"
+      @confirm="onSmartAdd"
+      @cancel="showSmartAdder = false"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { FieldSchema } from '@worldsmith/entity-core'
+import { WsIcon } from '@worldsmith/ui-kit'
+import SmartFieldAdder from './SmartFieldAdder.vue'
 
 const props = withDefaults(defineProps<{
   /** 实体类型标识 */
@@ -74,10 +70,7 @@ const emit = defineEmits<{
   'update:fieldDefs': [defs: FieldSchema[]]
 }>()
 
-const showAdder = ref(false)
-const newKey = ref('')
-const newType = ref<'text' | 'textarea' | 'number' | 'boolean' | 'select'>('text')
-const newOptions = ref('')
+const showSmartAdder = ref(false)
 
 function getValue(key: string): unknown {
   return props.modelValue?.[key]
@@ -87,38 +80,33 @@ function updateValue(key: string, value: string | number | boolean) {
   emit('update:modelValue', { ...props.modelValue, [key]: value })
 }
 
-function confirmAdd() {
-  const key = newKey.value.trim()
-  if (!key) return
-  const label = key
+function onSmartAdd(data: {
+  fieldDef: FieldSchema
+  linkConfig?: { targetType: string; relationType: string }
+  rememberMapping: boolean
+}) {
+  const { fieldDef } = data
 
-  // Default value based on type
+  // 默认值
   let defaultVal: unknown = ''
-  if (newType.value === 'number') defaultVal = 0
-  else if (newType.value === 'boolean') defaultVal = false
+  if (fieldDef.type === 'number') defaultVal = 0
+  else if (fieldDef.type === 'boolean') defaultVal = false
 
-  // Add value
-  emit('update:modelValue', { ...props.modelValue, [key]: defaultVal })
-
-  // Add field definition
-  const def: FieldSchema = {
-    key,
-    label,
-    type: newType.value,
-    options: newType.value === 'select' ? newOptions.value.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+  // 如果有关联配置，注入 autoLink 到字段定义
+  const defWithLink: FieldSchema = { ...fieldDef }
+  if (data.linkConfig) {
+    defWithLink.autoLink = {
+      targetType: data.linkConfig.targetType,
+      relationType: data.linkConfig.relationType,
+    }
   }
-  emit('update:fieldDefs', [...props.fieldDefs, def])
 
-  newKey.value = ''
-  newOptions.value = ''
-  showAdder.value = false
-}
+  // 添加值
+  emit('update:modelValue', { ...props.modelValue, [fieldDef.key]: defaultVal })
+  // 添加字段定义
+  emit('update:fieldDefs', [...props.fieldDefs, defWithLink])
 
-function cancelAdd() {
-  newKey.value = ''
-  newType.value = 'text'
-  newOptions.value = ''
-  showAdder.value = false
+  showSmartAdder.value = false
 }
 
 function removeField(key: string) {
@@ -132,21 +120,62 @@ function removeField(key: string) {
 
 <style scoped>
 .dynamic-fields { border-top: 1px dashed var(--border-color); padding-top: 8px; margin-top: 4px; }
-.df-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.df-title { font-size: var(--font-size-sm); color: var(--text-tertiary, #888); }
-.df-add-btn { font-size: var(--font-size-sm); padding: 2px 10px; background: var(--primary); color: var(--color-text-inverse); border: none; border-radius: var(--radius-sm); cursor: pointer; }
-.df-add-btn:hover { background: var(--primary-hover); }
+
+/* 图标长条 UI */
+.df-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-md, 8px);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: transparent;
+  user-select: none;
+}
+.df-strip:hover {
+  border-color: var(--primary, #6c5ce7);
+  background: color-mix(in srgb, var(--primary, #6c5ce7) 6%, transparent);
+}
+.df-strip:active {
+  background: color-mix(in srgb, var(--primary, #6c5ce7) 12%, transparent);
+}
+.df-strip-icon {
+  color: var(--text-tertiary, #888);
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+.df-strip:hover .df-strip-icon {
+  color: var(--primary, #6c5ce7);
+}
+.df-strip-text {
+  font-size: var(--font-size-sm);
+  color: var(--text-tertiary, #888);
+  transition: color 0.15s;
+}
+.df-strip:hover .df-strip-text {
+  color: var(--primary, #6c5ce7);
+}
+
 .df-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
 .df-key { font-size: var(--font-size-sm); color: var(--text-secondary); min-width: 70px; font-weight: var(--font-weight-medium); }
 .df-input { flex: 1; padding: 5px 8px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: var(--font-size-sm); font-family: inherit; background: var(--input-bg); color: var(--text-color); }
 .df-textarea { resize: vertical; min-height: 36px; }
 .df-check-wrap { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .df-check-wrap input[type="checkbox"] { accent-color: var(--primary); }
-.df-remove { width: 22px; height: 22px; border: none; background: transparent; border-radius: var(--radius-sm); cursor: pointer; color: var(--danger); font-size: var(--font-size-xs); flex-shrink: 0; }
+.df-remove {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--danger);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
 .df-remove:hover { background: color-mix(in srgb, var(--danger) 10%, transparent); }
-.df-adder { display: flex; gap: 4px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
-.df-input-key { max-width: 140px; }
-.df-select { padding: 5px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: var(--font-size-sm); background: var(--input-bg); color: var(--text-color); }
-.df-confirm { padding: 4px 10px; background: var(--success); color: var(--color-text-inverse); border: none; border-radius: var(--radius-sm); cursor: pointer; font-size: var(--font-size-sm); }
-.df-cancel { padding: 4px 10px; background: var(--border-color); color: var(--text-secondary); border: none; border-radius: var(--radius-sm); cursor: pointer; font-size: var(--font-size-sm); }
 </style>

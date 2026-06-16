@@ -1,11 +1,7 @@
 <template>
   <div class="plant-view">
     <div v-if="viewMode === 'recipe'" class="pv-recipe">
-      <div class="pv-back-bar">
-        <button class="btn-ghost" @click="viewMode = 'list'">← 返回列表</button>
-        <span class="pv-title">配方树</span>
-      </div>
-      <RecipeTreeView />
+      <RecipeTreeView @back="viewMode = 'list'" />
     </div>
     <SchemaRenderer v-else type-key="plant" :detail-tabs="plantTabs">
       <template #toolbar-extra>
@@ -44,9 +40,5 @@ const plantTabs: RelationTabDef[] = [
   color: var(--color-text-primary); font-size: var(--font-size-sm); cursor: pointer; transition: all 0.15s; white-space: nowrap;
 }
 .pv-recipe-btn:hover { background: var(--color-bg-hover); border-color: var(--color-text-secondary); color: var(--color-text-primary); }
-.pv-back-bar {
-  display: flex; align-items: center; gap: 12px; padding: 8px 16px;
-  border-bottom: 1px solid var(--border, #333);
-}
-.pv-title { font-weight: var(--font-weight-semibold); font-size: var(--font-size-base); }
+
 </style>

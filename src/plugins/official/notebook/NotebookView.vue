@@ -27,81 +27,33 @@
             <input v-model="searchQuery" class="nb-search-input" placeholder="搜索笔记..." />
           </div>
           <div class="nb-note-list">
-            <template v-if="searchQuery">
-              <div
-                v-for="note in filteredNotes"
-                :key="note.id"
-                :class="['nb-note-item', { active: selectedNoteId === note.id }]"
-                role="button"
-                tabindex="0"
-                @click="selectedNoteId = note.id"
-                @keydown.enter="selectedNoteId = note.id"
-              >
-                <span class="nb-note-icon"><WsIcon :name="getNoteIcon(note)" size="xs" /></span>
-                <span class="nb-note-name">{{ note.name }}</span>
-              </div>
-            </template>
-            <template v-else>
-              <div :class="['nb-folder-group', { collapsed: collapsedFolders.has('') }]">
-                <div class="nb-folder-header" role="button" tabindex="0" @click="toggleFolder('')" @keydown.enter="toggleFolder('')" @keydown.space.prevent="toggleFolder('')">
-                  <span class="nb-folder-arrow"><WsIcon :name="collapsedFolders.has('') ? 'chevron-right' : 'chevron-down'" size="xs" /></span>
-                  <span class="nb-folder-icon"><WsIcon name="outline" size="xs" /></span>
-                  <span class="nb-folder-name">未分类</span>
-                  <span class="nb-folder-count">{{ unfiledNotes.length }}</span>
-                </div>
-                <div class="nb-folder-items">
-                  <div
-                    v-for="note in unfiledNotes"
-                    :key="note.id"
-                    :class="['nb-note-item', { active: selectedNoteId === note.id }]"
-                    @click="selectedNoteId = note.id"
-                  >
-                    <span class="nb-note-icon"><WsIcon :name="getNoteIcon(note)" size="xs" /></span>
-                    <span class="nb-note-name">{{ note.name }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div
-                v-for="folder in folders"
-                :key="folder.id"
-                :class="['nb-folder-group', { collapsed: collapsedFolders.has(folder.id) }]"
-              >
-                <div class="nb-folder-header" @click="toggleFolder(folder.id)">
-                  <span class="nb-folder-arrow"><WsIcon :name="collapsedFolders.has(folder.id) ? 'chevron-right' : 'chevron-down'" size="xs" /></span>
-                  <span class="nb-folder-icon"><WsIcon name="folder" size="xs" /></span>
-                  <span class="nb-folder-name">{{ folder.name }}</span>
-                  <span class="nb-folder-count">{{ getFolderNotes(folder.id).length }}</span>
-                  <button :class="['nb-folder-del', { confirming: pendingDeleteFolderId === folder.id }]" @click.stop="deleteFolder(folder.id)" :title="pendingDeleteFolderId === folder.id ? '再次点击确认删除' : '删除文件夹'">{{ pendingDeleteFolderId === folder.id ? '确认?' : '×' }}</button>
-                </div>
-                <div class="nb-folder-items">
-                  <div
-                    v-for="note in getFolderNotes(folder.id)"
-                    :key="note.id"
-                    :class="['nb-note-item', { active: selectedNoteId === note.id }]"
-                    @click="selectedNoteId = note.id"
-                  >
-                    <span class="nb-note-icon"><WsIcon :name="getNoteIcon(note)" size="xs" /></span>
-                    <span class="nb-note-name">{{ note.name }}</span>
-                  </div>
-                </div>
-              </div>
-            </template>
+            <FolderTree
+              :folders="folders"
+              :selectedNoteId="selectedNoteId"
+              :collapsedFolders="collapsedFolders"
+              :unfiledNotes="unfiledNotes"
+              :allNotes="filteredNotes"
+              :searchResults="filteredNotes"
+              :searchMode="!!searchQuery"
+              :pendingDeleteId="pendingDeleteFolderId"
+              :folderToRename="folderToRename"
+              @renameMode="clearFolderToRename"
+              @selectNote="selectedNoteId = $event"
+              @toggleFolder="toggleFolder"
+              @deleteFolder="deleteFolder"
+              @moveNote="moveNoteToFolder"
+              @renameFolder="renameFolder"
+              @reorderFolders="reorderFolders"
+              @createNote="createNote"
+              @createFolder="createFolder"
+              @duplicateNote="duplicateNote"
+              @deleteNote="deleteNote"
+              @reorderNotes="reorderNotes"
+            />
+          </div>
         </div>
-        <div v-if="showFolderInput" class="nb-folder-input-wrap">
-          <input
-            ref="folderInputRef"
-            v-model="newFolderName"
-            class="nb-folder-input"
-            placeholder="文件夹名称…"
-            @keydown.enter="confirmCreateFolder"
-            @keydown.escape="showFolderInput = false"
-          />
-          <button class="nb-fi-ok" @click="confirmCreateFolder" aria-label="确认"><WsIcon name="check" size="xs" /></button>
-          <button class="nb-fi-cancel" @click="showFolderInput = false" aria-label="取消"><WsIcon name="close" size="xs" /></button>
-        </div>
+        
       </div>
-    </div>
 
       <div class="nb-main">
         <NotebookEditor
@@ -109,6 +61,7 @@
           :note="currentNote"
           :folders="folders"
           @update="onNoteUpdate"
+          @navigate="selectedNoteId = $event"
         />
         <NotebookBoard
           v-else-if="currentMode === 'board'"
@@ -127,15 +80,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, watch, nextTick } from 'vue'
-import { useEntityStore } from '@worldsmith/entity-core'
+import { ref, computed, reactive, watch, onMounted } from 'vue'
+import { useEntityStore, useRelationStore, useBidirectional } from '@worldsmith/entity-core'
+import type { Relation } from '@worldsmith/entity-core'
 import WsIcon from '../../../ui/WsIcon.vue'
 import NotebookEditor from './components/NotebookEditor.vue'
 import NotebookBoard from './components/NotebookBoard.vue'
 import NotebookGraph from './components/NotebookGraph.vue'
-import { VIEW_MODES, NOTE_TYPES } from './notebookConfig'
+import FolderTree from './components/FolderTree.vue'
+import { VIEW_MODES } from './notebookConfig'
 import type { ViewMode } from './notebookConfig'
 import { useAgentPluginBridge } from '../../../composables/useAgentPluginBridge'
+import type { NotebookEntity } from './types'
 
 interface NotebookFolder {
   id: string
@@ -143,14 +99,14 @@ interface NotebookFolder {
 }
 
 const entityStore = useEntityStore()
+const relationStore = useRelationStore()
+const { createBidirectional } = useBidirectional()
 const currentMode = ref<ViewMode>('editor')
 const searchQuery = ref('')
 const selectedNoteId = ref<string | null>(null)
 const collapsedFolders = reactive(new Set<string>())
 const sidebarOpen = ref(true)
-const showFolderInput = ref(false)
-const newFolderName = ref('')
-const folderInputRef = ref<HTMLInputElement | null>(null)
+const folderToRename = ref<string | null>(null)
 const pendingDeleteFolderId = ref<string | null>(null)
 
 const STORAGE_KEY_FOLDERS = 'worldsmith-notebook-folders'
@@ -188,45 +144,36 @@ const modeLabels: Record<ViewMode, string> = {
 }
 
 const notebookNotes = computed(() =>
-  entityStore.entities.filter((e: any) => e.type === 'notebook')
+  entityStore.entities.filter((e): e is NotebookEntity => e.type === 'notebook')
 )
 
 const filteredNotes = computed(() => {
   if (!searchQuery.value) return notebookNotes.value
   const q = searchQuery.value.toLowerCase()
-  return notebookNotes.value.filter((n: any) =>
+  return notebookNotes.value.filter((n) =>
     n.name.toLowerCase().includes(q) ||
     (n.description || '').toLowerCase().includes(q)
   )
 })
 
 const unfiledNotes = computed(() =>
-  notebookNotes.value.filter((n: any) => {
+  notebookNotes.value.filter((n) => {
     const fid = n.properties?.folderId
     return !fid || !folders.value.some(f => f.id === fid)
   })
 )
 
-function getFolderNotes(folderId: string): any[] {
-  return notebookNotes.value.filter((n: any) => n.properties?.folderId === folderId)
+function getFolderNotes(folderId: string): NotebookEntity[] {
+  return notebookNotes.value
+    .filter((n) => n.properties?.folderId === folderId)
+    .sort((a, b) => ((a.properties?.sortOrder || '0').localeCompare(b.properties?.sortOrder || '0', undefined, { numeric: true })))
 }
 
 const currentNote = computed(() =>
   selectedNoteId.value
-    ? notebookNotes.value.find((n: any) => n.id === selectedNoteId.value)
+    ? notebookNotes.value.find((n) => n.id === selectedNoteId.value) ?? null
     : null
 )
-
-function getNoteIcon(note: any): string {
-  const noteType = note.properties?.noteType || 'markdown'
-  const iconMap: Record<string, string> = {
-    markdown: 'edit',
-    code: 'keyboard',
-    canvas: 'palette',
-    reference: 'manuscript',
-  }
-  return iconMap[noteType] || 'edit'
-}
 
 function toggleFolder(id: string): void {
   if (collapsedFolders.has(id)) collapsedFolders.delete(id)
@@ -234,8 +181,8 @@ function toggleFolder(id: string): void {
   saveCollapsed()
 }
 
-async function createNote(): Promise<void> {
-  const targetFolder = folders.value.length > 0 ? folders.value[0].id : ''
+async function createNote(targetFolderId?: string): Promise<void> {
+  const targetFolder = targetFolderId ?? ''
   const id = await entityStore.add({
     id: crypto.randomUUID(),
     type: 'notebook',
@@ -244,9 +191,6 @@ async function createNote(): Promise<void> {
     properties: {
       content: '',
       noteType: 'markdown',
-      tags: [],
-      backlinks: [],
-      forwardLinks: [],
       linkedEntities: [],
       codeLanguage: '',
       codeOutput: '',
@@ -265,19 +209,14 @@ async function createNote(): Promise<void> {
 }
 
 function createFolder(): void {
-  showFolderInput.value = true
-  newFolderName.value = ''
-  nextTick(() => { folderInputRef.value?.focus() })
+  const id = crypto.randomUUID()
+  folders.value.push({ id, name: '新建文件夹' })
+  saveFolders()
+  folderToRename.value = id
 }
 
-function confirmCreateFolder(): void {
-  const name = newFolderName.value.trim()
-  if (!name) return
-  const id = crypto.randomUUID()
-  folders.value.push({ id, name })
-  saveFolders()
-  showFolderInput.value = false
-  newFolderName.value = ''
+function clearFolderToRename(): void {
+  folderToRename.value = null
 }
 
 function deleteFolder(folderId: string): void {
@@ -299,14 +238,259 @@ function deleteFolder(folderId: string): void {
   }
 }
 
+function moveNoteToFolder(noteId: string, folderId: string): void {
+  const note = notebookNotes.value.find((n) => n.id === noteId)
+  if (!note) return
+  entityStore.update(noteId, {
+    properties: { ...note.properties, folderId },
+  })
+}
+
+async function duplicateNote(noteId: string): Promise<void> {
+  const note = notebookNotes.value.find((n) => n.id === noteId)
+  if (!note) return
+  const id = await entityStore.add({
+    ...note,
+    id: crypto.randomUUID(),
+    name: note.name + '（副本）',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }, 'user')
+  selectedNoteId.value = id
+}
+
+async function deleteNote(noteId: string): Promise<void> {
+  await entityStore.remove(noteId)
+  if (selectedNoteId.value === noteId) selectedNoteId.value = null
+}
+
+function reorderNotes(folderId: string, noteIds: string[]): void {
+  for (let i = 0; i < noteIds.length; i++) {
+    const note = notebookNotes.value.find((n) => n.id === noteIds[i])
+    if (!note) continue
+    const sortOrder = String(i).padStart(10, '0')
+    if (note.properties?.sortOrder !== sortOrder) {
+      entityStore.update(note.id, {
+        properties: { ...note.properties, sortOrder },
+      })
+    }
+  }
+}
+
+function renameFolder(folderId: string, newName: string): void {
+  folders.value = folders.value.map((f) => f.id === folderId ? { ...f, name: newName } : f)
+  saveFolders()
+}
+
+function reorderFolders(newFolders: NotebookFolder[]): void {
+  folders.value = newFolders
+  saveFolders()
+}
+
 async function onNoteUpdate(data: { id: string; changes: Record<string, unknown> }): Promise<void> {
   await entityStore.update(data.id, data.changes)
 }
 
 watch(sidebarOpen, () => { saveSidebar() })
 
-useAgentPluginBridge('notebook', (event) => {
-  console.log(`[Agent→${event.pluginId}] ${event.action}`, event.payload)
+onMounted(async () => {
+  await migrateBacklinks()
+})
+
+async function migrateBacklinks(): Promise<void> {
+  const notesWithBacklinks = notebookNotes.value.filter((n) => {
+    const bl = n.properties?.backlinks
+    return Array.isArray(bl) && bl.length > 0
+  })
+  if (notesWithBacklinks.length === 0) return
+
+  for (const note of notesWithBacklinks) {
+    const targetIds: string[] = note.properties.backlinks || []
+    const sourceIds: string[] = note.properties.forwardLinks || []
+    for (const targetId of targetIds) {
+      const exists = relationStore.relations.some(
+        (r: Relation) => r.type === 'note_link' && r.sourceId === targetId && r.targetId === note.id
+      )
+      if (!exists) {
+        await createBidirectional({ type: 'note_link', sourceId: targetId, targetId: note.id })
+      }
+    }
+    for (const targetId of sourceIds) {
+      const exists = relationStore.relations.some(
+        (r: Relation) => r.type === 'note_link' && r.sourceId === note.id && r.targetId === targetId
+      )
+      if (!exists) {
+        await createBidirectional({ type: 'note_link', sourceId: note.id, targetId })
+      }
+    }
+    await entityStore.update(note.id, {
+      properties: { ...note.properties, backlinks: [], forwardLinks: [] },
+    })
+  }
+}
+
+useAgentPluginBridge('notebook', async (event) => {
+  const { action, payload } = event
+  console.log(`[Agent→notebook] ${action}`, payload)
+
+  switch (action) {
+    case 'create_note': {
+      const targetFolder = (payload.folderId as string) || (folders.value.length > 0 ? folders.value[0].id : '')
+      const id = await entityStore.add({
+        id: crypto.randomUUID(),
+        type: 'notebook',
+        name: (payload.name as string) || (payload.content as string)?.slice(0, 30) || 'AI 创建的笔记',
+        description: '',
+        properties: {
+          content: (payload.content as string) || '',
+          noteType: (payload.noteType as string) || 'markdown',
+          tags: (payload.tags as string[]) || [],
+          linkedEntities: [],
+          codeLanguage: '',
+          codeOutput: '',
+          sortOrder: Date.now().toString(),
+          folderId: targetFolder,
+        },
+        tags: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }, 'user')
+      selectedNoteId.value = id
+      break
+    }
+
+    case 'update_note': {
+      const noteId = payload.noteId as string
+      if (!noteId) break
+      const note = notebookNotes.value.find((n) => n.id === noteId)
+      if (!note) break
+      const changes: Record<string, unknown> = { updatedAt: new Date().toISOString() }
+      if (payload.content !== undefined) {
+        changes.properties = { ...note.properties, content: payload.content }
+      }
+      if (payload.tags !== undefined) {
+        const props = (changes.properties as Record<string, unknown>) || { ...note.properties }
+        props.tags = payload.tags
+        changes.properties = props
+      }
+      await entityStore.update(noteId, changes)
+      break
+    }
+
+    case 'delete_note': {
+      const noteId = payload.noteId as string
+      if (!noteId) break
+      await entityStore.remove(noteId)
+      if (selectedNoteId.value === noteId) selectedNoteId.value = null
+      break
+    }
+
+    case 'list_notes': {
+      let results = notebookNotes.value
+      const folderId = payload.folderId as string | undefined
+      const keyword = payload.keyword as string | undefined
+      if (folderId) {
+        results = results.filter((n) => n.properties?.folderId === folderId)
+      }
+      if (keyword) {
+        const q = keyword.toLowerCase()
+        results = results.filter((n) =>
+          n.name.toLowerCase().includes(q) ||
+          (n.properties?.content || '').toLowerCase().includes(q)
+        )
+      }
+      const summary = results.map((n) => ({ id: n.id, name: n.name, type: n.properties?.noteType }))
+      ;(window as any).__worldsmith_notebook_list__ = summary
+      break
+    }
+
+    case 'search_notes': {
+      const keyword = (payload.keyword as string) || ''
+      const q = keyword.toLowerCase()
+      const results = notebookNotes.value.filter((n) =>
+        n.name.toLowerCase().includes(q) ||
+        (n.description || '').toLowerCase().includes(q) ||
+        (n.properties?.content || '').toLowerCase().includes(q)
+      )
+      const summary = results.map((n) => ({ id: n.id, name: n.name, preview: (n.properties?.content || '').slice(0, 100) }))
+      ;(window as any).__worldsmith_notebook_search__ = summary
+      break
+    }
+
+    case 'execute_code': {
+      const noteId = payload.noteId as string
+      const code = payload.code as string
+      if (noteId && code) {
+        const note = notebookNotes.value.find((n) => n.id === noteId)
+        if (note) {
+          try {
+            const logs: string[] = []
+            const iframe = document.createElement('iframe')
+            iframe.style.display = 'none'
+            iframe.sandbox.add('allow-scripts')
+            const escapedCode = code.replace(/<\/script>/gi, '<\\/script>')
+            const srcdoc = `<!DOCTYPE html><html><head><script>
+              const __logs = [];
+              const console = { log: (...a) => __logs.push(a.map(v => typeof v === 'object' ? JSON.stringify(v) : String(v)).join(' ')), error: (...a) => __logs.push('ERROR: ' + a.map(String).join(' ')) };
+              try { ${escapedCode} } catch(e) { __logs.push('ERROR: ' + (e.message || String(e))); }
+              parent.postMessage({ type: 'code-output', logs: __logs }, '*');
+            <\/script></head><body></body></html>`
+            iframe.srcdoc = srcdoc
+            document.body.appendChild(iframe)
+            const output = await new Promise<string>((resolve) => {
+              const timer = setTimeout(() => { iframe.remove(); resolve('执行超时（5秒限制）') }, 5000)
+              function onMsg(e: MessageEvent) {
+                if (e.data?.type === 'code-output' && e.source === iframe.contentWindow) {
+                  clearTimeout(timer)
+                  window.removeEventListener('message', onMsg)
+                  iframe.remove()
+                  const l = e.data.logs || []
+                  resolve(l.length > 0 ? l.join('\n') : '(无输出)')
+                }
+              }
+              window.addEventListener('message', onMsg)
+            })
+            await entityStore.update(noteId, { properties: { ...note.properties, codeOutput: output } })
+          } catch (err: any) {
+            await entityStore.update(noteId, { properties: { ...note.properties, codeOutput: 'ERROR: ' + (err?.message || String(err)) } })
+          }
+        }
+      }
+      break
+    }
+
+    case 'create_backlink': {
+      const { sourceId, targetId } = payload as { sourceId: string; targetId: string }
+      if (!sourceId || !targetId) break
+      const source = notebookNotes.value.find((n) => n.id === sourceId)
+      const target = notebookNotes.value.find((n) => n.id === targetId)
+      if (source && target) {
+        await createBidirectional({ type: 'note_link', sourceId, targetId })
+      }
+      break
+    }
+
+    case 'export_note': {
+      const noteId = payload.noteId as string
+      const format = (payload.format as string) || 'markdown'
+      const note = notebookNotes.value.find((n) => n.id === noteId)
+      if (!note) break
+      const content = note.properties?.content || ''
+      const filename = `${note.name}.${format === 'html' ? 'html' : 'md'}`
+      const mimeType = format === 'html' ? 'text/html' : 'text/markdown'
+      const blob = new Blob([content], { type: mimeType })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      URL.revokeObjectURL(url)
+      break
+    }
+
+    default:
+      console.warn(`[Agent→notebook] unknown action: ${action}`, payload)
+  }
 })
 </script>
 
@@ -336,34 +520,12 @@ useAgentPluginBridge('notebook', (event) => {
 .nb-search-input:focus { border-color: var(--color-primary); }
 .nb-note-list { flex: 1; overflow-y: auto; padding: 4px; }
 
-.nb-folder-group { margin-bottom: 2px; }
-.nb-folder-header { display: flex; align-items: center; gap: 4px; padding: 5px 6px; border-radius: 4px; cursor: pointer; font-size: var(--font-size-sm); color: var(--color-text-secondary); transition: all 0.1s; user-select: none; }
-.nb-folder-header:hover { background: var(--color-bg-hover); }
-.nb-folder-arrow { font-size: var(--text-micro-font-size); width: 12px; text-align: center; color: var(--color-text-tertiary); }
-.nb-folder-icon { font-size: var(--font-size-sm); }
-.nb-folder-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--font-weight-medium); }
-.nb-folder-count { font-size: var(--font-size-xs); color: var(--color-text-tertiary); min-width: 16px; text-align: right; }
-.nb-folder-del { display: none; font-size: var(--font-size-sm); padding: 0 4px; border: none; background: transparent; color: var(--color-text-tertiary); cursor: pointer; line-height: 1; }
-.nb-folder-header:hover .nb-folder-del { display: inline-block; }
-.nb-folder-del:hover { color: var(--color-danger); }
-.nb-folder-del.confirming { display: inline-block; color: var(--color-danger); font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); animation: ws-pulse 1s infinite; }
-
-
 .nb-folder-input-wrap { display: flex; gap: 4px; padding: 6px 8px; border-top: 1px solid var(--color-border-subtle); align-items: center; }
 .nb-folder-input { flex: 1; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--color-primary); background: var(--color-bg-base); color: var(--color-text-primary); font-size: var(--font-size-sm); outline: none; }
 .nb-fi-ok, .nb-fi-cancel { padding: 2px 8px; border-radius: 4px; border: 1px solid var(--color-border); background: transparent; color: var(--color-text-secondary); font-size: var(--font-size-sm); cursor: pointer; }
 .nb-fi-ok:hover { background: color-mix(in srgb, var(--color-success) 15%, transparent); color: var(--color-success); border-color: var(--color-success); }
 .nb-fi-cancel:hover { background: color-mix(in srgb, var(--color-danger) 15%, transparent); color: var(--color-danger); border-color: var(--color-danger); }
 
-.nb-folder-items { overflow: hidden; transition: max-height 0.2s ease; }
-.nb-folder-group.collapsed .nb-folder-items { max-height: 0; }
-.nb-folder-group:not(.collapsed) .nb-folder-items { max-height: 2000px; }
-
-.nb-note-item { display: flex; align-items: center; gap: 6px; padding: 5px 8px 5px 28px; border-radius: 4px; cursor: pointer; font-size: var(--font-size-sm); color: var(--color-text-secondary); transition: all 0.1s; }
-.nb-note-item:hover { background: var(--color-bg-hover); }
-.nb-note-item.active { background: color-mix(in srgb, var(--color-primary) 15%, transparent); color: var(--color-primary); }
-.nb-note-icon { font-size: var(--font-size-base); }
-.nb-note-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nb-main { flex: 1; overflow: auto; background: var(--color-bg-base); }
 .nb-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--color-text-tertiary); font-size: var(--font-size-base); }
 </style>

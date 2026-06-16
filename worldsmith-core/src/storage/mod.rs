@@ -134,6 +134,8 @@ pub trait StorageBackend: Send + Sync {
   ///
   /// Returns `CoreError` if the operation fails.
   fn kv_get_all(&self) -> Result<Vec<(String, String)>, CoreError>;
+  /// Deletes a key-value pair by key. Idempotent.
+  fn kv_delete(&self, key: &str) -> Result<(), CoreError>;
 
   /// Writes or replaces a module.
   ///

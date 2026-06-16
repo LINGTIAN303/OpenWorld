@@ -2,6 +2,9 @@ import type { ToolDefinition } from '../bridge-types'
 import type { IToolContext } from '../toolbus/types'
 import { loadApiKey } from '../providers/key-store'
 import { persistImage, srcToBlob, getAllImages, getImage, blobToDataUrl, getImagesByPathPrefix } from '../stores/image-persistence'
+import { smartFetch, resolveApiBaseUrl } from '../utils/smart-fetch'
+import { getAllProviderManifests } from '../providers/provider-registry'
+import { isTauri } from '../execution'
 
 /** 图像生成请求超时时间 (180 秒 = 3 分钟) */
 const IMAGE_GEN_TIMEOUT = 180_000
@@ -11,20 +14,15 @@ const IMAGE_DIR = '/images/generated'
 
 /**
  * 各供应商的内置代理路径映射
- * 键为供应商标识，值为 Vite 代理路径前缀
+ * 从 provider-registry 统一读取
  */
-const PROVIDER_BASE_URLS: Record<string, string> = {
-  anthropic: '/api/anthropic',
-  openai: '/api/openai/v1',
-  google: '/api/google',
-  deepseek: '/api/deepseek',
-  groq: '/api/groq/openai/v1',
-  openrouter: '/api/openrouter/api/v1',
-  zhipu: '/api/zhipu/api/paas/v4',
-  qwen: '/api/qwen/compatible-mode/v1',
-  minimax: '/api/minimax/v1',
-  kimi: '/api/kimi/v1',
-}
+const PROVIDER_BASE_URLS: Record<string, string> = (() => {
+  const map: Record<string, string> = {}
+  for (const m of getAllProviderManifests()) {
+    map[m.id] = resolveApiBaseUrl(m.id)
+  }
+  return map
+})()
 
 /** DALL-E 模型名称列表，用于判断是否需要发送 DALL-E 专属参数 */
 const DALLE_MODELS = ['dall-e-2', 'dall-e-3']
@@ -33,7 +31,6 @@ const DALLE_MODELS = ['dall-e-2', 'dall-e-3']
 const IMAGE_GEN_PROVIDER_KEY = 'worldsmith_image_gen_provider'
 const IMAGE_GEN_MODEL_KEY = 'worldsmith_image_gen_model'
 const IMAGE_GEN_BASE_URL_KEY = 'worldsmith_image_gen_base_url'
-const IMAGE_GEN_API_KEY_KEY = 'worldsmith_image_gen_api_key'
 
 /** 获取当前浏览器源的根 URL，用于拼接绝对路径的 API 请求 */
 function getOrigin(): string {
@@ -53,19 +50,15 @@ function getImageGenConfig(): { provider: string; modelId: string; baseUrl?: str
 }
 
 /**
- * 获取图像生成 API Key，采用三级查找策略：
- * 1. 优先使用图像生成专用 API Key（设置面板独立配置）
- * 2. 若为 custom 供应商，尝试用自定义 hostname 查找 key-store
- * 3. 最后用供应商名查找 key-store（与主聊天共享）
+ * 获取图像生成 API Key，自动复用供应商已配置的 Key：
+ * 1. 若为 custom 供应商，尝试用自定义 hostname 查找 key-store
+ * 2. 用供应商名查找 key-store（与主聊天共享）
  *
  * @param provider 图像生成供应商名称
  * @param customBaseUrl 自定义供应商的 Base URL
  * @returns 找到的 API Key 字符串，未找到返回空字符串
  */
 async function getImageGenApiKey(provider: string, customBaseUrl?: string): Promise<string> {
-  const dedicatedKey = localStorage.getItem(IMAGE_GEN_API_KEY_KEY)
-  if (dedicatedKey) return dedicatedKey
-
   if (provider === 'custom' && customBaseUrl) {
     try {
       const url = new URL(customBaseUrl)
@@ -74,7 +67,6 @@ async function getImageGenApiKey(provider: string, customBaseUrl?: string): Prom
       if (key) return key
     } catch {}
   }
-
   const key = await loadApiKey(provider)
   return key || ''
 }
@@ -93,6 +85,13 @@ function resolveApiUrl(provider: string, customBaseUrl?: string): { url: string;
       const parsed = new URL(customBaseUrl)
       let basePath = parsed.pathname.replace(/\/+$/, '')
       if (!basePath) basePath = '/v1'
+      // Tauri 模式：直连；Web 模式：走 custom-proxy
+      if (isTauri()) {
+        return {
+          url: `${parsed.protocol}//${parsed.host}${basePath}/images/generations`,
+          proxyHeaders: {},
+        }
+      }
       const proxyPath = `/api/custom-proxy${basePath}/images/generations`
       return {
         url: `${getOrigin()}${proxyPath}`,
@@ -107,7 +106,7 @@ function resolveApiUrl(provider: string, customBaseUrl?: string): { url: string;
   if (!base) return null
 
   return {
-    url: `${getOrigin()}${base}/images/generations`,
+    url: `${base}/images/generations`,
     proxyHeaders: {},
   }
 }
@@ -172,8 +171,20 @@ const imageGenerateTool: ToolDefinition = {
       return JSON.stringify({ ok: false, error: 'prompt 不能为空' })
     }
 
+    // 进度上报：注册图片生成任务
+    ctx.reportProgress?.(0, 'generating')
+
+    // 模拟进度定时器
+    let fakeProgress = 0
+    let progressTimer: ReturnType<typeof setInterval> | undefined
+    progressTimer = setInterval(() => {
+      fakeProgress = Math.min(90, fakeProgress + Math.random() * 12 + 5)
+      ctx.reportProgress?.(fakeProgress, 'generating')
+    }, 2000)
+
     const config = getImageGenConfig()
     if (!config) {
+      clearInterval(progressTimer)
       return JSON.stringify({
         ok: false,
         error: '图像生成未配置。请在设置面板中配置图像生成供应商和模型（如 DALL-E 3、Stability AI 等）。',
@@ -182,14 +193,16 @@ const imageGenerateTool: ToolDefinition = {
 
     const apiKey = await getImageGenApiKey(config.provider, config.baseUrl)
     if (!apiKey) {
+      clearInterval(progressTimer)
       return JSON.stringify({
         ok: false,
-        error: `图像生成供应商 ${config.provider} 未配置 API Key。请在设置面板的"绘图"子面板中填入 API Key。`,
+        error: `图像生成供应商 ${config.provider} 未配置 API Key。请在设置面板的"供应商"中配置该供应商的 API Key。`,
       })
     }
 
     const resolved = resolveApiUrl(config.provider, config.baseUrl)
     if (!resolved) {
+      clearInterval(progressTimer)
       return JSON.stringify({
         ok: false,
         error: `不支持的图像生成供应商: ${config.provider}`,
@@ -227,11 +240,12 @@ const imageGenerateTool: ToolDefinition = {
     const timeout = setTimeout(() => controller.abort(), IMAGE_GEN_TIMEOUT)
 
     try {
-      const resp = await fetch(resolved.url, {
+      const resp = await smartFetch(resolved.url, {
         method: 'POST',
         headers: { ...headers, ...resolved.proxyHeaders },
         body: JSON.stringify(body),
         signal: controller.signal,
+        timeout: 180,
       })
 
       if (!resp.ok) {
@@ -253,7 +267,9 @@ const imageGenerateTool: ToolDefinition = {
 
       for (const img of images) {
         let src: string
+        let b64Data: string | undefined
         if (img.b64_json) {
+          b64Data = img.b64_json
           src = `data:image/png;base64,${img.b64_json}`
         } else if (img.url) {
           src = img.url
@@ -274,7 +290,12 @@ const imageGenerateTool: ToolDefinition = {
         })
 
         // 异步持久化到 IndexedDB，不阻塞生成流程
-        srcToBlob(src).then(blob => {
+        if (b64Data) {
+          // base64 数据直接转 Blob，无需 fetch
+          const binaryStr = atob(b64Data)
+          const bytes = new Uint8Array(binaryStr.length)
+          for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i)
+          const blob = new Blob([bytes], { type: 'image/png' })
           persistImage({
             id: blockId,
             path: imagePath,
@@ -286,7 +307,22 @@ const imageGenerateTool: ToolDefinition = {
             createdAt: Date.now(),
             caption,
           }).catch(() => {})
-        }).catch(() => {})
+        } else {
+          // 远程 URL：尝试 fetch 持久化（可能因 CORS 失败）
+          srcToBlob(src).then(blob => {
+            persistImage({
+              id: blockId,
+              path: imagePath,
+              blob,
+              prompt,
+              model: config.modelId,
+              provider: config.provider,
+              size,
+              createdAt: Date.now(),
+              caption,
+            }).catch(() => {})
+          }).catch(() => {})
+        }
 
         results.push({
           id: blockId,
@@ -294,6 +330,10 @@ const imageGenerateTool: ToolDefinition = {
           revisedPrompt: img.revised_prompt,
         })
       }
+
+      clearInterval(progressTimer)
+      progressTimer = undefined
+      ctx.reportProgress?.(100, 'completed')
 
       return JSON.stringify({
         ok: true,
@@ -303,6 +343,10 @@ const imageGenerateTool: ToolDefinition = {
         message: `已生成 ${results.length} 张图片，图片会自动显示在消息中。所有图片已持久化存储在 ${IMAGE_DIR} 目录，可通过 image_list 查看历史图片，通过 image_show 重新展示。`,
       })
     } catch (err: any) {
+      clearInterval(progressTimer)
+      progressTimer = undefined
+      ctx.reportProgress?.(-1, 'failed')
+
       if (err.name === 'AbortError') {
         return JSON.stringify({ ok: false, error: '图像生成请求超时（3分钟），请稍后重试或使用更小的尺寸。' })
       }
@@ -312,6 +356,10 @@ const imageGenerateTool: ToolDefinition = {
       })
     } finally {
       clearTimeout(timeout)
+      if (progressTimer) {
+        clearInterval(progressTimer)
+        progressTimer = undefined
+      }
     }
   },
 }

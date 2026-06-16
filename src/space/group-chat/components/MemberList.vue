@@ -2,19 +2,19 @@
   <div class="member-list">
     <div class="list-header">
       <span class="section-label">成员 ({{ store.groupMembers.length }})</span>
-      <button class="invite-btn" @click="$emit('invite')">＋ 邀请</button>
+      <button class="invite-btn" @click="$emit('invite')"><WsIcon name="plus" size="xs" /> 邀请</button>
     </div>
     <div class="members">
-      <div v-for="member in store.groupMembers" :key="member.id" class="member-item" @click="onMemberClick(member)">
+      <div v-for="member in store.groupMembers" :key="member.id" class="member-item" @click="onMemberClick($event, member)">
         <div class="member-avatar" :style="{ background: member.color }">
           <span class="avatar-letter">{{ member.name[0] }}</span>
         </div>
         <div class="member-info">
           <div class="member-name-row">
             <span class="member-name">{{ member.name }}</span>
-            <span v-if="member.groupRole === 'owner'" class="role-tag owner-tag">群主</span>
-            <span v-else-if="member.groupRole === 'admin'" class="role-tag admin-tag">管理员</span>
-            <span v-if="member.muted" class="mute-tag">🔇</span>
+            <span v-if="member.groupRole === 'owner'" class="role-tag owner-tag"><WsIcon name="crown" size="xs" /> 群主</span>
+            <span v-else-if="member.groupRole === 'admin'" class="role-tag admin-tag"><WsIcon name="shield" size="xs" /> 管理员</span>
+            <WsIcon v-if="member.muted" name="volume-off" size="xs" class="mute-icon" />
           </div>
           <div class="member-role-text">{{ member.role }}</div>
         </div>
@@ -24,10 +24,19 @@
     <MemberActionMenu
       v-if="selectedMember"
       :member="selectedMember"
-      @close="selectedMember = null"
+      :anchor-rect="menuAnchorRect"
+      @close="selectedMember = null; menuAnchorRect = null"
+      @private-chat="onPrivateChat"
       @set-admin="onSetAdmin"
-      @mute="onMute"
+      @mute="onMuteRequest"
       @kick="onKick"
+    />
+
+    <MuteDialog
+      v-if="muteTarget"
+      :member-name="muteTarget.name"
+      @cancel="muteTarget = null"
+      @confirm="onMuteConfirm"
     />
   </div>
 </template>
@@ -38,14 +47,28 @@ import { useGroupChatStore } from '../GroupChatStore'
 import { saveCasualGroupSession } from '../GroupSessionManager'
 import type { GroupMember } from '../types'
 import MemberActionMenu from './MemberActionMenu.vue'
+import MuteDialog from './MuteDialog.vue'
+import WsIcon from '../../../ui/WsIcon.vue'
 
-defineEmits<{ invite: [] }>()
+const emit = defineEmits<{
+  invite: []
+  privateChat: [memberId: string]
+  muteAction: [memberId: string, muted: boolean, duration: number | null]
+}>()
 
 const store = useGroupChatStore()
 const selectedMember = ref<GroupMember | null>(null)
+const menuAnchorRect = ref<DOMRect | null>(null)
+const muteTarget = ref<GroupMember | null>(null)
 
-function onMemberClick(member: GroupMember): void {
+function onMemberClick(event: MouseEvent, member: GroupMember): void {
   selectedMember.value = member
+  menuAnchorRect.value = (event.currentTarget as HTMLElement).getBoundingClientRect()
+}
+
+function onPrivateChat(memberId: string): void {
+  selectedMember.value = null
+  emit('privateChat', memberId)
 }
 
 async function onSetAdmin(memberId: string): Promise<void> {
@@ -57,11 +80,28 @@ async function onSetAdmin(memberId: string): Promise<void> {
   await persistMembers()
 }
 
-async function onMute(memberId: string): Promise<void> {
+function onMuteRequest(memberId: string): void {
   const member = store.groupMembers.find(m => m.id === memberId)
   if (!member) { selectedMember.value = null; return }
-  store.updateGroupMember(memberId, { muted: !member.muted })
   selectedMember.value = null
+  if (member.muted) {
+    // 已禁言则直接解禁
+    store.updateGroupMember(memberId, { muted: false, mutedUntil: undefined })
+    emit('muteAction', memberId, false, null)
+    persistMembers()
+  } else {
+    // 未禁言则打开时长选择弹窗
+    muteTarget.value = member
+  }
+}
+
+async function onMuteConfirm(duration: number | null): Promise<void> {
+  if (!muteTarget.value) return
+  const memberId = muteTarget.value.id
+  const mutedUntil = duration ? Date.now() + duration : undefined
+  store.updateGroupMember(memberId, { muted: true, mutedUntil })
+  emit('muteAction', memberId, true, duration)
+  muteTarget.value = null
   await persistMembers()
 }
 
@@ -98,9 +138,9 @@ async function persistMembers(): Promise<void> {
 .member-info { flex: 1; min-width: 0; }
 .member-name-row { display: flex; align-items: center; gap: 4px; }
 .member-name { font-size: 12px; font-weight: 600; }
-.role-tag { font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: 600; }
+.role-tag { font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: 600; display: inline-flex; align-items: center; gap: 2px; }
 .owner-tag { background: rgba(245,158,11,0.15); color: #f59e0b; }
 .admin-tag { background: rgba(59,130,246,0.15); color: #3b82f6; }
-.mute-tag { font-size: 10px; }
+.mute-icon { color: var(--color-text-tertiary); }
 .member-role-text { font-size: 10px; color: var(--color-text-tertiary); }
 </style>

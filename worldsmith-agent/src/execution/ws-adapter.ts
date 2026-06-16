@@ -1,4 +1,4 @@
-import type { ExecutionAdapter, ExecOptions, ExecResult, PtyOptions } from './adapter'
+import type { ExecutionAdapter, ExecOptions, ExecResult, PtyOptions, ShellInfo, ShellSessionInfo, ShellExecResult } from './adapter'
 
 interface WsAdapterConfig {
   url: string
@@ -286,5 +286,74 @@ export class WebSocketExecutionAdapter implements ExecutionAdapter {
       this.ws = null
     }
     this.connected = false
+  }
+
+  // ─── Shell 检测与会话管理（Web 模式降级） ──────────────────────
+
+  async detectShells(): Promise<ShellInfo[]> {
+    // Web 模式下无法检测本地 Shell，返回默认列表
+    const isWin = navigator.userAgent.includes('Windows')
+    if (isWin) {
+      return [
+        { id: 'cmd', name: 'CMD', path: 'cmd.exe', is_default: true },
+        { id: 'powershell', name: 'PowerShell', path: 'powershell.exe', is_default: false },
+      ]
+    }
+    return [
+      { id: 'sh', name: 'POSIX Shell', path: '/bin/sh', is_default: false },
+      { id: 'bash', name: 'Bash', path: '/bin/bash', is_default: true },
+    ]
+  }
+
+  async createSession(id: string, opts?: PtyOptions): Promise<ShellSessionInfo> {
+    await this.ensureConnection()
+    const shell = opts?.shell || (navigator.userAgent.includes('Windows') ? 'powershell.exe' : '/bin/bash')
+    this.send({
+      type: 'pty_spawn',
+      id,
+      payload: { shell, cwd: opts?.cwd, cols: opts?.cols || 200, rows: opts?.rows || 50 },
+    })
+    return {
+      id,
+      shell_id: shell.includes('powershell') ? 'powershell' : shell.includes('cmd') ? 'cmd' : 'bash',
+      shell_path: shell,
+      cwd: opts?.cwd || process.cwd?.() || '.',
+      created_at: Date.now() / 1000 | 0,
+    }
+  }
+
+  async execInSession(id: string, command: string, timeoutMs?: number): Promise<ShellExecResult> {
+    await this.ensureConnection()
+    // Web 模式下通过 write 发送命令，然后等待输出
+    this.send({ type: 'pty_write', id, payload: { data: command + '\n' } })
+
+    // 收集输出（简化版：等待一段时间后读取）
+    const chunks: string[] = []
+    const cb = (data: string) => chunks.push(data)
+    if (!this.outputCallbacks.has(id)) this.outputCallbacks.set(id, new Set())
+    this.outputCallbacks.get(id)!.add(cb)
+
+    await new Promise(r => setTimeout(r, Math.min(timeoutMs || 30000, 5000)))
+
+    this.outputCallbacks.get(id)?.delete(cb)
+    const stdout = chunks.join('')
+      .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+      .replace(/\x1b\].*?\x07/g, '')
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
+
+    return { stdout, stderr: '', exit_code: 0, timed_out: false }
+  }
+
+  async destroySession(id: string): Promise<void> {
+    await this.killPty(id)
+  }
+
+  async listSessions(): Promise<string[]> {
+    // Web 模式下无法列举服务端会话
+    return []
+  }
+
+  async sendInput(id: string, data: string): Promise<void> {
+    await this.writePty(id, data + '\n')
   }
 }

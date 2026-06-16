@@ -33,8 +33,8 @@ const durationOptions = [
 </script>
 
 <style scoped>
-.dialog-backdrop { position: fixed; inset: 0; z-index: 9998; }
-.mute-dialog { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--color-surface-elevated); border: 1px solid var(--color-border); border-radius: 12px; padding: 20px; min-width: 280px; z-index: 9999; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+.dialog-backdrop { position: fixed; inset: 0; z-index: 10000; }
+.mute-dialog { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--color-surface-elevated); border: 1px solid var(--color-border); border-radius: 12px; padding: 20px; min-width: 280px; z-index: 10001; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
 .dialog-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
 .duration-options { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
 .duration-option { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 8px; cursor: pointer; font-size: 12px; }

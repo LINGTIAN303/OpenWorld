@@ -17,7 +17,8 @@ fn build_team_components(
     width: u32,
     height: u32,
 ) -> Vec<ComponentInfo> {
-    let team_units: Vec<&crate::unit::BattleUnit> = units.iter().filter(|u| u.team == team).collect();
+    let team_units: Vec<&crate::unit::BattleUnit> =
+        units.iter().filter(|u| u.team == team).collect();
     if team_units.is_empty() {
         return Vec::new();
     }
@@ -90,8 +91,8 @@ pub fn calculate(engine: &TacticalEngine) -> AwarenessResult {
 
     for y in 0..height {
         for x in 0..width {
-            let terrain = engine.board.get_terrain(x, y);
-            let terrain_blocks = terrain.blocks_movement();
+            let terrain = engine.board.get_terrain_cached(x, y);
+            let terrain_blocks = terrain.blocks_move;
 
             let mut team_reach_count: HashMap<&str, u32> = HashMap::new();
             for unit in &engine.units {
@@ -163,9 +164,7 @@ pub fn calculate(engine: &TacticalEngine) -> AwarenessResult {
             let unit_at_cell = engine.units.iter().find(|u| u.x == x && u.y == y);
             let is_isolated = if let Some(unit) = unit_at_cell {
                 !engine.units.iter().any(|u| {
-                    u.id != unit.id
-                        && u.team == unit.team
-                        && manhattan(u.x, u.y, x, y) == 1
+                    u.id != unit.id && u.team == unit.team && manhattan(u.x, u.y, x, y) == 1
                 })
             } else {
                 false

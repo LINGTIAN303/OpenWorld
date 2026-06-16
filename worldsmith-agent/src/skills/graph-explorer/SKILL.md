@@ -12,34 +12,34 @@
 ## 操作流程
 
 ### 路径分析
-1. 使用 `graph_find_path` 查找源→目标路径
-2. 结合 `algo_shortest_path` / `algo_k_shortest_paths` 做多路径对比
+1. 使用 `graph(action='find_path')` 查找源→目标路径
+2. 结合 `algo_run(action='shortest_path')` / `algo_run(action='k_shortest_paths')` 做多路径对比
 3. 标注路径上的关键转折节点
 
 ### 聚类探索
-1. 使用 `graph_cluster_analysis` 或 `algo_community_detection` 执行聚类
+1. 使用 `graph(action='cluster_analysis')` 或 `algo_run(action='community_detection')` 执行聚类
 2. 对每个聚类标注主题标签
-3. 使用 `graph_highlight_nodes` 高亮聚类结果
+3. 使用 `graph(action='highlight_nodes')` 高亮聚类结果
 
 ### 节点操作
-- `graph_get_nodes` — 按类型/关键词过滤节点
-- `graph_get_edges` — 按源/目标/关系类型过滤边
-- `graph_export_snapshot` — 导出当前视图
+- `graph(action='get_nodes')` — 按类型/关键词过滤节点
+- `graph(action='get_edges')` — 按源/目标/关系类型过滤边
+- `graph(action='export_snapshot')` — 导出当前视图
 
 ## 工具绑定
 
 | 工具 | 用途 |
 |------|------|
-| `graph_get_nodes` | 获取图谱节点列表 |
-| `graph_get_edges` | 获取图谱边列表 |
-| `graph_find_path` | 查找节点间路径 |
-| `graph_cluster_analysis` | 聚类分析 |
-| `graph_highlight_nodes` | 高亮指定节点 |
-| `graph_export_snapshot` | 导出图谱快照 |
-| `algo_shortest_path` | 最短路径算法 |
-| `algo_force_layout` | 力导向布局 |
-| `algo_pagerank` | PageRank计算 |
-| `algo_community_detection` | 社区检测 |
+| `graph(action='get_nodes')` | 获取图谱节点列表 |
+| `graph(action='get_edges')` | 获取图谱边列表 |
+| `graph(action='find_path')` | 查找节点间路径 |
+| `graph(action='cluster_analysis')` | 聚类分析 |
+| `graph(action='highlight_nodes')` | 高亮指定节点 |
+| `graph(action='export_snapshot')` | 导出图谱快照 |
+| `algo_run(action='shortest_path')` | 最短路径算法 |
+| `algo_run(action='force_layout')` | 力导向布局 |
+| `algo_run(action='pagerank')` | PageRank计算 |
+| `algo_run(action='community_detection')` | 社区检测 |
 
 ## 触发关键词
 图谱、关系网络、聚类、路径、连接、关系图、节点、边

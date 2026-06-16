@@ -1,0 +1,748 @@
+/**
+ * FileStorageBackend — 基于本地文件系统的存储后端
+ *
+ * Phase 2 核心组件：将实体、关系等数据以 JSON 文件形式存储在项目目录中。
+ * 当项目有关联目录时使用此后端，否则降级到 WebStorageBackend/TauriStorageBackend。
+ *
+ * 目录结构：
+ * ```
+ * ProjectDir/
+ * ├── entities/{type}/{name_id}.json   # 每个实体一个文件
+ * ├── relations/_index.json            # 所有关系集中存储
+ * ├── .worldsmith/
+ * │   ├── kv_store.json                # 键值对存储
+ * │   ├── files_meta.json              # 文件元数据
+ * │   └── files_content/               # 文件内容
+ * │       └── {id}.json
+ * ```
+ *
+ * 内存索引：启动时扫描 entities/ 目录构建索引，避免每次查文件系统。
+ */
+
+import type { Entity } from '../types'
+import type { Relation } from '../types'
+import type { ProjectFile, ProjectFileContent } from '../types'
+import type { StorageBackend } from './StorageBackend'
+
+/* ════════════════════════════════════════
+   Tauri 文件系统操作封装
+   ════════════════════════════════════════ */
+
+let _invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null
+
+async function getInvoke() {
+  if (_invoke) return _invoke
+  try {
+    const api = await import('@tauri-apps/api/core')
+    _invoke = api.invoke
+    return _invoke
+  } catch {
+    return null
+  }
+}
+
+async function writeTextFile(path: string, content: string, createDirs = true): Promise<void> {
+  const invoke = await getInvoke()
+  if (!invoke) throw new Error('Tauri 环境不可用')
+  await invoke('cmd_fs_write', { path, content, createDirs })
+}
+
+async function readTextFile(path: string): Promise<string> {
+  const invoke = await getInvoke()
+  if (!invoke) throw new Error('Tauri 环境不可用')
+  return invoke('cmd_fs_read', { path, encoding: 'utf-8' }) as Promise<string>
+}
+
+async function listDir(path: string, recursive = false): Promise<Array<{
+  name: string
+  path: string
+  isDir: boolean
+  size: number
+}>> {
+  const invoke = await getInvoke()
+  if (!invoke) throw new Error('Tauri 环境不可用')
+  return invoke('cmd_fs_list', { path, recursive }) as Promise<any[]>
+}
+
+async function deleteFile(path: string): Promise<void> {
+  const invoke = await getInvoke()
+  if (!invoke) throw new Error('Tauri 环境不可用')
+  await invoke('cmd_fs_delete', { path })
+}
+
+/* ════════════════════════════════════════
+   辅助函数
+   ════════════════════════════════════════ */
+
+/** 将实体名称转为安全的文件名 */
+function toSafeFileName(name: string, id: string): string {
+  const safe = name
+    .slice(0, 30)
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+  const shortId = id.slice(0, 8)
+  return safe ? `${safe}_${shortId}.json` : `${shortId}.json`
+}
+
+/** 从文件路径中提取实体 ID（从文件内容中获取，不从文件名解析） */
+
+/* ════════════════════════════════════════
+   索引条目
+   ════════════════════════════════════════ */
+
+interface EntityIndexEntry {
+  type: string
+  name: string
+  path: string
+}
+
+/* ════════════════════════════════════════
+   FileStorageBackend
+   ════════════════════════════════════════ */
+
+export class FileStorageBackend implements StorageBackend {
+  private _projectDir: string | null = null
+  private _entityIndex = new Map<string, EntityIndexEntry>()
+  private _entityCache = new Map<string, Entity>()
+  private _relations: Relation[] = []
+  private _relationsLoaded = false
+  private _kvCache = new Map<string, string>()
+  private _kvLoaded = false
+  private _filesMeta: ProjectFile[] = []
+  private _filesMetaLoaded = false
+  private _fallback: StorageBackend | null = null
+  private _ready = false
+
+  /**
+   * 自身写入静默期截止时间。
+   * FileStorageBackend 写操作时设置此值，useFsWatcher 检测到
+   * 文件变更时如果处于静默期内则跳过 reload，避免自身写入触发 UI 闪烁。
+   */
+  private _selfWriteUntil = 0
+
+  constructor(fallback: StorageBackend) {
+    this._fallback = fallback
+  }
+
+  /** 是否处于自身写入静默期（文件监听应跳过 reload） */
+  get isInSelfWriteWindow(): boolean {
+    return Date.now() < this._selfWriteUntil
+  }
+
+  /** 标记自身写入开始，设置静默期（2秒） */
+  private markSelfWrite(): void {
+    this._selfWriteUntil = Date.now() + 2000
+  }
+
+  /** 当前是否已绑定项目目录 */
+  get isReady(): boolean {
+    return this._ready && this._projectDir !== null
+  }
+
+  /** 获取当前项目目录路径 */
+  get projectDir(): string | null {
+    return this._projectDir
+  }
+
+  /**
+   * 设置项目目录并加载索引。
+   * 传入 null 表示取消目录绑定，降级到 fallback。
+   */
+  async setProjectDir(dir: string | null): Promise<void> {
+    this._projectDir = dir
+    this._entityIndex.clear()
+    this._entityCache.clear()
+    this._relations = []
+    this._relationsLoaded = false
+    this._kvCache.clear()
+    this._kvLoaded = false
+    this._filesMeta = []
+    this._filesMetaLoaded = false
+
+    if (dir) {
+      await this.loadIndex()
+      this._ready = true
+    } else {
+      this._ready = false
+    }
+  }
+
+  /**
+   * 重新加载索引（文件监听触发外部变更时使用）。
+   * 增量更新：只处理变更的文件路径，不清空全部缓存。
+   */
+  async reloadIndex(): Promise<void> {
+    if (!this._projectDir) return
+    // 标记关系需要重新加载
+    this._relationsLoaded = false
+  }
+
+  /**
+   * 增量更新指定路径的实体缓存。
+   * 由 useFsWatcher 调用，只读取变更的文件，不全量重建。
+   */
+  async reloadPaths(paths: string[]): Promise<void> {
+    if (!this._projectDir) return
+
+    const dir = this._projectDir.replace(/\\/g, '/')
+    const entitiesPrefix = `${dir}/entities/`
+
+    for (const rawPath of paths) {
+      const normalizedPath = rawPath.replace(/\\/g, '/')
+      if (!normalizedPath.startsWith(entitiesPrefix)) continue
+      if (!normalizedPath.endsWith('.json')) continue
+
+      try {
+        const content = await readTextFile(rawPath)
+        const entity: Entity = JSON.parse(content)
+        // 从路径提取 type: entities/{type}/{name_id}.json
+        const relPath = normalizedPath.slice(entitiesPrefix.length)
+        const type = relPath.split('/')[0]
+        this._entityIndex.set(entity.id, {
+          type,
+          name: entity.name,
+          path: rawPath,
+        })
+        this._entityCache.set(entity.id, entity)
+      } catch {
+        // 文件可能已被删除，尝试从缓存中移除
+        // 通过路径反查 index 中的条目
+        for (const [id, entry] of this._entityIndex) {
+          if (entry.path.replace(/\\/g, '/') === normalizedPath) {
+            this._entityIndex.delete(id)
+            this._entityCache.delete(id)
+            break
+          }
+        }
+      }
+    }
+
+    // 标记关系需要重新加载
+    this._relationsLoaded = false
+  }
+
+  /* ─── 索引加载 ─── */
+
+  /**
+   * 扫描项目目录，构建实体索引。
+   * 同时加载关系、KV、文件元数据到内存。
+   */
+  private async loadIndex(): Promise<void> {
+    if (!this._projectDir) return
+
+    const dir = this._projectDir
+
+    // 1. 扫描 entities/ 目录
+    try {
+      const typeDirs = await listDir(`${dir}/entities`)
+      for (const typeDir of typeDirs) {
+        if (!typeDir.isDir) continue
+        const entityType = typeDir.name
+        try {
+          const files = await listDir(typeDir.path)
+          for (const file of files) {
+            if (file.isDir || !file.name.endsWith('.json')) continue
+            // 读取实体文件获取 ID（首次加载）
+            try {
+              const content = await readTextFile(file.path)
+              const entity: Entity = JSON.parse(content)
+              this._entityIndex.set(entity.id, {
+                type: entityType,
+                name: entity.name,
+                path: file.path,
+              })
+              this._entityCache.set(entity.id, entity)
+            } catch {
+              // 单个文件解析失败不影响整体
+            }
+          }
+        } catch {
+          // 类型目录读取失败跳过
+        }
+      }
+    } catch {
+      // entities/ 目录可能不存在（空项目）
+    }
+
+    // 2. 加载关系
+    try {
+      const relText = await readTextFile(`${dir}/relations/_index.json`)
+      this._relations = JSON.parse(relText)
+      this._relationsLoaded = true
+    } catch {
+      this._relations = []
+      this._relationsLoaded = true
+    }
+
+    // 3. 加载 KV 存储
+    try {
+      const kvText = await readTextFile(`${dir}/.worldsmith/kv_store.json`)
+      const kvPairs: [string, string][] = JSON.parse(kvText)
+      for (const [k, v] of kvPairs) {
+        this._kvCache.set(k, v)
+      }
+      this._kvLoaded = true
+    } catch {
+      this._kvLoaded = true
+    }
+
+    // 4. 加载文件元数据
+    try {
+      const metaText = await readTextFile(`${dir}/.worldsmith/files_meta.json`)
+      this._filesMeta = JSON.parse(metaText)
+      this._filesMetaLoaded = true
+    } catch {
+      this._filesMeta = []
+      this._filesMetaLoaded = true
+    }
+  }
+
+  /* ─── 路径构建 ─── */
+
+  private entityFilePath(entity: Entity): string {
+    const fileName = toSafeFileName(entity.name, entity.id)
+    return `${this._projectDir}/entities/${entity.type}/${fileName}`
+  }
+
+  private entityFilePathById(id: string): string | null {
+    const entry = this._entityIndex.get(id)
+    return entry?.path ?? null
+  }
+
+  /* ─── 实体操作 ─── */
+
+  async getAllEntities(): Promise<Entity[]> {
+    if (!this.isReady) return this._fallback!.getAllEntities()
+    return Array.from(this._entityCache.values())
+  }
+
+  async getEntity(id: string): Promise<Entity | undefined> {
+    if (!this.isReady) return this._fallback!.getEntity(id)
+    // 先查缓存
+    const cached = this._entityCache.get(id)
+    if (cached) return cached
+    // 缓存未命中，尝试从索引路径读取
+    const path = this.entityFilePathById(id)
+    if (!path) return undefined
+    try {
+      const content = await readTextFile(path)
+      const entity: Entity = JSON.parse(content)
+      this._entityCache.set(id, entity)
+      return entity
+    } catch {
+      return undefined
+    }
+  }
+
+  async getEntitiesByType(type: string): Promise<Entity[]> {
+    if (!this.isReady) return this._fallback!.getEntitiesByType(type)
+    const result: Entity[] = []
+    for (const [id, entry] of this._entityIndex) {
+      if (entry.type === type) {
+        const entity = this._entityCache.get(id)
+        if (entity) result.push(entity)
+      }
+    }
+    return result
+  }
+
+  async getEntitiesByFacet(type: string, facetName: string): Promise<Entity[]> {
+    if (!this.isReady) return this._fallback!.getEntitiesByFacet(type, facetName)
+    const entities = await this.getEntitiesByType(type)
+    return entities.filter(e => e.facets && facetName in e.facets)
+  }
+
+  async putEntity(entity: Entity): Promise<void> {
+    if (!this.isReady) return this._fallback!.putEntity(entity)
+    this.markSelfWrite()
+    // 先更新内存索引和缓存（同步，零延迟）
+    const filePath = this.entityFilePath(entity)
+    this._entityIndex.set(entity.id, {
+      type: entity.type,
+      name: entity.name,
+      path: filePath,
+    })
+    this._entityCache.set(entity.id, entity)
+    // 文件写入异步化（不阻塞调用方）
+    const content = JSON.stringify(entity, null, 2)
+    writeTextFile(filePath, content, true).catch(err =>
+      console.warn('[FileStorageBackend] 文件写入失败:', err),
+    )
+  }
+
+  async updateEntity(id: string, changes: Partial<Entity>): Promise<void> {
+    if (!this.isReady) return this._fallback!.updateEntity(id, changes)
+    this.markSelfWrite()
+    const existing = await this.getEntity(id)
+    if (!existing) throw new Error(`实体 ${id} 不存在`)
+    const updated = { ...existing, ...changes }
+    // 先更新内存索引和缓存
+    const oldPath = this.entityFilePathById(id)
+    const newPath = this.entityFilePath(updated)
+    this._entityIndex.set(id, {
+      type: updated.type,
+      name: updated.name,
+      path: newPath,
+    })
+    this._entityCache.set(id, updated)
+    // 文件写入异步化
+    const content = JSON.stringify(updated, null, 2)
+    writeTextFile(newPath, content, true).then(async () => {
+      // 如果路径变了，删除旧文件
+      if (oldPath && oldPath !== newPath) {
+        try { await deleteFile(oldPath) } catch { /* 忽略 */ }
+      }
+    }).catch(err =>
+      console.warn('[FileStorageBackend] 文件写入失败:', err),
+    )
+  }
+
+  async deleteEntity(id: string): Promise<void> {
+    if (!this.isReady) return this._fallback!.deleteEntity(id)
+    this.markSelfWrite()
+    // 先更新内存索引和缓存
+    const path = this.entityFilePathById(id)
+    this._entityIndex.delete(id)
+    this._entityCache.delete(id)
+    // 文件删除异步化
+    if (path) {
+      deleteFile(path).catch(() => { /* 忽略 */ })
+    }
+  }
+
+  async deleteEntityAtomic(id: string): Promise<{ success: boolean; error?: string }> {
+    if (!this.isReady) return this._fallback!.deleteEntityAtomic(id)
+    try {
+      // 删除关联关系
+      await this.deleteRelationsByEntity(id)
+      // 删除实体
+      await this.deleteEntity(id)
+      return { success: true }
+    } catch (e: any) {
+      return { success: false, error: e?.message ?? String(e) }
+    }
+  }
+
+  async countEntitiesByType(): Promise<Map<string, number>> {
+    if (!this.isReady) return this._fallback!.countEntitiesByType()
+    const map = new Map<string, number>()
+    for (const entry of this._entityIndex.values()) {
+      map.set(entry.type, (map.get(entry.type) || 0) + 1)
+    }
+    return map
+  }
+
+  async clearEntities(): Promise<void> {
+    if (!this.isReady) return this._fallback!.clearEntities()
+    // 删除所有实体文件
+    for (const entry of this._entityIndex.values()) {
+      try { await deleteFile(entry.path) } catch { /* 忽略 */ }
+    }
+    this._entityIndex.clear()
+    this._entityCache.clear()
+  }
+
+  async importEntities(entities: Entity[]): Promise<number> {
+    if (!this.isReady) return this._fallback!.importEntities(entities)
+    for (const entity of entities) {
+      await this.putEntity(entity)
+    }
+    return entities.length
+  }
+
+  /* ─── 关系操作 ─── */
+
+  async getAllRelations(): Promise<Relation[]> {
+    if (!this.isReady) return this._fallback!.getAllRelations()
+    if (!this._relationsLoaded) {
+      await this.loadRelations()
+    }
+    return [...this._relations]
+  }
+
+  async getRelationsByEntity(entityId: string): Promise<Relation[]> {
+    if (!this.isReady) return this._fallback!.getRelationsByEntity(entityId)
+    if (!this._relationsLoaded) {
+      await this.loadRelations()
+    }
+    return this._relations.filter(
+      r => r.sourceId === entityId || r.targetId === entityId,
+    )
+  }
+
+  async putRelation(relation: Relation): Promise<void> {
+    if (!this.isReady) return this._fallback!.putRelation(relation)
+    this.markSelfWrite()
+    if (!this._relationsLoaded) {
+      await this.loadRelations()
+    }
+    // 替换或追加（先更新内存）
+    const idx = this._relations.findIndex(r => r.id === relation.id)
+    if (idx >= 0) {
+      this._relations[idx] = relation
+    } else {
+      this._relations.push(relation)
+    }
+    // 文件写入异步化
+    this.flushRelationsAsync()
+  }
+
+  async updateRelation(id: string, changes: Partial<Relation>): Promise<void> {
+    if (!this.isReady) return this._fallback!.updateRelation(id, changes)
+    this.markSelfWrite()
+    if (!this._relationsLoaded) {
+      await this.loadRelations()
+    }
+    const idx = this._relations.findIndex(r => r.id === id)
+    if (idx >= 0) {
+      this._relations[idx] = { ...this._relations[idx], ...changes }
+      this.flushRelationsAsync()
+    }
+  }
+
+  async deleteRelation(id: string): Promise<void> {
+    if (!this.isReady) return this._fallback!.deleteRelation(id)
+    this.markSelfWrite()
+    if (!this._relationsLoaded) {
+      await this.loadRelations()
+    }
+    this._relations = this._relations.filter(r => r.id !== id)
+    this.flushRelationsAsync()
+  }
+
+  async deleteRelationsByEntity(entityId: string): Promise<number> {
+    if (!this.isReady) return this._fallback!.deleteRelationsByEntity(entityId)
+    this.markSelfWrite()
+    if (!this._relationsLoaded) {
+      await this.loadRelations()
+    }
+    const before = this._relations.length
+    this._relations = this._relations.filter(
+      r => r.sourceId !== entityId && r.targetId !== entityId,
+    )
+    const deleted = before - this._relations.length
+    if (deleted > 0) {
+      this.flushRelationsAsync()
+    }
+    return deleted
+  }
+
+  async clearRelations(): Promise<void> {
+    if (!this.isReady) return this._fallback!.clearRelations()
+    this.markSelfWrite()
+    this._relations = []
+    this.flushRelationsAsync()
+  }
+
+  async importRelations(relations: Relation[]): Promise<number> {
+    if (!this.isReady) return this._fallback!.importRelations(relations)
+    this.markSelfWrite()
+    if (!this._relationsLoaded) {
+      await this.loadRelations()
+    }
+    this._relations.push(...relations)
+    await this.flushRelations()
+    return relations.length
+  }
+
+  /** 将关系持久化到文件 */
+  private async flushRelations(): Promise<void> {
+    if (!this._projectDir) return
+    const content = JSON.stringify(this._relations, null, 2)
+    await writeTextFile(`${this._projectDir}/relations/_index.json`, content, true)
+  }
+
+  /** 异步将关系持久化到文件（防抖合并，不阻塞调用方） */
+  private _flushRelationsTimer: ReturnType<typeof setTimeout> | null = null
+  private flushRelationsAsync(): void {
+    if (this._flushRelationsTimer) clearTimeout(this._flushRelationsTimer)
+    this._flushRelationsTimer = setTimeout(() => {
+      this._flushRelationsTimer = null
+      this.flushRelations().catch(err =>
+        console.warn('[FileStorageBackend] 关系文件写入失败:', err),
+      )
+    }, 100)
+  }
+
+  /** 从文件加载关系 */
+  private async loadRelations(): Promise<void> {
+    if (!this._projectDir) return
+    try {
+      const text = await readTextFile(`${this._projectDir}/relations/_index.json`)
+      this._relations = JSON.parse(text)
+    } catch {
+      this._relations = []
+    }
+    this._relationsLoaded = true
+  }
+
+  /* ─── KV 存储 ─── */
+
+  async kvGet(key: string): Promise<string | null> {
+    if (!this.isReady) return this._fallback!.kvGet(key)
+    if (!this._kvLoaded) {
+      await this.loadKv()
+    }
+    return this._kvCache.get(key) ?? null
+  }
+
+  async kvSet(key: string, value: string): Promise<void> {
+    if (!this.isReady) return this._fallback!.kvSet(key, value)
+    if (!this._kvLoaded) {
+      await this.loadKv()
+    }
+    this._kvCache.set(key, value)
+    await this.flushKv()
+  }
+
+  async kvDelete(key: string): Promise<void> {
+    if (!this.isReady) return this._fallback!.kvDelete(key)
+    if (!this._kvLoaded) {
+      await this.loadKv()
+    }
+    this._kvCache.delete(key)
+    await this.flushKv()
+  }
+
+  async kvGetAll(): Promise<[string, string][]> {
+    if (!this.isReady) return this._fallback!.kvGetAll()
+    if (!this._kvLoaded) {
+      await this.loadKv()
+    }
+    return Array.from(this._kvCache.entries())
+  }
+
+  private async flushKv(): Promise<void> {
+    if (!this._projectDir) return
+    const pairs = Array.from(this._kvCache.entries())
+    await writeTextFile(`${this._projectDir}/.worldsmith/kv_store.json`, JSON.stringify(pairs, null, 2), true)
+  }
+
+  private async loadKv(): Promise<void> {
+    if (!this._projectDir) return
+    try {
+      const text = await readTextFile(`${this._projectDir}/.worldsmith/kv_store.json`)
+      const pairs: [string, string][] = JSON.parse(text)
+      this._kvCache.clear()
+      for (const [k, v] of pairs) {
+        this._kvCache.set(k, v)
+      }
+    } catch {
+      this._kvCache.clear()
+    }
+    this._kvLoaded = true
+  }
+
+  /* ─── 文件操作 ─── */
+
+  async getAllFiles(): Promise<ProjectFile[]> {
+    if (!this.isReady) return this._fallback!.getAllFiles()
+    if (!this._filesMetaLoaded) {
+      await this.loadFilesMeta()
+    }
+    return [...this._filesMeta]
+  }
+
+  async getFile(id: string): Promise<ProjectFile | undefined> {
+    if (!this.isReady) return this._fallback!.getFile(id)
+    if (!this._filesMetaLoaded) {
+      await this.loadFilesMeta()
+    }
+    return this._filesMeta.find(f => f.id === id)
+  }
+
+  async getFileByPath(path: string): Promise<ProjectFile | undefined> {
+    if (!this.isReady) return this._fallback!.getFileByPath(path)
+    if (!this._filesMetaLoaded) {
+      await this.loadFilesMeta()
+    }
+    return this._filesMeta.find(f => f.path === path)
+  }
+
+  async getFilesByEntity(entityId: string): Promise<ProjectFile[]> {
+    if (!this.isReady) return this._fallback!.getFilesByEntity(entityId)
+    if (!this._filesMetaLoaded) {
+      await this.loadFilesMeta()
+    }
+    return this._filesMeta.filter(f => f.entityId === entityId)
+  }
+
+  async putFile(file: ProjectFile, content: ProjectFileContent): Promise<void> {
+    if (!this.isReady) return this._fallback!.putFile(file, content)
+    if (!this._filesMetaLoaded) {
+      await this.loadFilesMeta()
+    }
+    // 写文件内容
+    await writeTextFile(
+      `${this._projectDir}/.worldsmith/files_content/${file.id}.json`,
+      JSON.stringify(content, null, 2),
+      true,
+    )
+    // 更新元数据
+    const idx = this._filesMeta.findIndex(f => f.id === file.id)
+    if (idx >= 0) {
+      this._filesMeta[idx] = file
+    } else {
+      this._filesMeta.push(file)
+    }
+    await this.flushFilesMeta()
+  }
+
+  async updateFile(id: string, changes: Partial<ProjectFile>): Promise<void> {
+    if (!this.isReady) return this._fallback!.updateFile(id, changes)
+    if (!this._filesMetaLoaded) {
+      await this.loadFilesMeta()
+    }
+    const idx = this._filesMeta.findIndex(f => f.id === id)
+    if (idx >= 0) {
+      this._filesMeta[idx] = { ...this._filesMeta[idx], ...changes }
+      await this.flushFilesMeta()
+    }
+  }
+
+  async deleteFile(id: string): Promise<void> {
+    if (!this.isReady) return this._fallback!.deleteFile(id)
+    if (!this._filesMetaLoaded) {
+      await this.loadFilesMeta()
+    }
+    // 删除内容文件
+    try {
+      await deleteFile(`${this._projectDir}/.worldsmith/files_content/${id}.json`)
+    } catch { /* 忽略 */ }
+    // 更新元数据
+    this._filesMeta = this._filesMeta.filter(f => f.id !== id)
+    await this.flushFilesMeta()
+  }
+
+  async getFileContent(id: string): Promise<ProjectFileContent | undefined> {
+    if (!this.isReady) return this._fallback!.getFileContent(id)
+    try {
+      const text = await readTextFile(`${this._projectDir}/.worldsmith/files_content/${id}.json`)
+      return JSON.parse(text)
+    } catch {
+      return undefined
+    }
+  }
+
+  private async flushFilesMeta(): Promise<void> {
+    if (!this._projectDir) return
+    await writeTextFile(
+      `${this._projectDir}/.worldsmith/files_meta.json`,
+      JSON.stringify(this._filesMeta, null, 2),
+      true,
+    )
+  }
+
+  private async loadFilesMeta(): Promise<void> {
+    if (!this._projectDir) return
+    try {
+      const text = await readTextFile(`${this._projectDir}/.worldsmith/files_meta.json`)
+      this._filesMeta = JSON.parse(text)
+    } catch {
+      this._filesMeta = []
+    }
+    this._filesMetaLoaded = true
+  }
+}

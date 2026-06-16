@@ -15,6 +15,14 @@ export type KeyframeName =
   | 'ws-caret-typing'
   | 'ws-skeleton-pulse'
   | 'ws-ripple-expand'
+  | 'ws-loader-spin-ring'
+  | 'ws-loader-pulse-dot'
+  | 'ws-loader-bounce-bar'
+  | 'ws-loader-ripple-ring'
+  | 'ws-loader-conic-spin'
+  | 'ws-loader-typing-dot'
+  | 'ws-loader-shimmer'
+  | 'ws-loader-dna-rotate'
 
 interface KeyframeDefinition {
   name: KeyframeName
@@ -81,16 +89,15 @@ const KEYFRAME_DEFS: KeyframeDefinition[] = [
   {
     name: 'ws-focus-slide-in',
     css: `@keyframes ws-focus-slide-in {
-  from { border-color: transparent; box-shadow: 0 0 0 0px rgba(167, 139, 250, 0); }
-  50% { border-color: var(--accent, #a78bfa); box-shadow: 0 0 0 3px var(--focus-ring, rgba(167, 139, 250, 0.2)); }
-  to { border-color: var(--accent, #a78bfa); box-shadow: 0 0 0 3px var(--focus-ring, rgba(167, 139, 250, 0.15)); }
+  from { opacity: 0.6; transform: scaleX(0.95); }
+  to { opacity: 1; transform: scaleX(1); }
 }`,
   },
   {
     name: 'ws-card-pulse',
     css: `@keyframes ws-card-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(124, 92, 252, 0.4); }
-  50% { box-shadow: 0 0 0 6px rgba(124, 92, 252, 0.1); }
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.01); opacity: 0.85; }
 }`,
   },
   {
@@ -133,6 +140,77 @@ const KEYFRAME_DEFS: KeyframeDefinition[] = [
     name: 'ws-ripple-expand',
     css: `@keyframes ws-ripple-expand {
   to { transform: scale(4); opacity: 0; }
+}`,
+  },
+  // ─── Loading Animations (8 types) ───
+
+  // 1. 旋转圆环 — border + gradient classic spinner
+  {
+    name: 'ws-loader-spin-ring',
+    css: `@keyframes ws-loader-spin-ring {
+  to { transform: rotate(360deg); }
+}`,
+  },
+
+  // 2. 脉冲圆点 — single dot scale pulse (stagger via animation-delay on each dot)
+  {
+    name: 'ws-loader-pulse-dot',
+    css: `@keyframes ws-loader-pulse-dot {
+  0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+  40% { transform: scale(1); opacity: 1; }
+}`,
+  },
+
+  // 3. 弹跳柱条 — bar stretch bounce (stagger via animation-delay on each bar)
+  {
+    name: 'ws-loader-bounce-bar',
+    css: `@keyframes ws-loader-bounce-bar {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}`,
+  },
+
+  // 4. 波纹圆圈 — concentric ripple expand
+  {
+    name: 'ws-loader-ripple-ring',
+    css: `@keyframes ws-loader-ripple-ring {
+  0% { transform: scale(0.2); opacity: 1; }
+  100% { transform: scale(1); opacity: 0; }
+}`,
+  },
+
+  // 5. 渐变旋转器 — conic-gradient spin
+  {
+    name: 'ws-loader-conic-spin',
+    css: `@keyframes ws-loader-conic-spin {
+  to { transform: rotate(360deg); }
+}`,
+  },
+
+  // 6. 打字指示器 — typing dot bounce (stagger via animation-delay)
+  {
+    name: 'ws-loader-typing-dot',
+    css: `@keyframes ws-loader-typing-dot {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-6px); }
+}`,
+  },
+
+  // 7. 骨架屏微光 — shimmer sweep
+  {
+    name: 'ws-loader-shimmer',
+    css: `@keyframes ws-loader-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}`,
+  },
+
+  // 8. DNA 双螺旋 — helix rotate
+  {
+    name: 'ws-loader-dna-rotate',
+    css: `@keyframes ws-loader-dna-rotate {
+  0% { transform: rotateY(0deg); }
+  100% { transform: rotateY(360deg); }
 }`,
   },
 ]

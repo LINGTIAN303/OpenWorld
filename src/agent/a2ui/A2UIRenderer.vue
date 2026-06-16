@@ -24,7 +24,7 @@ interface Surface {
   catalogId: string
   theme?: Record<string, unknown>
   components: Record<string, any>
-  rootIds: string[]
+  rootIds: readonly string[]
   dataModel: Record<string, unknown>
 }
 

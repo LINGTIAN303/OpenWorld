@@ -76,6 +76,7 @@ onMounted(() => {
 .editor-wrap :deep(.tiptap) {
   outline: none;
   min-height: 300px;
+  font-family: var(--font-family-content);
   font-size: var(--font-size-md);
   line-height: 1.8;
   color: var(--text-color);

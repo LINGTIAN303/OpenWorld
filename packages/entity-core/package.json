@@ -10,6 +10,13 @@
     "./stores": "./src/stores/index.ts",
     "./core": "./src/core/index.ts",
     "./types": "./src/types/index.ts",
-    "./composables": "./src/composables/index.ts"
+    "./composables": "./src/composables/index.ts",
+    "./traits": "./src/traits/index.ts",
+    "./facets": "./src/facets/index.ts",
+    "./relations": "./src/relations/index.ts"
+  },
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.build.json --noEmit"
   }
 }

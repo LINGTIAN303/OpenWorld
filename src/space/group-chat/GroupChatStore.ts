@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { AgentMessage } from '@agent/index'
 import type {
   GroupChatConfig,
@@ -16,8 +16,13 @@ import type {
   GroupMember,
   GroupChatMessage,
   DesireConfig,
+  RequestTrackerSnapshot,
+  ToolCallInfo,
+  WorldEvent,
 } from './types'
 import { DEFAULT_GROUP_CHAT_CONFIG, DEFAULT_GROUP_CHAT_BUDGET, DEFAULT_DESIRE_CONFIG, assignAgentColor } from './types'
+
+import type { TurnStrategy } from '@agent/group-chat/types'
 
 export const useGroupChatStore = defineStore('group-chat', () => {
   const state = ref<GroupChatState>('idle')
@@ -54,6 +59,16 @@ export const useGroupChatStore = defineStore('group-chat', () => {
   const typingAgents = ref<Record<string, boolean>>({})
   const onlineAgentIds = ref<Set<string>>(new Set())
   const desireConfig = ref<DesireConfig>({ ...DEFAULT_DESIRE_CONFIG })
+
+  // 后端模块集成状态
+  const turnStrategy = ref<TurnStrategy>('speaking-desire')
+  const flowStats = ref<{ globalPending: number; slots: Record<string, number> }>({ globalPending: 0, slots: {} })
+  const requestSnapshot = ref<RequestTrackerSnapshot | null>(null)
+  const syncMode = ref(false)
+
+  // 世界事件（Layer 3：修改共享世界状态的操作）
+  const worldEvents = ref<WorldEvent[]>([])
+
   const isStreaming = computed(() => Object.keys(streamingAgents.value).length > 0)
   const streamingContent = computed(() => {
     const keys = Object.keys(streamingAgents.value)
@@ -128,10 +143,10 @@ export const useGroupChatStore = defineStore('group-chat', () => {
     reviewPending.value = p
   }
 
-  function setStreaming(agentId: string, content: string, thinking: string): void {
+  function setStreaming(agentId: string, content: string, thinking: string, toolCalls?: ToolCallInfo[]): void {
     streamingAgents.value = {
       ...streamingAgents.value,
-      [agentId]: { content, thinking },
+      [agentId]: { content, thinking, toolCalls: toolCalls ?? streamingAgents.value[agentId]?.toolCalls ?? [] },
     }
   }
 
@@ -224,6 +239,42 @@ export const useGroupChatStore = defineStore('group-chat', () => {
   function setDesireConfig(config: DesireConfig): void {
     desireConfig.value = config
   }
+  function setTurnStrategy(s: TurnStrategy): void {
+    turnStrategy.value = s
+  }
+  function setFlowStats(stats: { globalPending: number; slots: Record<string, number> }): void {
+    flowStats.value = stats
+  }
+  function setRequestSnapshot(snapshot: RequestTrackerSnapshot): void {
+    requestSnapshot.value = snapshot
+  }
+  function clearRequestSnapshot(): void {
+    requestSnapshot.value = null
+  }
+  function setSyncMode(v: boolean): void {
+    syncMode.value = v
+  }
+
+  /** 更新指定 Agent 的流式工具调用状态 */
+  function setStreamingToolCalls(agentId: string, toolCalls: ToolCallInfo[]): void {
+    const current = streamingAgents.value[agentId]
+    if (current) {
+      streamingAgents.value = {
+        ...streamingAgents.value,
+        [agentId]: { ...current, toolCalls },
+      }
+    }
+  }
+
+  /** 添加世界事件 */
+  function addWorldEvent(event: WorldEvent): void {
+    worldEvents.value = [...worldEvents.value, event]
+  }
+
+  /** 清空世界事件 */
+  function clearWorldEvents(): void {
+    worldEvents.value = []
+  }
 
   function reset(): void {
     state.value = 'idle'
@@ -258,6 +309,10 @@ export const useGroupChatStore = defineStore('group-chat', () => {
     onlineAgentIds.value = new Set()
     casualMessages.value = []
     desireConfig.value = { ...DEFAULT_DESIRE_CONFIG }
+    turnStrategy.value = 'speaking-desire'
+    flowStats.value = { globalPending: 0, slots: {} }
+    requestSnapshot.value = null
+    worldEvents.value = []
   }
 
   function loadSession(session: GroupSession): void {
@@ -278,6 +333,15 @@ export const useGroupChatStore = defineStore('group-chat', () => {
     streamingAgents.value = {}
     healthStatus.value = {}
     degradedAgents.value = {}
+    // 重置 casual 专属字段，避免从闲聊切换到会议时残留旧数据
+    groupMode.value = 'meeting'
+    groupInfo.value = null
+    groupMembers.value = []
+    casualMessages.value = []
+    typingAgents.value = {}
+    onlineAgentIds.value = new Set()
+    desireConfig.value = { ...DEFAULT_DESIRE_CONFIG }
+    allMuted.value = false
   }
 
   return {
@@ -294,5 +358,9 @@ export const useGroupChatStore = defineStore('group-chat', () => {
     setGroupMode, setGroupInfo, setGroupMembers, updateGroupMember, setAllMuted,
     typingAgents, setTyping, clearTyping,
     onlineAgentIds, setOnline, setOffline, setOnlineBatch, setOfflineBatch, setDesireConfig,
+    turnStrategy, flowStats, setTurnStrategy, setFlowStats,
+    requestSnapshot, setRequestSnapshot, clearRequestSnapshot,
+    syncMode, setSyncMode,
+    worldEvents, setStreamingToolCalls, addWorldEvent, clearWorldEvents,
   }
 })

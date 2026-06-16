@@ -12,5 +12,9 @@
     "./graph": "./src/graph/index.ts",
     "./algorithms": "./src/algorithms/index.ts",
     "./geometry": "./src/geometry/index.ts"
+  },
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.build.json --noEmit"
   }
 }

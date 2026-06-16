@@ -62,28 +62,28 @@ capabilities:
 ### 关系网络分析
 | 需求 | 算法 | 输入 | 输出 |
 |------|------|------|------|
-| 角色影响力排名 | `algo_pagerank` | 关系图 | 节点重要性分数 |
-| 发现势力阵营 | `algo_community_detection` | 关系图 | 社区划分 |
-| 两角色关系路径 | `algo_shortest_path` | 图+起终点 | 路径序列 |
-| 网络整体分析 | `algo_graph_analysis` | 邻接表 | 连通性/中心性 |
-| 关系图布局 | `algo_force_layout` | 图结构 | 节点坐标 |
+| 角色影响力排名 | `algo_run(action='pagerank')` | 关系图 | 节点重要性分数 |
+| 发现势力阵营 | `algo_run(action='community_detection')` | 关系图 | 社区划分 |
+| 两角色关系路径 | `algo_run(action='shortest_path')` | 图+起终点 | 路径序列 |
+| 网络整体分析 | `algo_run(action='graph_analysis')` | 邻接表 | 连通性/中心性 |
+| 关系图布局 | `algo_run(action='force_layout')` | 图结构 | 节点坐标 |
 
 ### 地理空间分析
 | 需求 | 算法 | 输入 | 输出 |
 |------|------|------|------|
-| 领土重叠检测 | `algo_collision_check` | 多边形列表 | 碰撞对 |
-| 区域面积计算 | `algo_polygon_metrics` | 多边形顶点 | 面积/周长 |
-| 凸包计算 | `algo_convex_hull` | 点集 | 凸包多边形 |
-| 空间查询 | `algo_spatial_query` | 点/范围 | 命中实体 |
+| 领土重叠检测 | `algo_run(action='collision_check')` | 多边形列表 | 碰撞对 |
+| 区域面积计算 | `algo_run(action='polygon_metrics')` | 多边形顶点 | 面积/周长 |
+| 凸包计算 | `algo_run(action='convex_hull')` | 点集 | 凸包多边形 |
+| 空间查询 | `algo_run(action='spatial_query')` | 点/范围 | 命中实体 |
 
 ### 地形生成
 | 需求 | 算法 | 输入 | 输出 |
 |------|------|------|------|
-| 随机地形 | `algo_terrain_noise` | scale/octaves/seed | 高度矩阵 |
-| 精细地形 | `algo_terrain_heightmap` | width/height/params | 高度图 |
-| 等高线 | `algo_terrain_contour` | 高度图 | 等高线数据 |
-| 河流侵蚀 | `algo_hydraulic_erosion` | 高度图/iterations | 侵蚀后地形 |
-| 视域分析 | `algo_viewshed` | 观测点/距离 | 可见区域 |
+| 随机地形 | `algo_run(action='terrain_noise')` | scale/octaves/seed | 高度矩阵 |
+| 精细地形 | `algo_run(action='terrain_heightmap')` | width/height/params | 高度图 |
+| 等高线 | `algo_run(action='terrain_contour')` | 高度图 | 等高线数据 |
+| 河流侵蚀 | `algo_run(action='hydraulic_erosion')` | 高度图/iterations | 侵蚀后地形 |
+| 视域分析 | `algo_run(action='viewshed')` | 观测点/距离 | 可见区域 |
 
 ## 质量审核清单
 

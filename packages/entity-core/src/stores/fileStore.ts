@@ -3,6 +3,36 @@ import { defineStore } from 'pinia'
 import { storage } from '../core/StorageBackend'
 import type { ProjectFile, ProjectFileContent } from '../types/file'
 
+/** 文件持久化事件载荷——id 必填，path 在 add 时已知，update 时从缓存或存储回读 */
+export interface FilePersistedEvent {
+  id: string
+  path: string
+}
+
+type FilePersistedListener = (event: FilePersistedEvent) => void
+const filePersistedListeners = new Set<FilePersistedListener>()
+
+/**
+ * 订阅"文件已写入 IndexedDB"事件。
+ * 在 add/update 的 IDB 写完成且本地缓存更新后触发，订阅方在回调内读 store
+ * 一定能看到新数据。
+ * 返回取消订阅的函数。
+ */
+export function onFilePersisted(listener: FilePersistedListener): () => void {
+  filePersistedListeners.add(listener)
+  return () => { filePersistedListeners.delete(listener) }
+}
+
+function emitFilePersisted(event: FilePersistedEvent): void {
+  for (const listener of filePersistedListeners) {
+    try {
+      listener(event)
+    } catch (e) {
+      console.warn('[fileStore] onFilePersisted listener error:', e)
+    }
+  }
+}
+
 export const useFileStore = defineStore('files', () => {
   const files = ref<ProjectFile[]>([])
   const loading = ref(false)
@@ -65,6 +95,7 @@ export const useFileStore = defineStore('files', () => {
     }
     await storage.putFile(file, fileContent)
     files.value = [...files.value, file]
+    emitFilePersisted({ id, path })
     return id
   }
 
@@ -73,6 +104,11 @@ export const useFileStore = defineStore('files', () => {
     const idx = files.value.findIndex(f => f.id === id)
     if (idx !== -1) {
       files.value = files.value.map((f, i) => i === idx ? { ...f, ...changes, updatedAt: new Date().toISOString() } : f)
+      emitFilePersisted({ id, path: files.value[idx].path })
+    } else {
+      // 缓存未命中时回读一次，确保事件 payload 携带最新 path
+      const fresh = await storage.getFile(id)
+      emitFilePersisted({ id, path: fresh?.path ?? '' })
     }
   }
 

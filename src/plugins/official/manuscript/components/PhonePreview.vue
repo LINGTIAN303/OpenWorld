@@ -31,6 +31,13 @@
 
         <div class="pp-settings">
           <label class="pp-setting">
+            <span>字体</span>
+            <select v-model="localFontFamily" class="pp-select-sm">
+              <option value="">跟随设置</option>
+              <option v-for="p in contentPresets" :key="p.id" :value="p.family">{{ p.displayName }}</option>
+            </select>
+          </label>
+          <label class="pp-setting">
             <span>字号</span>
             <input type="range" v-model.number="fontSize" min="14" max="22" step="1" />
             <span class="pp-val">{{ fontSize }}px</span>
@@ -64,6 +71,8 @@
 import { ref, computed } from 'vue'
 import WsIcon from '../../../../ui/WsIcon.vue'
 import DOMPurify from 'dompurify'
+import { useFontStore } from '../../../../stores/fontStore'
+import { useFontPresets } from '../../../../composables/useFontPresets'
 
 const props = defineProps<{
   visible: boolean
@@ -73,12 +82,16 @@ const props = defineProps<{
 
 defineEmits<{ close: [] }>()
 
+const fontStore = useFontStore()
+const { contentPresets } = useFontPresets()
+
 const presetSize = ref('iphone15')
 const previewMode = ref('webnovel')
 const themeMode = ref('day')
 const fontSize = ref(16)
 const lineHeight = ref(1.8)
 const paraSpacing = ref(0.75)
+const localFontFamily = ref('')
 const frameW = ref(393)
 const frameH = ref(852)
 
@@ -112,6 +125,7 @@ const contentStyle = computed(() => ({
   fontSize: fontSize.value + 'px',
   lineHeight: lineHeight.value,
   '--para-spacing': paraSpacing.value + 'em',
+  fontFamily: localFontFamily.value || fontStore.prefs.preview.family || fontStore.prefs.content.family || 'inherit',
 }))
 
 const sanitizedHTML = computed(() => {

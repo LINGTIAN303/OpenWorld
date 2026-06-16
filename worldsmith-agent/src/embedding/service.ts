@@ -1,3 +1,5 @@
+import { smartFetch } from '../utils/smart-fetch'
+
 export interface EmbeddingConfig {
   baseUrl: string
   apiKey: string
@@ -112,13 +114,14 @@ export async function generateEmbedding(text: string, config?: EmbeddingConfig):
     body.dimensions = cfg.dimensions
   }
 
-  const response = await fetch(url, {
+  const response = await smartFetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${cfg.apiKey}`,
     },
     body: JSON.stringify(body),
+    timeout: 30,
   })
 
   if (!response.ok) {
@@ -167,13 +170,14 @@ export async function generateEmbeddings(texts: string[], config?: EmbeddingConf
         body.dimensions = cfg.dimensions
       }
 
-      const response = await fetch(url, {
+      const response = await smartFetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${cfg.apiKey}`,
         },
         body: JSON.stringify(body),
+        timeout: 60,
       })
 
       if (!response.ok) {

@@ -10,6 +10,7 @@
           :last-assistant-has-thinking="lastAssistantHasThinking"
           :a2ui-surfaces="a2uiSurfaces"
           :resolve-data-binding="resolveDataBinding"
+          :chat-mode="spaceStore.chatMode"
           @a2ui-action="onA2UIAction"
           @copy="copyMessage"
           @retry="retryMessage"
@@ -54,8 +55,23 @@ function onBlockAction(event: { blockId: string; action: string; data?: Record<s
   const steerText = dataStr
     ? `[Block Action] block=${event.blockId} action=${event.action} data=${dataStr}`
     : `[Block Action] block=${event.blockId} action=${event.action}`
-  const displayText = dataStr ? `${event.action} (${dataStr})` : event.action
+  const displayText = formatBlockActionDisplay(event)
   void sendBlockAction(steerText, displayText)
+}
+
+function formatBlockActionDisplay(event: { blockId: string; action: string; data?: Record<string, unknown> }): string {
+  if (event.action === 'choice_select' && event.data) {
+    const mode = event.data.mode as string
+    if (mode === 'multi' && event.data.labels) {
+      return `选择了: ${(event.data.labels as string[]).join(', ')}`
+    }
+    if (mode === 'multi' && event.data.values) {
+      return `选择了: ${(event.data.values as string[]).join(', ')}`
+    }
+    const displayVal = (event.data.label as string) || (event.data.value as string) || ''
+    return `选择了: ${displayVal}`
+  }
+  return event.action
 }
 
 async function onInputSend(text: string, rawAttachments: any[]): Promise<void> {

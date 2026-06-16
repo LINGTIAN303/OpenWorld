@@ -2,6 +2,8 @@
   <div class="mindmap-view">
     <MindmapToolbar
       :search-query="searchQuery"
+      :search-match-count="searchMatches.length"
+      :search-match-index="searchMatchIndex"
       :layout="layoutName"
       :enabled-types="visibleTypes"
       :edit-mode="editMode"
@@ -9,31 +11,59 @@
       :zoom-level="zoomLevel"
       :can-go-back="!!mindmapStore.currentRootId"
       :detail-panel-visible="mindmapStore.detailPanelVisible"
+      :minimap-visible="mindmapStore.ui.minimapVisible"
+      :can-undo="canUndo"
+      :can-redo="canRedo"
+      :selected-count="selectedNodes.size"
       @update:search-query="searchQuery = $event; onSearchInput()"
+      @search-next="searchNext"
+      @search-prev="searchPrev"
       @update:layout="layoutName = $event; applyLayout()"
+      @toggle-type="toggleType"
       @update:enabled-types="visibleTypes = $event; rebuildGraph()"
       @toggle-edit-mode="toggleEditMode"
       @toggle-free-draw="toggleFreeDrawMode"
       @toggle-ai-suggest="aiSuggestions.toggle()"
+      @ai-organize="onAIOrganize"
       @add-textbox="ctxAddTextbox"
       @add-image="ctxAddImage"
       @add-note="ctxAddNote"
       @add-link="ctxAddLink"
       @add-group="ctxAddGroup"
       @add-center="ctxAddCenter"
+      @undo="doUndo"
+      @redo="doRedo"
+      @align-selection="alignSelection"
+      @distribute-selection="distributeSelection"
+      @create-section-from-selection="createSectionFromSelection"
       @fit="fitView"
       @zoom-in="zoomIn"
       @zoom-out="zoomOut"
       @go-back="exitNested"
       @toggle-detail="mindmapStore.toggleDetailPanel()"
+      @toggle-minimap="mindmapStore.toggleMinimap()"
+      @export-png="onExportPNG"
+      @export-svg="onExportSVG"
     />
 
     <MindmapBreadcrumb :breadcrumb="breadcrumb" @jump="jumpTo" />
 
-    <EmptyState v-if="!entityStore.entities.length" icon="map" message="还没有实体" hint="创建第一个实体吧" actionText="创建实体" @action="ctxCreateNode" />
+    <EmptyState v-if="!entityStore.entities.length" icon="map" message="还没有实体" hint="创建第一个实体吧" />
 
     <div class="mm-main-area">
-      <div ref="containerRef" class="mm-canvas"></div>
+      <div ref="containerRef" class="mm-canvas">
+        <!-- 选区矩形提示：shift+drag 期间显示 -->
+        <div
+          v-if="selectionRectOverlay"
+          class="mm-selection-overlay"
+          :style="{
+            left: selectionRectOverlay.x + 'px',
+            top: selectionRectOverlay.y + 'px',
+            width: selectionRectOverlay.w + 'px',
+            height: selectionRectOverlay.h + 'px',
+          }"
+        ></div>
+      </div>
 
       <MindmapDetailPanel
         :visible="mindmapStore.detailPanelVisible"
@@ -50,6 +80,22 @@
         @navigate="navigateToEntity"
       />
     </div>
+
+    <Minimap
+      v-if="mindmapStore.ui.minimapVisible && canvasNodes.length > 0"
+      :nodes="canvasNodes"
+      :edges="canvasEdges"
+      :camera="renderer.camera.value"
+      :container-size="containerSize"
+      @jump="onMinimapJump"
+    />
+
+    <MindmapNodeTooltip
+      :visible="hoveredNode !== null"
+      :node="hoveredNode"
+      :x="tooltipPos.x"
+      :y="tooltipPos.y"
+    />
 
     <MindmapKeyHint :current-sequence="currentSequence" :available-next="availableNext" :is-active="keyHintActive" />
 
@@ -88,78 +134,40 @@
 
     <input ref="imageInputRef" type="file" accept="image/*" class="hidden-input" @change="onImageFileSelected" />
 
-    <div v-if="ctxMenu.show" class="mm-ctx-menu" :style="ctxMenuStyle">
-      <button v-if="ctxMenu.nodeId" class="mm-ctx-item" @click="ctxEditName"><WsIcon name="edit" size="xs" /> 编辑名称</button>
-      <button v-if="ctxMenu.nodeId && !ctxNodeIsCustom" class="mm-ctx-item" @click="ctxEditDescription"><WsIcon name="edit" size="xs" /> 编辑描述</button>
-      <button v-if="ctxMenu.nodeId && !ctxNodeIsCustom" class="mm-ctx-item" @click="ctxEditTags"><WsIcon name="tag" size="xs" /> 编辑标签</button>
-      <button v-if="ctxMenu.nodeId" class="mm-ctx-item" @click="startEdgeConnect"><WsIcon name="link" size="xs" /> 连接</button>
-      <button v-if="ctxMenu.nodeId && selectedNodes.size >= 2" class="mm-ctx-item" @click="createSectionFromSelection"><WsIcon name="item" size="xs" /> 创建分组框</button>
-      <button v-if="ctxMenu.nodeId && selectedNodes.size >= 2" class="mm-ctx-item" @click="onAISuggestionAnalyzeSelection"><WsIcon name="search" size="xs" /> 分析关系</button>
-      <button v-if="ctxMenu.nodeId && selectedNodes.size >= 2" class="mm-ctx-item" @click="onAISuggestionAnalyzeSelectionWithAI"><WsIcon name="concept" size="xs" /> AI 分析关系</button>
-      <button v-if="ctxMenu.nodeId && !ctxNodeIsCustom" class="mm-ctx-item" @click="ctxToggleCollapse">
-        <WsIcon name="folder" size="xs" /> {{ isNodeCollapsed(ctxMenu.nodeId) ? '展开子节点' : '折叠子节点' }}
-      </button>
-      <button v-if="ctxMenu.nodeId && ctxMenu.nodeType === 'section'" class="mm-ctx-item" @click="sectionMgr.promoteToEntity(ctxMenu.nodeId)"><WsIcon name="arrow-up" size="xs" /> 提升为实体分组</button>
-      <button v-if="ctxMenu.nodeId && ctxMenu.nodeType === 'section'" class="mm-ctx-item danger" @click="sectionMgr.removeSection(ctxMenu.nodeId)"><WsIcon name="delete" size="xs" /> 删除分组框</button>
-      <button v-if="ctxMenu.nodeId" class="mm-ctx-item" @click="ctxDeleteNode"><WsIcon name="delete" size="xs" /> 删除</button>
-      <div v-if="ctxMenu.nodeId" class="mm-ctx-divider"></div>
-      <button v-if="ctxMenu.edgeId" class="mm-ctx-item" @click="editEdgeLabel"><WsIcon name="tag" size="xs" /> 编辑标签</button>
-      <button v-if="ctxMenu.edgeId" class="mm-ctx-item" @click="editEdgeType"><WsIcon name="refresh" size="xs" /> 更改关系类型</button>
-      <button v-if="ctxMenu.edgeId" class="mm-ctx-item" @click="deleteEdge"><WsIcon name="delete" size="xs" /> 删除关系</button>
-      <div v-if="ctxMenu.edgeId" class="mm-ctx-divider"></div>
-      <div v-if="ctxMenu.edgeId" class="mm-ctx-submenu-wrap">
-        <button class="mm-ctx-item"><WsIcon name="outline" size="xs" /> 连线样式 ▸</button>
-        <div class="mm-ctx-submenu">
-          <button class="mm-ctx-item" @click="setEdgeStyle('bezier')">贝塞尔曲线</button>
-          <button class="mm-ctx-item" @click="setEdgeStyle('straight')">— 直线</button>
-          <button class="mm-ctx-item" @click="setEdgeStyle('taxi')">∟ 折线</button>
-        </div>
-      </div>
-      <div v-if="ctxMenu.nodeId" class="mm-ctx-divider"></div>
-      <button v-if="ctxMenu.nodeId" class="mm-ctx-item" @click="ctxSetCenter"><WsIcon name="target" size="xs" /> 设为中心节点</button>
-      <button v-if="ctxMenu.nodeId && !ctxNodeIsCustom && ctxMenu.nodeType !== 'section'" class="mm-ctx-item" @click="enterSelectedNode"><WsIcon name="search" size="xs" /> 进入子图</button>
-      <div v-if="ctxMenu.isCenter" class="mm-ctx-submenu-wrap">
-        <button class="mm-ctx-item"><WsIcon name="palette" size="xs" /> 样式 ▸</button>
-        <div class="mm-ctx-submenu">
-          <button class="mm-ctx-item" @click="ctxSetCenterStyle('default')">默认</button>
-          <button class="mm-ctx-item" @click="ctxSetCenterStyle('gold')">金色</button>
-          <button class="mm-ctx-item" @click="ctxSetCenterStyle('flame')">火焰</button>
-          <button class="mm-ctx-item" @click="ctxSetCenterStyle('ocean')">海洋</button>
-          <button class="mm-ctx-item" @click="ctxSetCenterStyle('forest')">森林</button>
-        </div>
-      </div>
-      <div v-if="ctxMenu.nodeType === 'textbox'" class="mm-ctx-submenu-wrap">
-        <button class="mm-ctx-item"><WsIcon name="outline" size="xs" /> 大小 ▸</button>
-        <div class="mm-ctx-submenu">
-          <button class="mm-ctx-item" @click="ctxSetTextboxSize('small')">小</button>
-          <button class="mm-ctx-item" @click="ctxSetTextboxSize('medium')">中</button>
-          <button class="mm-ctx-item" @click="ctxSetTextboxSize('large')">大</button>
-          <button class="mm-ctx-item" @click="ctxSetTextboxSize('wide')">宽</button>
-        </div>
-      </div>
-      <div v-if="ctxMenu.nodeType === 'textbox'" class="mm-ctx-submenu-wrap">
-        <button class="mm-ctx-item"><WsIcon name="palette" size="xs" /> 样式 ▸</button>
-        <div class="mm-ctx-submenu">
-          <button class="mm-ctx-item" @click="ctxSetTextboxStyle('default')">默认</button>
-          <button class="mm-ctx-item" @click="ctxSetTextboxStyle('blue')">蓝色</button>
-          <button class="mm-ctx-item" @click="ctxSetTextboxStyle('green')">绿色</button>
-          <button class="mm-ctx-item" @click="ctxSetTextboxStyle('pink')">粉色</button>
-        </div>
-      </div>
-      <button v-if="ctxMenu.nodeType === 'image'" class="mm-ctx-item" @click="ctxEditImage"><WsIcon name="image" size="xs" /> 编辑图片</button>
-      <button v-if="ctxMenu.nodeType === 'note'" class="mm-ctx-item" @click="ctxEditNoteContent"><WsIcon name="edit" size="xs" /> 编辑内容</button>
-      <div v-if="!ctxMenu.nodeId && !ctxMenu.edgeId" class="mm-ctx-item" @click="ctxCreateNode">＋ 新建节点</div>
-      <div v-if="!ctxMenu.nodeId && !ctxMenu.edgeId" class="mm-ctx-divider"></div>
-      <div v-if="!ctxMenu.nodeId && !ctxMenu.edgeId" class="mm-ctx-item" @click="ctxAddTextbox"><WsIcon name="edit" size="xs" /> 文本框</div>
-      <div v-if="!ctxMenu.nodeId && !ctxMenu.edgeId" class="mm-ctx-item" @click="ctxAddImage"><WsIcon name="image" size="xs" /> 图片</div>
-      <div v-if="!ctxMenu.nodeId && !ctxMenu.edgeId" class="mm-ctx-item" @click="ctxAddNote"><WsIcon name="outline" size="xs" /> 备注</div>
-      <div v-if="!ctxMenu.nodeId && !ctxMenu.edgeId" class="mm-ctx-item" @click="ctxAddLink"><WsIcon name="link" size="xs" /> 链接</div>
-      <div v-if="!ctxMenu.nodeId && !ctxMenu.edgeId" class="mm-ctx-item" @click="ctxAddGroup"><WsIcon name="item" size="xs" /> 分组</div>
-      <template v-if="ctxMenuStrokeId">
-        <div class="mm-ctx-divider"></div>
-        <div class="mm-ctx-item" role="button" tabindex="0" @click="deleteCtxStroke" @keydown.enter="deleteCtxStroke"><WsIcon name="delete" size="xs" /> 删除笔迹</div>
-      </template>
-    </div>
+    <MindmapContextMenu
+      :ctx-menu="ctxMenu"
+      :selected-count="selectedNodes.size"
+      :collapsed-text="collapsedLabel"
+      @edit-name="ctxEditName"
+      @edit-description="ctxEditDescription"
+      @edit-tags="ctxEditTags"
+      @connect="startEdgeConnect"
+      @create-section="createSectionFromSelection"
+      @analyze-relation="onAISuggestionAnalyzeSelection"
+      @analyze-relation-ai="onAISuggestionAnalyzeSelectionWithAI"
+      @toggle-collapse="ctxToggleCollapse"
+      @promote-section="sectionMgr.promoteToEntity(ctxMenu.nodeId)"
+      @remove-section="sectionMgr.removeSection(ctxMenu.nodeId)"
+      @delete-node="ctxDeleteNode"
+      @edit-edge-label="editEdgeLabel"
+      @edit-edge-type="editEdgeType"
+      @delete-edge="deleteEdge"
+      @set-edge-style="setEdgeStyle"
+      @set-center="ctxSetCenter"
+      @set-center-style="ctxSetCenterStyle"
+      @enter-subgraph="enterSelectedNode"
+      @set-textbox-size="ctxSetTextboxSize"
+      @set-textbox-style="ctxSetTextboxStyle"
+      @edit-image="ctxEditImage"
+      @edit-note-content="ctxEditNoteContent"
+      @create-node="ctxCreateNode"
+      @add-textbox="ctxAddTextbox"
+      @add-image="ctxAddImage"
+      @add-note="ctxAddNote"
+      @add-link="ctxAddLink"
+      @add-group="ctxAddGroup"
+      @delete-stroke="deleteCtxStroke"
+    />
 
     <div v-if="edgeConnecting" class="mm-connect-bar"><WsIcon name="link" size="xs" /> 点击另一个节点完成连接，点击空白处取消</div>
 
@@ -262,7 +270,8 @@ import { useEntityStore, useRelationStore } from '@worldsmith/entity-core'
 import type { Entity, Relation } from '@worldsmith/entity-core'
 import { EmptyState, EntityFormModal, type FormFieldDef, deduplicateEdges, useShortcuts, useUndoRedo, useGraphData, useTypeMapping } from '@worldsmith/ui-kit'
 import MindmapToolbar from './components/MindmapToolbar.vue'
-import { nodeSize, guessRelType, getViewIdForEntity } from './mindmapConfig'
+import MindmapNodeTooltip from './components/MindmapNodeTooltip.vue'
+import { nodeSize, guessRelType, getViewIdForEntity, resolveIcon } from './mindmapConfig'
 import { relationSchemaRegistry } from '@worldsmith/entity-core'
 import { useMindmapStore } from './mindmapStore'
 import { useSection } from './composables/useSection'
@@ -272,14 +281,23 @@ import MindmapBreadcrumb from './MindmapBreadcrumb.vue'
 import MindmapDetailPanel from './MindmapDetailPanel.vue'
 import MindmapKeyHint from './MindmapKeyHint.vue'
 import AISuggestionPanel from './components/AISuggestionPanel.vue'
+import MindmapContextMenu from './components/MindmapContextMenu.vue'
 import { useCanvasRenderer } from './composables/useCanvasRenderer'
-import { useForceLayout, type LayoutType } from './composables/useForceLayout'
 import { useCanvasInteraction, type CanvasInteractionCallbacks } from './composables/useCanvasInteraction'
 import type { CanvasNode, CanvasEdge } from './composables/canvasTypes'
 import { useFreeDrawing } from './composables/useFreeDrawing'
 import { useAISuggestions, type Suggestion } from './composables/useAISuggestions'
 import { getEdgeColor } from '@worldsmith/entity-core'
 import { useAgentPluginBridge } from '../../../composables/useAgentPluginBridge'
+import { useAgentBridge } from './composables/useAgentBridge'
+import { useMindmapNodeOps } from './composables/useMindmapNodeOps'
+import { useMindmapKeyboardNav } from './composables/useMindmapKeyboardNav'
+import Minimap from './composables/Minimap.vue'
+import { findIsolatedNodes, findCycles, findShortestPath } from './composables/useGraphAnalysis'
+import { useRustLayout } from './composables/useRustLayout'
+import { useMindmapExport } from './composables/useMindmapExport'
+import { useLayoutAnimation } from './composables/useLayoutAnimation'
+import type { LayoutAlgorithmType } from './mindmapStore'
 
 const entityStore = useEntityStore()
 const relationStore = useRelationStore()
@@ -288,26 +306,6 @@ const undoRedo = useUndoRedo()
 const { nodes: graphNodes, edges: graphEdges } = useGraphData()
 const { getColor, getIcon, getLabel } = useTypeMapping()
 
-const emojiToIcon: Record<string, string> = {
-  '📋': 'outline', '🏷️': 'tag', '📝': 'edit', '🎨': 'palette',
-  '📐': 'outline', '🔗': 'link', '✨': 'magic', '📂': 'folder',
-  '📁': 'folder', '🔍': 'search', '🗑️': 'delete', '⭐': 'star',
-  '🏠': 'home', '⚔️': 'war', '📜': 'manuscript', '📍': 'location',
-  '💡': 'inspiration', '🎭': 'culture', '🐉': 'species', '🧠': 'concept',
-  '🧬': 'species', '🐣': 'character', '🌱': 'plant', '⚡': 'lightning',
-  '💀': 'skull', '🛡️': 'shield', '🔮': 'magic', '💍': 'tag',
-  '🧪': 'magic', '🔧': 'settings', '🚢': 'trade', '🎵': 'music',
-  '🏺': 'item', '🍷': 'item', '👘': 'apparel', '📦': 'item',
-  '✅': 'check', '📌': 'pin', '🌿': 'plant', '🗡️': 'weapon',
-  '🏗️': 'building', '📄': 'manuscript', '🧩': 'puzzle', '👤': 'user',
-  '🖼️': 'image', '⬆️': 'arrow-up', '🔄': 'refresh', '🎯': 'target',
-  '🖌️': 'brush',
-}
-
-function resolveIcon(emoji: string): string {
-  return emojiToIcon[emoji] || emoji
-}
-
 const containerRef = ref<HTMLDivElement | null>(null)
 const imageInputRef = ref<HTMLInputElement>()
 const inlineInputRef = ref<HTMLInputElement>()
@@ -315,23 +313,50 @@ const inlineInputRef = ref<HTMLInputElement>()
 const canvasNodes = ref<CanvasNode[]>([])
 const canvasEdges = ref<CanvasEdge[]>([])
 
+// 使用 Store 的选择/聚焦状态
+const selectedNodeId = computed({
+  get: () => mindmapStore.focusedNodeId || '',
+  set: (v) => { mindmapStore.focusedNodeId = v || null },
+})
+const selectedNodes = mindmapStore.selectedNodeIds
+
+const nodeOps = useMindmapNodeOps({ canvasNodes, canvasEdges })
+
 const renderer = useCanvasRenderer(
   containerRef,
   () => canvasNodes.value,
   () => canvasEdges.value,
+  () => mindmapStore.aiSuggestionHints,
+  () => mindmapStore.highlightedNodeIds,
 )
 
-const forceLayout = useForceLayout()
+useMindmapKeyboardNav({
+  selectedNodeId,
+  canvasNodes,
+  camera: renderer.camera as any,
+  onEnter: (id) => enterNestedNode(id),
+  onFocus: (id) => {
+    const n = canvasNodes.value.find(nn => nn.id === id)
+    if (n) renderer.camera.value = { x: n.x, y: n.y, k: 1.2 }
+    renderer.markDirty()
+  },
+  onExit: () => exitNested(),
+  onClear: () => { selectedNodes.clear() },
+})
+
+const rustLayout = useRustLayout()
+const layoutAnim = useLayoutAnimation()
 
 const interactionCallbacks: CanvasInteractionCallbacks = {
   onNodeClick: (node, e) => {
-    ctxMenu.show = false
-    if (edgeConnecting.value) {
-      if (node.id === connectSourceId.value) return
-      _edgeSrcId = connectSourceId.value
+    mindmapStore.hideContextMenu()
+    if (mindmapStore.ui.edgeConnecting) {
+      const srcId = mindmapStore.connectSourceId
+      if (node.id === srcId) return
+      _edgeSrcId = srcId
       _edgeTgtId = node.id
       _relTypId = ''
-      const srcNode = canvasNodes.value.find(n => n.id === connectSourceId.value)
+      const srcNode = canvasNodes.value.find(n => n.id === srcId)
       const srcType = srcNode?.type || ''
       const tgtType = node.type
       const guessed = guessRelType(srcType, tgtType)
@@ -344,7 +369,7 @@ const interactionCallbacks: CanvasInteractionCallbacks = {
         availableRelationTypes.value = rels.map(r => ({ type: r.type, label: r.label || r.type }))
         if (rels.find(r => r.type === guessed)) _relTypId = guessed
       }
-      edgeConnecting.value = false
+      mindmapStore.cancelEdgeConnect()
       if (_relTypId) createRelationEdge(_edgeSrcId, _edgeTgtId, _relTypId)
       else {
         availableRelationTypes.value = rels.map(r => ({ type: r.type, label: r.label || r.type }))
@@ -352,11 +377,7 @@ const interactionCallbacks: CanvasInteractionCallbacks = {
       }
       return
     }
-    selectedNodeId.value = node.id
-    if (e.shiftKey) {
-      if (selectedNodes.has(node.id)) selectedNodes.delete(node.id)
-      else selectedNodes.add(node.id)
-    }
+    mindmapStore.selectNode(node.id, e.shiftKey || e.metaKey)
   },
   onNodeDoubleClick: (node, e) => {
     if (e.ctrlKey || e.metaKey) {
@@ -374,57 +395,49 @@ const interactionCallbacks: CanvasInteractionCallbacks = {
     }
   },
   onNodeRightClick: (node, e) => {
-    ctxMenu.x = e.clientX
-    ctxMenu.y = e.clientY
-    ctxMenu.nodeId = node.id
-    ctxMenu.edgeId = ''
-    ctxMenu.nodeType = node.type
-    ctxMenu.isCenter = node.type === 'center'
-    ctxMenu.show = true
+    mindmapStore.showContextMenu({
+      x: e.clientX, y: e.clientY,
+      nodeId: node.id, nodeType: node.type,
+      isCenter: node.isRoot || node.type === 'center',
+    })
   },
   onNodeHover: (node) => {
     renderer.hoveredNodeId.value = node?.id || null
+    hoveredNode.value = node
   },
   onEdgeClick: () => {},
   onEdgeRightClick: (edge, e) => {
-    ctxMenu.x = e.clientX
-    ctxMenu.y = e.clientY
-    ctxMenu.nodeId = ''
-    ctxMenu.edgeId = edge.id
-    ctxMenu.nodeType = ''
-    ctxMenu.isCenter = false
-    ctxMenu.show = true
+    mindmapStore.showContextMenu({
+      x: e.clientX, y: e.clientY, edgeId: edge.id,
+    })
   },
   onBackgroundClick: () => {
-    ctxMenu.show = false
-    ctxMenuStrokeId.value = ''
-    selectedNodes.clear()
-    selectedNodeId.value = ''
-    if (edgeConnecting.value) {
-      edgeConnecting.value = false
-      connectSourceId.value = ''
+    mindmapStore.hideContextMenu()
+    if (!canvasInteraction.isSelecting.value) {
+      mindmapStore.clearSelection()
+      selectedNodeId.value = ''
+    }
+    mindmapStore.clearHighlight()
+    if (mindmapStore.ui.edgeConnecting) {
+      mindmapStore.cancelEdgeConnect()
     }
   },
   onBackgroundRightClick: (e) => {
-    ctxMenu.x = e.clientX
-    ctxMenu.y = e.clientY
-    ctxMenu.nodeId = ''
-    ctxMenu.edgeId = ''
-    ctxMenu.nodeType = ''
-    ctxMenu.isCenter = false
     const rect = containerRef.value?.getBoundingClientRect()
+    let strokeId = ''
     if (rect) {
       const sx = e.clientX - rect.left
       const sy = e.clientY - rect.top
       const { x: wx, y: wy } = renderer.screenToWorld(sx, sy)
       const hitStroke = freeDrawing.hitTestStroke(wx, wy)
-      ctxMenuStrokeId.value = hitStroke?.id || ''
-    } else {
-      ctxMenuStrokeId.value = ''
+      strokeId = hitStroke?.id || ''
     }
-    ctxMenu.show = true
+    mindmapStore.showContextMenu({
+      x: e.clientX, y: e.clientY, strokeId,
+    })
   },
   onNodeDrag: (node, dx, dy) => {
+    if (node.isRoot) return // 中心节点不可拖拽
     node.x += dx
     node.y += dy
     node.fx = node.x
@@ -432,7 +445,9 @@ const interactionCallbacks: CanvasInteractionCallbacks = {
     renderer.markDirty()
   },
   onNodeDragEnd: (node) => {
-    forceLayout.pinNode(node)
+    if (node.isRoot) return
+    node.fx = node.x
+    node.fy = node.y
   },
   onZoom: (k) => {
     zoomLevel.value = Math.round(k * 100)
@@ -440,6 +455,35 @@ const interactionCallbacks: CanvasInteractionCallbacks = {
   },
   onPan: () => {
     renderer.markDirty()
+  },
+  onSelectionRect: (_worldRect, hit) => {
+    mindmapStore.selectAll(hit.map(n => n.id))
+    if (hit.length === 1) selectedNodeId.value = hit[0].id
+    else if (hit.length > 1) selectedNodeId.value = hit[hit.length - 1].id
+    else selectedNodeId.value = ''
+    renderer.markDirty()
+  },
+  onSelectionRectMove: (startWorld, endWorld) => {
+    if (!startWorld || !endWorld) {
+      selectionRectOverlay.value = null
+      return
+    }
+    // 转屏幕坐标
+    const cam = renderer.camera.value
+    const rect = containerRef.value?.getBoundingClientRect()
+    if (!rect) return
+    const camCx = rect.width / 2
+    const camCy = rect.height / 2
+    const x1 = (startWorld.x - cam.x) * cam.k + camCx
+    const y1 = (startWorld.y - cam.y) * cam.k + camCy
+    const x2 = (endWorld.x - cam.x) * cam.k + camCx
+    const y2 = (endWorld.y - cam.y) * cam.k + camCy
+    selectionRectOverlay.value = {
+      x: Math.min(x1, x2),
+      y: Math.min(y1, y2),
+      w: Math.abs(x2 - x1),
+      h: Math.abs(y2 - y1),
+    }
   },
 }
 
@@ -527,73 +571,105 @@ function onAISuggestionAccept(sug: Suggestion): void {
 }
 
 function deleteCtxStroke(): void {
-  ctxMenu.show = false
-  if (ctxMenuStrokeId.value) {
-    freeDrawing.deleteStroke(ctxMenuStrokeId.value)
-    ctxMenuStrokeId.value = ''
+  mindmapStore.hideContextMenu()
+  const sid = mindmapStore.ui.contextMenu.strokeId
+  if (sid) {
+    freeDrawing.deleteStroke(sid)
+    mindmapStore.ui.contextMenu.strokeId = ''
   }
 }
 
-const zoomLevel = ref(100)
-const layoutName = ref<LayoutType>('force')
-const searchQuery = ref('')
-const editMode = ref(false)
-
-const visibleTypes = ref(new Set(['character', 'region', 'event', 'organization', 'concept', 'item', 'textbox', 'image', 'note', 'link', 'group']))
-
-const ctxMenu = reactive({ show: false, x: 0, y: 0, nodeId: '', edgeId: '', nodeType: '', isCenter: false })
-const ctxMenuStrokeId = ref('')
-const CTX_MENU_W = 180
-const CTX_MENU_H = 320
-const ctxMenuStyle = computed(() => {
-  let left = ctxMenu.x
-  let top = ctxMenu.y
-  if (left + CTX_MENU_W > window.innerWidth - 8) left = ctxMenu.x - CTX_MENU_W
-  if (top + CTX_MENU_H > window.innerHeight - 8) top = ctxMenu.y - CTX_MENU_H
-  left = Math.max(8, left)
-  top = Math.max(8, top)
-  return { left: left + 'px', top: top + 'px' }
+const zoomLevel = computed(() => Math.round(mindmapStore.camera.k * 100))
+const layoutName = computed({
+  get: () => mindmapStore.layoutAlgorithm,
+  set: (v: LayoutAlgorithmType) => { mindmapStore.setLayout(v) },
 })
-const ctxNodeIsCustom = computed(() => {
-  const types = ['textbox', 'image', 'note', 'link', 'group', 'center']
-  return types.includes(ctxMenu.nodeType)
+const searchQuery = computed({
+  get: () => mindmapStore.searchQuery,
+  set: (v) => { mindmapStore.setSearchQuery(v) },
+})
+const searchMatchIndex = computed({
+  get: () => mindmapStore.searchMatchIndex,
+  set: (v) => { mindmapStore.setSearchMatchIndex(v) },
+})
+const editMode = computed({
+  get: () => mindmapStore.ui.editMode,
+  set: (v) => { mindmapStore.ui.editMode = v },
 })
 
-const edgeConnecting = ref(false)
-const connectSourceId = ref('')
-const collapsedNodes = reactive(new Set<string>())
-const selectedNodes = reactive(new Set<string>())
-const nodeCustomColors = reactive(new Map<string, string>())
-const searchMatches = ref<string[]>([])
+const visibleTypes = mindmapStore.visibleEntityTypes
+const edgeConnecting = computed({
+  get: () => mindmapStore.ui.edgeConnecting,
+  set: (v) => { mindmapStore.ui.edgeConnecting = v },
+})
+const connectSourceId = computed({
+  get: () => mindmapStore.connectSourceId,
+  set: (v) => { mindmapStore.connectSourceId = v },
+})
+const collapsedNodes = mindmapStore.collapsedNodeIds
+const nodeCustomColors = mindmapStore.nodeCustomColors
+const searchMatches = mindmapStore.searchMatches
+
+// 右键菜单使用 Store
+const ctxMenu = mindmapStore.ui.contextMenu
+const collapsedLabel = computed(() =>
+  isNodeCollapsed(ctxMenu.nodeId) ? '展开子节点' : '折叠子节点',
+)
+
+// ===== 新增 UI 状态：tooltip / minimap / 选区提示 =====
+const hoveredNode = ref<CanvasNode | null>(null)
+const tooltipPos = reactive({ x: 0, y: 0 })
+const containerSize = reactive({ width: 0, height: 0 })
+const selectionRectOverlay = ref<{ x: number; y: number; w: number; h: number } | null>(null)
+
+// 全局鼠标移动 → 更新 tooltip 位置（使用 ref+watch 保持轻量）
+let _mouseMoveHandler: ((e: MouseEvent) => void) | null = null
+function attachMouseTracker(): void {
+  if (_mouseMoveHandler) return
+  _mouseMoveHandler = (e: MouseEvent) => {
+    tooltipPos.x = e.clientX
+    tooltipPos.y = e.clientY
+  }
+  window.addEventListener('mousemove', _mouseMoveHandler)
+}
+function detachMouseTracker(): void {
+  if (_mouseMoveHandler) {
+    window.removeEventListener('mousemove', _mouseMoveHandler)
+    _mouseMoveHandler = null
+  }
+}
+
+// 监听 store 高亮变化 → 触发重画
+watch(() => mindmapStore.highlightedNodeIds.size, () => renderer.markDirty())
+watch(() => mindmapStore.aiSuggestionHints.length, () => renderer.markDirty())
 
 const sectionMgr = useSection({
   getNodes: () => canvasNodes.value,
   getEdges: () => canvasEdges.value,
 })
 
-const breadcrumb = ref<{ id: string; name: string }[]>([])
+const breadcrumb = computed(() => mindmapStore.breadcrumb)
 
 function enterNestedNode(nodeId: string) {
   const node = canvasNodes.value.find(n => n.id === nodeId)
   if (node) {
-    breadcrumb.value.push({ id: nodeId, name: node.name })
+    mindmapStore.enterNode(nodeId)
     mindmapStore.currentRootId = nodeId
     rebuildGraph()
   }
 }
 
 function exitNested() {
-  if (breadcrumb.value.length > 0) {
-    breadcrumb.value.pop()
-    mindmapStore.currentRootId = breadcrumb.value.length > 0 ? breadcrumb.value[breadcrumb.value.length - 1].id : null
-    rebuildGraph()
-  }
+  mindmapStore.exitNode()
+  rebuildGraph()
 }
 
 function jumpTo(idx: number) {
-  breadcrumb.value = breadcrumb.value.slice(0, idx + 1)
-  mindmapStore.currentRootId = breadcrumb.value.length > 0 ? breadcrumb.value[breadcrumb.value.length - 1].id : null
-  rebuildGraph()
+  const item = mindmapStore.breadcrumb[idx]
+  if (item) {
+    mindmapStore.jumpToBreadcrumb(item.id)
+    rebuildGraph()
+  }
 }
 
 function handleKeySequence(seq: string) {
@@ -636,6 +712,21 @@ onMounted(() => {
   shortcuts.register({ id: 'mindmap.redo', keys: ['ctrl', 'y'], description: '重做', scope: 'view', handler: () => undoRedo.redo(entityStore, relationStore) })
   shortcuts.register({ id: 'mindmap.freeDraw', keys: ['d'], description: '自由绘图', scope: 'view', handler: () => toggleFreeDrawMode() })
   shortcuts.register({ id: 'mindmap.aiSuggest', keys: ['ctrl', 'j'], description: 'AI 关系建议', scope: 'view', handler: () => aiSuggestions.toggle() })
+  // 思维导图快捷创建
+  shortcuts.register({ id: 'mindmap.addChild', keys: ['tab'], description: '添加子主题', scope: 'view', handler: () => addChildNode() })
+  shortcuts.register({ id: 'mindmap.addSibling', keys: ['enter'], description: '添加同级主题', scope: 'view', handler: () => addSiblingNode() })
+})
+onBeforeUnmount(() => {
+  shortcuts.unregister('mindmap.toggleDetail')
+  shortcuts.unregister('mindmap.fitView')
+  shortcuts.unregister('mindmap.exitNested')
+  shortcuts.unregister('mindmap.deleteNode')
+  shortcuts.unregister('mindmap.undo')
+  shortcuts.unregister('mindmap.redo')
+  shortcuts.unregister('mindmap.freeDraw')
+  shortcuts.unregister('mindmap.aiSuggest')
+  shortcuts.unregister('mindmap.addChild')
+  shortcuts.unregister('mindmap.addSibling')
 })
 onBeforeUnmount(() => {
   shortcuts.unregister('mindmap.toggleDetail')
@@ -648,7 +739,6 @@ onBeforeUnmount(() => {
   shortcuts.unregister('mindmap.aiSuggest')
 })
 
-const selectedNodeId = ref('')
 const selectedNodeName = computed(() => {
   const n = canvasNodes.value.find(n => n.id === selectedNodeId.value)
   return n?.name || ''
@@ -735,27 +825,44 @@ function buildCanvasData(): void {
   const nodes: CanvasNode[] = []
   const edges: CanvasEdge[] = []
   const rootId = mindmapStore.currentRootId
-  const saved = loadPositions()
+  const saved = mindmapStore.nodePositions
+  const customColors = mindmapStore.nodeCustomColors
+  const collapsed = mindmapStore.collapsedNodeIds
+  const focusedId = mindmapStore.focusedNodeId
+  const searchMatchIds = mindmapStore.searchMatches
+  const searchQueryLower = mindmapStore.searchQuery.toLowerCase()
+  const vTypes = visibleTypes.value
 
   if (rootId === null) {
+    const centerId = mindmapStore.centerNodeId
+    // 计算画布中心（优先使用已保存的位置）
+    const canvasCenter = { x: 500, y: 350 }
     for (const e of graphNodes.value) {
-      if (!visibleTypes.value.has(e.type)) continue
+      if (!(vTypes instanceof Set ? vTypes.has(e.type) : true)) continue
+      const isCenter = centerId === e.id
       const color = getColor(e.type, 'warm')
-      const size = nodeSize(e.degree)
+      const size = isCenter ? 80 : nodeSize(e.degree)
       const pos = saved[e.id]
       nodes.push({
         id: e.id, name: e.name, type: e.type,
-        x: pos?.x ?? Math.random() * 800, y: pos?.y ?? Math.random() * 600,
-        vx: 0, vy: 0, fx: pos?.x ?? null, fy: pos?.y ?? null,
-        width: size * 2.5, height: size * 1.5,
+        x: isCenter ? (pos?.x ?? canvasCenter.x) : (pos?.x ?? Math.random() * 800),
+        y: isCenter ? (pos?.y ?? canvasCenter.y) : (pos?.y ?? Math.random() * 600),
+        vx: 0, vy: 0,
+        fx: isCenter ? (pos?.x ?? canvasCenter.x) : (pos?.x ?? null),
+        fy: isCenter ? (pos?.y ?? canvasCenter.y) : (pos?.y ?? null),
+        width: isCenter ? 140 : size * 2.5,
+        height: isCenter ? 80 : size * 1.5,
         color, icon: e.icon, label: e.label,
         tags: e.tags, description: e.description, degree: e.degree,
-        customColor: nodeCustomColors.get(e.id) || '',
-        isRoot: false, isCollapsed: collapsedNodes.has(e.id),
-        childCount: 0, centerStyle: '', textboxSize: '', textboxStyle: '',
+        customColor: customColors.get(e.id) || '',
+        isRoot: isCenter,
+        isCollapsed: collapsed.has(e.id),
+        childCount: 0,
+        centerStyle: isCenter ? 'gold' : '',
+        textboxSize: '', textboxStyle: '',
         imageUrl: '', linkUrl: '', hidden: false,
-        selected: selectedNodeId.value === e.id,
-        highlighted: false, searchHighlight: searchMatches.value.includes(e.id),
+        selected: focusedId === e.id,
+        highlighted: false, searchHighlight: searchMatchIds.includes(e.id),
         sectionColor: '',
       })
     }
@@ -766,6 +873,8 @@ function buildCanvasData(): void {
       const defaultStyle = edgeLineStyle(me.relType)
       edges.push({
         id: me.id, source: me.source, target: me.target,
+        sourceId: me.source, targetId: me.target,
+        label: me.relLabel, arrow: !me.symmetric, bidir: me.bidirectional || me.symmetric,
         relType: me.relType, relLabel: me.relLabel,
         bidirectional: me.bidirectional, symmetric: me.symmetric,
         color: getEdgeColor(me.relType, 'warm'),
@@ -785,7 +894,7 @@ function buildCanvasData(): void {
       width: 120, height: 120,
       color: rootColor, icon: getIcon(rootEntity.type), label: getLabel(rootEntity.type),
       tags: rootEntity.tags || [], description: rootEntity.description || '', degree: 0,
-      customColor: nodeCustomColors.get(rootEntity.id) || '',
+      customColor: customColors.get(rootEntity.id) || '',
       isRoot: true, isCollapsed: false, childCount: 0,
       centerStyle: '', textboxSize: '', textboxStyle: '',
       imageUrl: '', linkUrl: '', hidden: false,
@@ -800,7 +909,7 @@ function buildCanvasData(): void {
     }
     for (const nid of neighborIds) {
       const entity = entityStore.entities.find(e => e.id === nid)
-      if (!entity || !visibleTypes.value.has(entity.type)) continue
+      if (!entity || !(vTypes instanceof Set ? vTypes.has(entity.type) : true)) continue
       const color = getColor(entity.type, 'warm')
       nodes.push({
         id: entity.id, name: entity.name, type: entity.type,
@@ -809,7 +918,7 @@ function buildCanvasData(): void {
         width: 80, height: 50,
         color, icon: getIcon(entity.type), label: getLabel(entity.type),
         tags: entity.tags || [], description: entity.description || '', degree: 0,
-        customColor: nodeCustomColors.get(entity.id) || '',
+        customColor: customColors.get(entity.id) || '',
         isRoot: false, isCollapsed: false, childCount: 0,
         centerStyle: '', textboxSize: '', textboxStyle: '',
         imageUrl: '', linkUrl: '', hidden: false,
@@ -825,6 +934,8 @@ function buildCanvasData(): void {
       const defaultStyle = edgeLineStyle(me.relType)
       edges.push({
         id: me.id, source: me.source, target: me.target,
+        sourceId: me.source, targetId: me.target,
+        label: me.relLabel, arrow: !me.symmetric, bidir: me.bidirectional || me.symmetric,
         relType: me.relType, relLabel: me.relLabel,
         bidirectional: me.bidirectional, symmetric: me.symmetric,
         color: getEdgeColor(me.relType, 'warm'),
@@ -857,21 +968,92 @@ function buildCanvasData(): void {
   canvasEdges.value = edges
 }
 
-function applyLayout() {
-  forceLayout.applyLayout(canvasNodes.value, canvasEdges.value, layoutName.value as LayoutType)
+function mapToGraphData() {
+  const gNodes = canvasNodes.value.map(n => ({
+    id: n.id, name: n.name, type: n.type, label: n.label,
+    icon: n.icon, shape: '', coolColor: n.color, warmColor: n.color,
+    tags: n.tags || [], description: n.description || '', degree: n.degree,
+  }))
+  const gEdges = canvasEdges.value.map(e => ({
+    id: e.id, source: e.source, target: e.target,
+    relType: e.relType, relLabel: e.relLabel || '',
+    bidirectional: e.bidirectional, symmetric: e.symmetric,
+    relationIds: [e.id], coolColor: e.color, warmColor: e.color,
+    dashed: e.dashed, noArrow: e.noArrow, curveStyle: e.curveStyle,
+  }))
+  return { gNodes, gEdges }
+}
+
+async function applyLayout() {
+  const algo = layoutName.value as LayoutAlgorithmType
+  const { gNodes, gEdges } = mapToGraphData()
+
+  try {
+    let positions: { id: string; x: number; y: number }[] = []
+
+    if (algo === 'tree') {
+      if (!mindmapStore.currentRootId) return
+      positions = await rustLayout.applyLayout('tree', gNodes, gEdges, { rootId: mindmapStore.currentRootId })
+    } else if (algo === 'mindmapTree') {
+      const centerId = mindmapStore.centerNodeId
+      if (!centerId) return
+      const rect = containerRef.value?.getBoundingClientRect()
+      positions = await rustLayout.applyLayout('mindmapTree', gNodes, gEdges, {
+        centerId,
+        centerX: rect ? rect.width / 2 : 400,
+        centerY: rect ? rect.height / 2 : 300,
+        radiusStep: 140,
+      })
+    } else {
+      // compact 降级为 force
+      const layoutType = algo === 'compact' ? 'force' : algo
+      positions = await rustLayout.applyLayout(layoutType, gNodes, gEdges, {})
+    }
+
+    // 构建动画目标（跳过被手动固定的节点）
+    const targets: Array<{
+      node: import('./composables/canvasTypes').CanvasNode
+      fromX: number; fromY: number; toX: number; toY: number
+    }> = []
+    for (const pos of positions) {
+      const node = canvasNodes.value.find(n => n.id === pos.id)
+      // 中心节点 (isRoot) 不参与布局动画，始终固定
+      if (node && !node.isRoot && node.fx === null && (Math.abs(node.x - pos.x) > 2 || Math.abs(node.y - pos.y) > 2)) {
+        targets.push({ node, fromX: node.x, fromY: node.y, toX: pos.x, toY: pos.y })
+      }
+    }
+
+    if (targets.length > 0) {
+      layoutAnim.animateToTargets(targets, () => {
+        renderer.markDirty()
+      })
+    } else {
+      // 无可见变化时直接设置 + 重绘（跳过中心节点）
+      for (const pos of positions) {
+        const node = canvasNodes.value.find(n => n.id === pos.id)
+        if (node && !node.isRoot && node.fx === null) { node.x = pos.x; node.y = pos.y }
+      }
+      renderer.markDirty()
+    }
+  } catch {
+    renderer.markDirty()
+  }
+  savePositions()
 }
 
 function rebuildGraph() {
-  forceLayout.stopSimulation()
   buildCanvasData()
   applyLayout()
-  renderer.markDirty()
   nextTick(() => renderer.fitView(canvasNodes.value))
 }
 
 function zoomIn() { renderer.zoomIn() }
 function zoomOut() { renderer.zoomOut() }
 function fitView() { renderer.fitView(canvasNodes.value) }
+
+const { exportPNG, exportSVG } = useMindmapExport()
+function onExportPNG() { exportPNG(renderer.canvas.value) }
+function onExportSVG() { exportSVG(canvasNodes.value, canvasEdges.value) }
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -899,6 +1081,8 @@ function createRelationEdge(srcId: string, tgtId: string, relType: string) {
   const tgtNode = canvasNodes.value.find(n => n.id === tgtId)
   canvasEdges.value.push({
     id: edgeId, source: srcId, target: tgtId,
+    sourceId: srcId, targetId: tgtId,
+    label: rt?.label || relType, arrow: true, bidir: false,
     relType, relLabel: rt?.label || relType,
     bidirectional: false, symmetric: false,
     color: getEdgeColor(relType, 'warm'),
@@ -968,8 +1152,7 @@ function ctxEditName() {
 
 function commitInlineEdit() {
   if (!inlineEditTarget.value) return
-  const node = canvasNodes.value.find(n => n.id === inlineEditTarget.value)
-  if (node) node.name = inlineEditText.value
+  nodeOps.renameNode(inlineEditTarget.value, inlineEditText.value)
   const entity = entityStore.entities.find(e => e.id === inlineEditTarget.value)
   if (entity) entityStore.update(entity.id, { name: inlineEditText.value })
   showInlineEdit.value = false
@@ -1015,24 +1198,21 @@ async function saveTags() {
 function ctxToggleCollapse() {
   ctxMenu.show = false
   if (!ctxMenu.nodeId) return
-  if (collapsedNodes.has(ctxMenu.nodeId)) collapsedNodes.delete(ctxMenu.nodeId)
-  else collapsedNodes.add(ctxMenu.nodeId)
+  nodeOps.toggleCollapse(ctxMenu.nodeId)
   rebuildGraph()
 }
 
 function ctxDeleteNode() {
   ctxMenu.show = false
   if (!ctxMenu.nodeId) return
-  canvasNodes.value = canvasNodes.value.filter(n => n.id !== ctxMenu.nodeId)
-  canvasEdges.value = canvasEdges.value.filter(e => e.source !== ctxMenu.nodeId && e.target !== ctxMenu.nodeId)
+  nodeOps.deleteNode(ctxMenu.nodeId)
   const entity = entityStore.entities.find(e => e.id === ctxMenu.nodeId)
   if (entity) entityStore.remove(ctxMenu.nodeId)
 }
 
 function startEdgeConnect() {
-  ctxMenu.show = false
-  edgeConnecting.value = true
-  connectSourceId.value = ctxMenu.nodeId
+  mindmapStore.hideContextMenu()
+  mindmapStore.startEdgeConnect(ctxMenu.nodeId)
 }
 
 function editEdgeLabel() {
@@ -1061,7 +1241,7 @@ function editEdgeType() {
 function deleteEdge() {
   ctxMenu.show = false
   if (!ctxMenu.edgeId) return
-  canvasEdges.value = canvasEdges.value.filter(e => e.id !== ctxMenu.edgeId)
+  nodeOps.deleteEdge(ctxMenu.edgeId)
 }
 
 function setEdgeStyle(style: string) {
@@ -1075,65 +1255,30 @@ function setEdgeStyle(style: string) {
 function onPickColor(color: string) {
   showColorPicker.value = false
   if (!ctxMenu.nodeId) return
-  const node = canvasNodes.value.find(n => n.id === ctxMenu.nodeId)
-  if (color) {
-    nodeCustomColors.set(ctxMenu.nodeId, color)
-    if (node) node.customColor = color
-  } else {
-    nodeCustomColors.delete(ctxMenu.nodeId)
-    if (node) node.customColor = ''
-  }
+  nodeOps.setCustomColor(ctxMenu.nodeId, color)
+  mindmapStore.setNodeColor(ctxMenu.nodeId, color) // Store 是唯一真相源
 }
 
 function ctxSetCenter() {
   ctxMenu.show = false
   if (!ctxMenu.nodeId) return
-  const node = canvasNodes.value.find(n => n.id === ctxMenu.nodeId)
-  if (node) {
-    node.type = 'center'
-    node.width = 120
-    node.height = 120
-    node.isRoot = true
-  }
+  nodeOps.setAsCenter(ctxMenu.nodeId)
 }
 
 function ctxSetCenterStyle(style: string) {
   ctxMenu.show = false
   if (!ctxMenu.nodeId) return
-  const node = canvasNodes.value.find(n => n.id === ctxMenu.nodeId)
-  if (node) node.centerStyle = style === 'default' ? '' : style
+  nodeOps.setCenterStyle(ctxMenu.nodeId, style)
 }
 
 function ctxAddCenter() {
   ctxMenu.show = false
-  const id = `center-${Date.now()}`
-  canvasNodes.value.push({
-    id, name: '中心', type: 'center',
-    x: 400, y: 300, vx: 0, vy: 0, fx: 400, fy: 300,
-    width: 120, height: 120,
-    color: '#a78bfa', icon: 'star', label: '中心',
-    tags: [], description: '', degree: 0, customColor: '',
-    isRoot: true, isCollapsed: false, childCount: 0,
-    centerStyle: '', textboxSize: '', textboxStyle: '',
-    imageUrl: '', linkUrl: '', hidden: false,
-    selected: false, highlighted: false, searchHighlight: false, sectionColor: '',
-  })
+  nodeOps.addCenter()
 }
 
 function ctxAddTextbox() {
   ctxMenu.show = false
-  const id = `textbox-${Date.now()}`
-  canvasNodes.value.push({
-    id, name: '文本框', type: 'textbox',
-    x: 500, y: 350, vx: 0, vy: 0, fx: 500, fy: 350,
-    width: 160, height: 80,
-    color: '#eab308', icon: 'edit', label: '文本框',
-    tags: [], description: '', degree: 0, customColor: '',
-    isRoot: false, isCollapsed: false, childCount: 0,
-    centerStyle: '', textboxSize: '', textboxStyle: '',
-    imageUrl: '', linkUrl: '', hidden: false,
-    selected: false, highlighted: false, searchHighlight: false, sectionColor: '',
-  })
+  nodeOps.addTextbox()
 }
 
 function ctxAddImage() {
@@ -1147,18 +1292,7 @@ function onImageFileSelected(e: Event) {
   if (!file) return
   const reader = new FileReader()
   reader.onload = () => {
-    const id = `image-${Date.now()}`
-    canvasNodes.value.push({
-      id, name: file.name, type: 'image',
-      x: 500, y: 400, vx: 0, vy: 0, fx: 500, fy: 400,
-      width: 150, height: 120,
-      color: '#999', icon: 'image', label: '图片',
-      tags: [], description: '', degree: 0, customColor: '',
-      isRoot: false, isCollapsed: false, childCount: 0,
-      centerStyle: '', textboxSize: '', textboxStyle: '',
-      imageUrl: reader.result as string, linkUrl: '', hidden: false,
-      selected: false, highlighted: false, searchHighlight: false, sectionColor: '',
-    })
+    nodeOps.addImage(reader.result as string, file.name)
     input.value = ''
   }
   reader.readAsDataURL(file)
@@ -1171,18 +1305,7 @@ function ctxEditImage() {
 
 function ctxAddNote() {
   ctxMenu.show = false
-  const id = `note-${Date.now()}`
-  canvasNodes.value.push({
-    id, name: '备注', type: 'note',
-    x: 500, y: 400, vx: 0, vy: 0, fx: 500, fy: 400,
-    width: 140, height: 60,
-    color: '#ca8a04', icon: 'outline', label: '备注',
-    tags: [], description: '', degree: 0, customColor: '',
-    isRoot: false, isCollapsed: false, childCount: 0,
-    centerStyle: '', textboxSize: '', textboxStyle: '',
-    imageUrl: '', linkUrl: '', hidden: false,
-    selected: false, highlighted: false, searchHighlight: false, sectionColor: '',
-  })
+  nodeOps.addNote()
 }
 
 function ctxEditNoteContent() {
@@ -1192,74 +1315,42 @@ function ctxEditNoteContent() {
 
 function ctxAddLink() {
   ctxMenu.show = false
-  const id = `link-${Date.now()}`
-  canvasNodes.value.push({
-    id, name: '链接', type: 'link',
-    x: 500, y: 450, vx: 0, vy: 0, fx: 500, fy: 450,
-    width: 140, height: 40,
-    color: '#3b82f6', icon: 'link', label: '链接',
-    tags: [], description: '', degree: 0, customColor: '',
-    isRoot: false, isCollapsed: false, childCount: 0,
-    centerStyle: '', textboxSize: '', textboxStyle: '',
-    imageUrl: '', linkUrl: '', hidden: false,
-    selected: false, highlighted: false, searchHighlight: false, sectionColor: '',
-  })
+  nodeOps.addLink()
 }
 
 function ctxAddGroup() {
   ctxMenu.show = false
-  const id = `group-${Date.now()}`
-  canvasNodes.value.push({
-    id, name: '分组', type: 'group',
-    x: 500, y: 400, vx: 0, vy: 0, fx: 500, fy: 400,
-    width: 300, height: 200,
-    color: '#999', icon: 'item', label: '分组',
-    tags: [], description: '', degree: 0, customColor: '',
-    isRoot: false, isCollapsed: false, childCount: 0,
-    centerStyle: '', textboxSize: '', textboxStyle: '',
-    imageUrl: '', linkUrl: '', hidden: false,
-    selected: false, highlighted: false, searchHighlight: false, sectionColor: '',
-  })
+  nodeOps.addGroup()
 }
 
 function ctxSetTextboxSize(size: string) {
   ctxMenu.show = false
   if (!ctxMenu.nodeId) return
-  const node = canvasNodes.value.find(n => n.id === ctxMenu.nodeId)
-  if (node) {
-    node.textboxSize = size === 'medium' ? '' : size
-    switch (size) {
-      case 'small': node.width = 120; node.height = 60; break
-      case 'large': node.width = 220; node.height = 110; break
-      case 'wide': node.width = 280; node.height = 80; break
-      default: node.width = 160; node.height = 80; break
-    }
-  }
+  nodeOps.setTextboxSize(ctxMenu.nodeId, size as any)
 }
 
 function ctxSetTextboxStyle(style: string) {
   ctxMenu.show = false
   if (!ctxMenu.nodeId) return
-  const node = canvasNodes.value.find(n => n.id === ctxMenu.nodeId)
-  if (node) node.textboxStyle = style === 'default' ? '' : style
+  nodeOps.setTextboxStyle(ctxMenu.nodeId, style)
 }
 
 function deleteSelectedNodes() {
   for (const id of selectedNodes) {
-    canvasNodes.value = canvasNodes.value.filter(n => n.id !== id)
-    canvasEdges.value = canvasEdges.value.filter(e => e.source !== id && e.target !== id)
     const entity = entityStore.entities.find(e => e.id === id)
     if (entity) entityStore.remove(id)
   }
-  selectedNodes.clear()
+  nodeOps.deleteSelected(selectedNodes)
+  mindmapStore.clearSelection()
+  rebuildGraph()
 }
 
-function clearNodeSelection() { selectedNodes.clear() }
+function clearNodeSelection() { mindmapStore.clearSelection() }
 
 function createSectionFromSelection() {
   if (selectedNodes.size === 0) return
   sectionMgr.createFromSelection([...selectedNodes])
-  selectedNodes.clear()
+  mindmapStore.clearSelection()
 }
 
 function enterSelectedNode() {
@@ -1286,6 +1377,213 @@ function navigateToEntity(entityId: string) {
   }
 }
 
+// ===== P0 小地图跳转 =====
+function onMinimapJump(wx: number, wy: number): void {
+  renderer.camera.value = { ...renderer.camera.value, x: wx, y: wy }
+  renderer.markDirty()
+}
+
+// ===== 搜索导航 =====
+function searchNext(): void {
+  if (searchMatches.value.length === 0) return
+  searchMatchIndex.value = (searchMatchIndex.value + 1) % searchMatches.value.length
+  focusSearchMatch()
+}
+function searchPrev(): void {
+  if (searchMatches.value.length === 0) return
+  searchMatchIndex.value = (searchMatchIndex.value - 1 + searchMatches.value.length) % searchMatches.value.length
+  focusSearchMatch()
+}
+function focusSearchMatch(): void {
+  const id = searchMatches.value[searchMatchIndex.value]
+  const node = canvasNodes.value.find(n => n.id === id)
+  if (!node) return
+  renderer.camera.value = { x: node.x, y: node.y, k: Math.max(renderer.camera.value.k, 1) }
+  selectedNodeId.value = id
+  renderer.markDirty()
+}
+
+// ===== O3 对齐/分布 =====
+function alignSelection(direction: 'h' | 'v'): void {
+  const sel = canvasNodes.value.filter(n => selectedNodes.has(n.id))
+  if (sel.length < 2) return
+  if (direction === 'h') {
+    const targetY = sel.reduce((s, n) => s + n.y, 0) / sel.length
+    for (const n of sel) n.y = targetY
+  } else {
+    const targetX = sel.reduce((s, n) => s + n.x, 0) / sel.length
+    for (const n of sel) n.x = targetX
+  }
+  renderer.markDirty()
+}
+function distributeSelection(): void {
+  const sel = canvasNodes.value.filter(n => selectedNodes.has(n.id))
+  if (sel.length < 3) return
+  // 按 x 排序后均匀分布
+  sel.sort((a, b) => a.x - b.x)
+  const minX = sel[0].x
+  const maxX = sel[sel.length - 1].x
+  const step = (maxX - minX) / (sel.length - 1)
+  sel.forEach((n, i) => { n.x = minX + i * step })
+  renderer.markDirty()
+}
+
+// ===== O10 撤销/重做显式入口 =====
+const canUndo = ref(false)
+const canRedo = ref(false)
+function refreshUndoRedoState(): void {
+  canUndo.value = (undoRedo as any).history?.length > 0
+  canRedo.value = (undoRedo as any).future?.length > 0
+}
+function doUndo(): void {
+  undoRedo.undo(entityStore, relationStore)
+  refreshUndoRedoState()
+  rebuildGraph()
+}
+function doRedo(): void {
+  undoRedo.redo(entityStore, relationStore)
+  refreshUndoRedoState()
+  rebuildGraph()
+}
+
+// ===== Agent 整理（自动布局 + 找孤立 + 找环） =====
+function onAIOrganize(): void {
+  // 1. 自动布局
+  layoutName.value = 'force'
+  applyLayout()
+  // 2. 找孤立 + 找环 + 把高亮发给 Agent
+  const isolated = findIsolatedNodes(canvasNodes.value, canvasEdges.value)
+  const cycles = findCycles(canvasNodes.value, canvasEdges.value)
+  const cycleNodes = new Set<string>()
+  for (const c of cycles) for (const id of c) cycleNodes.add(id)
+  mindmapStore.setHighlighted([...isolated, ...cycleNodes])
+  // 3. 把信息回传给 agent
+  const detail = {
+    isolatedCount: isolated.length,
+    cycleCount: cycles.length,
+    cycleNodes: [...cycleNodes],
+    suggestedAction: 'autoLayout + highlightIssues',
+  }
+  window.dispatchEvent(new CustomEvent('worldsmith:agent:plugin-action', {
+    detail: { pluginId: 'mindmap', action: 'ai_organize_result', payload: detail, timestamp: Date.now() },
+  }))
+  // 4. 弹 toast
+  if (isolated.length > 0 || cycles.length > 0) {
+    console.info(`[Mindmap AI 整理] 发现 ${isolated.length} 个孤立节点、${cycles.length} 个环，已高亮`)
+  } else {
+    console.info('[Mindmap AI 整理] 节点结构良好')
+  }
+}
+
+// ===== Agent 通信 =====
+const _isMindmapActive = ref(true)
+useAgentBridge(_isMindmapActive, {
+  autoLayout: (algorithm) => {
+    layoutName.value = algorithm
+    applyLayout()
+  },
+  findIsolated: () => {
+    const ids = findIsolatedNodes(canvasNodes.value, canvasEdges.value)
+    mindmapStore.setHighlighted(ids)
+    mindmapStore.selectAll(ids)
+    if (ids.length > 0) selectedNodeId.value = ids[0]
+    renderer.markDirty()
+  },
+  findCycles: () => {
+    const cycles = findCycles(canvasNodes.value, canvasEdges.value)
+    const ids = new Set<string>()
+    for (const c of cycles) for (const id of c) ids.add(id)
+    mindmapStore.setHighlighted([...ids])
+    mindmapStore.selectAll([...ids])
+    renderer.markDirty()
+  },
+  highlightPath: (sourceId, targetId) => {
+    const path = findShortestPath(canvasNodes.value, canvasEdges.value, sourceId, targetId)
+    if (!path) {
+      mindmapStore.setHighlighted([])
+      return
+    }
+    mindmapStore.setHighlighted(path, { sourceId, targetId, path })
+    mindmapStore.selectAll(path)
+    if (path[0]) selectedNodeId.value = path[0]
+    // 视图聚焦路径中点
+    const midNode = canvasNodes.value.find(n => n.id === path[Math.floor(path.length / 2)])
+    if (midNode) renderer.camera.value = { x: midNode.x, y: midNode.y, k: 1.2 }
+    renderer.markDirty()
+  },
+  suggestMoveToGroup: (nodeId, _groupId) => {
+    // 简单实现：把节点的 sectionColor 临时设为 group 的颜色
+    const group = canvasNodes.value.find(n => n.id === _groupId)
+    if (!group) return
+    const node = canvasNodes.value.find(n => n.id === nodeId)
+    if (!node) return
+    const color = (group as any).color || (group as any).sectionColor || '#6c5ce7'
+    node.sectionColor = color
+    mindmapStore.setNodeColor(nodeId, color)
+    renderer.markDirty()
+  },
+  selectNode: (nodeId) => {
+    selectedNodeId.value = nodeId
+    const node = canvasNodes.value.find(n => n.id === nodeId)
+    if (node) renderer.camera.value = { x: node.x, y: node.y, k: 1.5 }
+    renderer.markDirty()
+  },
+  fitView: () => { fitView() },
+  aiOrganize: () => onAIOrganize(),
+})
+
+// ===== Toolbar 辅助 =====
+async function createMindmapEntity(parentId: string | null, relationType?: string): Promise<string> {
+  const id = `concept-${Date.now()}`
+  const now = new Date().toISOString()
+  await entityStore.add({
+    id, type: 'concept', name: '新主题',
+    description: '', properties: {}, tags: [],
+    createdAt: now, updatedAt: now,
+  })
+  if (parentId) {
+    const relType = relationType || 'associated_with'
+    const relId = `rel-${Date.now()}`
+    await relationStore.add({
+      id: relId, type: relType, name: '关联',
+      sourceId: parentId, targetId: id,
+      sourceType: 'concept', targetType: 'concept',
+      createdAt: now,
+    })
+  }
+  await nextTick()
+  rebuildGraph()
+  // 自动选中并进入内联编辑
+  selectedNodeId.value = id
+  nextTick(() => {
+    ctxEditName()
+  })
+  return id
+}
+
+function addChildNode() {
+  const parentId = mindmapStore.focusedNodeId
+  if (!parentId) return
+  createMindmapEntity(parentId)
+}
+
+function addSiblingNode() {
+  const focusedId = mindmapStore.focusedNodeId
+  if (!focusedId) return
+  // 找到选中节点的父节点
+  const rels = relationStore.relations.filter(r => r.targetId === focusedId)
+  const parentId = rels.length > 0 ? rels[0].sourceId : null
+  createMindmapEntity(parentId)
+}
+
+function toggleType(type: string): void {
+  const v = visibleTypes.value
+  if (!(v instanceof Set)) return
+  if (v.has(type)) v.delete(type)
+  else v.add(type)
+  rebuildGraph()
+}
+
 const POSITION_STORAGE_KEY = 'worldsmith-mindmap-positions'
 
 function savePositions() {
@@ -1293,19 +1591,18 @@ function savePositions() {
   for (const n of canvasNodes.value) {
     positions[n.id] = { x: n.x, y: n.y }
   }
-  try { localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(positions)) } catch { /* quota */ }
+  mindmapStore.nodePositions = positions
 }
 
 function loadPositions(): Record<string, { x: number; y: number }> {
-  try {
-    const raw = localStorage.getItem(POSITION_STORAGE_KEY)
-    return raw ? JSON.parse(raw) : {}
-  } catch { return {} }
+  return mindmapStore.nodePositions
 }
 
 onMounted(async () => {
   await entityStore.loadAll()
   await relationStore.loadAll()
+  // 确保中心主题存在
+  await mindmapStore.ensureCenterNode()
   await nextTick()
   buildCanvasData()
   renderer.init()
@@ -1315,13 +1612,29 @@ onMounted(async () => {
     freeDrawing.drawFreehandStrokes(ctx, camera, mindmapStore.currentRootId)
   })
   nextTick(() => renderer.fitView(canvasNodes.value))
+  attachMouseTracker()
+  refreshUndoRedoState()
+  // 监听容器尺寸变化 → 同步物理 buffer + minimap
+  if (containerRef.value) {
+    const ro = new ResizeObserver(() => {
+      renderer.resize()
+      renderer.markDirty()
+      if (containerRef.value) {
+        containerSize.width = containerRef.value.clientWidth
+        containerSize.height = containerRef.value.clientHeight
+      }
+    })
+    ro.observe(containerRef.value)
+    ;(onBeforeUnmount as any)._ro = ro
+  }
 })
 
 onBeforeUnmount(() => {
   savePositions()
-  forceLayout.stopSimulation()
   canvasInteraction.unbindEvents()
   renderer.destroy()
+  detachMouseTracker()
+  ;(onBeforeUnmount as any)._ro?.disconnect()
 })
 
 watch([graphNodes, graphEdges], () => {
@@ -1338,13 +1651,6 @@ useAgentPluginBridge('mindmap', (event) => {
 .mm-canvas { flex: 1; min-height: 0; }
 .mm-main-area { display: flex; flex: 1; min-height: 0; overflow: hidden; }
 .hidden-input { display: none; }
-.mm-ctx-menu { position: fixed; z-index: var(--z-detail); background: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--radius-lg); box-shadow: var(--shadow-xl); padding: 4px 0; min-width: 160px; }
-.mm-ctx-item { display: block; width: 100%; padding: 6px 14px; text-align: left; border: none; background: none; font-size: var(--font-size-sm); cursor: pointer; color: var(--text-color); white-space: nowrap; transition: background var(--transition-fast); }
-.mm-ctx-item:hover { background: var(--hover-bg); }
-.mm-ctx-divider { height: 1px; background: var(--border-color); margin: 4px 0; }
-.mm-ctx-submenu-wrap { position: relative; }
-.mm-ctx-submenu { display: none; position: absolute; left: 100%; top: 0; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--radius-lg); box-shadow: var(--shadow-xl); padding: 4px 0; min-width: 80px; }
-.mm-ctx-submenu-wrap:hover .mm-ctx-submenu { display: block; }
 .mm-connect-bar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: var(--primary); color: white; padding: 6px 16px; border-radius: var(--radius-md); font-size: var(--font-size-sm); z-index: var(--z-detail); }
 .mm-inline-edit { position: absolute; z-index: var(--z-detail); display: flex; gap: 4px; background: var(--card-bg); padding: 4px; border-radius: var(--radius-md); box-shadow: var(--shadow-lg); border: 1px solid var(--border-color); }
 .mm-inline-input { border: none; border-bottom: 1px solid var(--border-color); background: transparent; color: var(--text-color); padding: 2px 6px; font-size: var(--font-size-sm); outline: none; }

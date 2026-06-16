@@ -71,7 +71,17 @@ playwright-report/
 **/pkg/
 **/pkg/.gitignore
 
-# ── Brainstorming skill runtime state (added at git init) ──────────────
+# ── Third-party AI tool directories ────────────────────────────────────
+.codebuddy/
+.qoder/
+.workbuddy/
+.superpowers/
+
+# ── Test/debug artifacts ────────────────────────────────────────────────
+test-deep-mode-fix.png
+
+# ── Brainstorming skill runtime state ──────────────────────────────────
+# (kept for compatibility if .superpowers is ever re-created)
 .superpowers/brainstorm/*/state/
 .superpowers/brainstorm/*/*.pid
 .superpowers/brainstorm/*/server-*

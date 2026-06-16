@@ -1,11 +1,13 @@
-import { ref, watch, onBeforeUnmount, type Ref } from 'vue'
+import { ref, watch, onBeforeUnmount, onMounted, type Ref } from 'vue'
 import type { CameraState, CanvasNode, CanvasEdge } from './canvasTypes'
-import { drawGraph, type FreehandDrawFn } from './canvasDraw'
+import { drawGraph, invalidateThemeCache, type FreehandDrawFn } from './canvasDraw'
 
 export function useCanvasRenderer(
   containerRef: Ref<HTMLElement | null>,
   getNodes: () => CanvasNode[],
   getEdges: () => CanvasEdge[],
+  getAISuggestions?: () => Array<{ sourceId: string; targetId: string; relType: string }>,
+  getHighlightedIds?: () => Set<string>,
 ) {
   const canvas = ref<HTMLCanvasElement | null>(null)
   const ctx = ref<CanvasRenderingContext2D | null>(null)
@@ -20,6 +22,16 @@ export function useCanvasRenderer(
 
   function markDirty(): void {
     _dirty = true
+    // 如果循环已停止，重新启动一帧
+    if (isRunning && !animFrame) {
+      animFrame = requestAnimationFrame(() => {
+        animFrame = 0
+        if (_dirty) {
+          render()
+          _dirty = false
+        }
+      })
+    }
   }
 
   function init(): void {
@@ -49,19 +61,22 @@ export function useCanvasRenderer(
 
   function resize(): void {
     if (!canvas.value || !containerRef.value) return
-    const rect = containerRef.value.getBoundingClientRect()
+    const cw = containerRef.value.clientWidth
+    const ch = containerRef.value.clientHeight
+    if (!cw || !ch) return
     const dpr = window.devicePixelRatio || 1
-    canvas.value.width = rect.width * dpr
-    canvas.value.height = rect.height * dpr
-    canvas.value.style.width = rect.width + 'px'
-    canvas.value.style.height = rect.height + 'px'
-    ctx.value?.scale(dpr, dpr)
+    canvas.value.width = cw * dpr
+    canvas.value.height = ch * dpr
+    // 保持 CSS 100% 不设置像素值，确保自适应
+    if (ctx.value) {
+      ctx.value.setTransform(dpr, 0, 0, dpr, 0, 0)
+    }
     markDirty()
   }
 
   function startRenderLoop(): void {
     isRunning = true
-    _forceRenderCount = 60
+    _forceRenderCount = 10
     function frame() {
       if (!isRunning) return
       if (_dirty || _forceRenderCount > 0) {
@@ -69,25 +84,33 @@ export function useCanvasRenderer(
         _dirty = false
         if (_forceRenderCount > 0) _forceRenderCount--
       }
-      animFrame = requestAnimationFrame(frame)
+      // 只在有变化时继续循环
+      if (_dirty || _forceRenderCount > 0) {
+        animFrame = requestAnimationFrame(frame)
+      } else {
+        animFrame = 0
+      }
     }
     frame()
   }
 
   function render(): void {
-    if (!ctx.value || !canvas.value) return
-    const rect = containerRef.value?.getBoundingClientRect()
-    if (!rect) return
+    if (!ctx.value || !canvas.value || !containerRef.value) return
+    const cw = containerRef.value.clientWidth
+    const ch = containerRef.value.clientHeight
+    if (!cw || !ch) return
     drawGraph(
       ctx.value,
-      rect.width,
-      rect.height,
+      cw,
+      ch,
       getNodes(),
       getEdges(),
       camera.value,
       hoveredNodeId.value,
       selectedNodeId.value,
       _freehandDrawFn,
+      getAISuggestions?.(),
+      getHighlightedIds?.(),
     )
   }
 
@@ -97,7 +120,7 @@ export function useCanvasRenderer(
   }
 
   function fitView(nodes: CanvasNode[]): void {
-    if (nodes.length === 0) return
+    if (nodes.length === 0 || !containerRef.value) return
     let minX = Infinity, maxX = -Infinity
     let minY = Infinity, maxY = -Infinity
     for (const n of nodes) {
@@ -107,14 +130,14 @@ export function useCanvasRenderer(
       if (n.y - n.height / 2 < minY) minY = n.y - n.height / 2
       if (n.y + n.height / 2 > maxY) maxY = n.y + n.height / 2
     }
-    const rect = containerRef.value?.getBoundingClientRect()
-    if (!rect) return
+    const cw = containerRef.value.clientWidth
+    const ch = containerRef.value.clientHeight
     const graphW = maxX - minX || 1
     const graphH = maxY - minY || 1
     const padding = 80
     const k = Math.min(
-      (rect.width - padding * 2) / graphW,
-      (rect.height - padding * 2) / graphH,
+      (cw - padding * 2) / graphW,
+      (ch - padding * 2) / graphH,
       2,
     )
     camera.value = {
@@ -125,8 +148,11 @@ export function useCanvasRenderer(
   }
 
   function screenToWorld(sx: number, sy: number): { x: number; y: number } {
-    const rect = containerRef.value?.getBoundingClientRect()
-    if (!rect) return { x: sx, y: sy }
+    // 必须与 useCanvasInteraction.getCanvasRect() 使用同一元素，
+    // 否则侧边栏收缩/展开后 clientWidth 与 BCR.width 的偏差导致命中偏移。
+    const el = (canvas.value || containerRef.value) as HTMLElement | null
+    if (!el) return { x: sx, y: sy }
+    const rect = el.getBoundingClientRect()
     const cx = rect.width / 2
     const cy = rect.height / 2
     return {
@@ -188,8 +214,23 @@ export function useCanvasRenderer(
   watch(hoveredNodeId, () => markDirty())
   watch(selectedNodeId, () => markDirty())
 
+  // 监听主题切换 — 颜色编辑器和主题按钮会改 CSS 变量
+  let _themeObserver: MutationObserver | null = null
+  onMounted(() => {
+    if (typeof MutationObserver === 'undefined') return
+    _themeObserver = new MutationObserver(() => {
+      invalidateThemeCache()
+      markDirty()
+    })
+    _themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class', 'style', 'data-theme'],
+    })
+  })
+
   onBeforeUnmount(() => {
     destroy()
+    _themeObserver?.disconnect()
   })
 
   return {

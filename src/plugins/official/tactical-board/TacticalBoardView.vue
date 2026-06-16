@@ -69,6 +69,7 @@
           :selectedCell="selectedCell"
           :awarenessCells="awareness.cells.value"
           :awarenessMode="awareness.mode.value"
+          :animationProvider="animProvider"
           @cellClick="onCellClick"
           @cellRightClick="onCellRightClick"
           @cellHover="onCellHover"
@@ -159,20 +160,17 @@
       </div>
     </div>
 
-    <div class="tb-status">
-      <span>回合 {{ currentTurn }}</span>
-      <span class="tb-status-sep">|</span>
-      <span>单位 {{ units.length }}</span>
-      <span class="tb-status-sep">|</span>
-      <span>{{ gridType === 'hex' ? '六边形' : '方形' }} {{ gridSize }}×{{ gridSize }}</span>
-      <span class="tb-status-sep">|</span>
-      <span class="tb-status-hint">{{ statusHint }}</span>
-    </div>
+    <TacticalStatusBar
+      :turn="currentTurn"
+      :unitCount="units.length"
+      :gridLabel="`${gridType === 'hex' ? '六边形' : '方形'} ${gridSize}×${gridSize}`"
+      :hint="statusHint"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useEntityStore } from '@worldsmith/entity-core'
 import WsEmpty from '../../../ui/WsEmpty.vue'
 import WsIcon from '../../../ui/WsIcon.vue'
@@ -183,13 +181,15 @@ import BattleLog from './components/BattleLog.vue'
 import AIControl from './components/AIControl.vue'
 import AwarenessPanel from './components/AwarenessPanel.vue'
 import DeployPanel from './components/DeployPanel.vue'
+import TacticalStatusBar from './components/TacticalStatusBar.vue'
 import { useTacticalEngine, type WasmBattleUnit } from './composables/useTacticalEngine'
-import { useBattleManager, type BattlePhase } from './composables/useBattleManager'
+import { useBattleManager } from './composables/useBattleManager'
 import { useAIController } from './composables/useAIController'
 import { useAwareness, type AwarenessMode } from './composables/useAwareness'
 import { useBoardPersistence } from './composables/useBoardPersistence'
 import type { UnitRenderData, HighlightCell } from './composables/boardDraw'
 import { useAgentPluginBridge } from '../../../composables/useAgentPluginBridge'
+import { useBoardAnimation } from './composables/useBoardAnimation'
 
 const es = useEntityStore()
 const { engine, loading, error: engineError, createEngine } = useTacticalEngine()
@@ -231,6 +231,15 @@ const hoveredCell = ref<{ x: number; y: number } | null>(null)
 
 const engineReady = computed(() => !!engine.value && !loading.value)
 
+const anim = useBoardAnimation()
+
+// Expose animation provider for BoardCanvas
+const animProvider = computed(() => ({
+  tick: anim.tick,
+  getOverride: anim.getOverride,
+  floatingNumbers: anim.floatingNumbers,
+}))
+
 function refreshUnits() {
   if (!engine.value) return
   try {
@@ -246,7 +255,7 @@ function refreshUnits() {
   awareness.refresh()
 }
 
-const battle = useBattleManager(engine, units, refreshUnits)
+const battle = useBattleManager(engine, units, refreshUnits, anim)
 
 const ai = useAIController(
   engine,
@@ -277,24 +286,7 @@ const currentUnit = computed(() => battle.currentUnit.value)
 const actionState = computed(() => battle.actionState.value)
 const battleLog = computed(() => battle.battleLog.value)
 
-watch(battleLog, (newLog, oldLog) => {
-  if (!oldLog || newLog.length <= oldLog.length) return
-  const newEntries = newLog.slice(oldLog.length)
-  for (const entry of newEntries) {
-    if (entry.type === 'attack') {
-      const dmgMatch = entry.text.match(/(\d+) 伤害/)
-      const critMatch = entry.text.includes('暴击')
-      const deadMatch = entry.text.match('被击败')
-      if (dmgMatch) {
-        persistence.recordAttack(
-          Number(dmgMatch[1]),
-          critMatch,
-          deadMatch ? 'unknown' : null,
-        )
-      }
-    }
-  }
-}, { deep: true })
+// Stats are now tracked via engine events in useBattleManager, no regex parsing needed
 
 const TERRAIN_LABELS: Record<string, string> = {
   plain: '平原', forest: '森林', mountain: '山地',
@@ -396,7 +388,7 @@ function syncTerrainToEngine() {
   }
 }
 
-function onCellClick(x: number, y: number, evt: MouseEvent) {
+function onCellClick(x: number, y: number, _evt: MouseEvent) {
   if (battlePhase.value === 'deployment') {
     if (terrainBrush.value !== 'none') {
       paintTerrain(x, y)
@@ -609,18 +601,88 @@ async function onLoadBoard() {
   }
   refreshUnits()
   battle.resetBattle()
-  if (data.battlePhase === 'action' || data.battlePhase === 'battle') {
+  if (data.battlePhase === 'battle') {
     battle.startBattle()
   }
+}
+
+// --- Keyboard shortcuts ---
+function onKeyDown(e: KeyboardEvent) {
+  // Ignore if focus is in an input/textarea
+  const tag = (e.target as HTMLElement)?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+
+  if (battlePhase.value === 'battle') {
+    if (e.code === 'Space') { e.preventDefault(); endTurn() }
+    else if (e.key === 'm' || e.key === 'M') { beginMoveAction() }
+    else if (e.key === 'a' || e.key === 'A') { beginAttackAction() }
+    else if (e.key === 'w' || e.key === 'W') { waitAction() }
+    else if (e.key === 'Escape') { cancelAction() }
+  }
+  if (e.key === '1') { onToggleAwareness('influence') }
+  else if (e.key === '2') { onToggleAwareness('threat') }
+  else if (e.key === '3') { onToggleAwareness('supply') }
 }
 
 onMounted(async () => {
   es.loadAll()
   await rebuildBoard()
+  window.addEventListener('keydown', onKeyDown)
 })
 
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeyDown)
+})
+
+// --- Agent plugin bridge ---
 useAgentPluginBridge('tactical-board', (event) => {
-  console.log(`[Agent→${event.pluginId}] ${event.action}`, event.payload)
+  const { action, payload } = event
+  switch (action) {
+    case 'deploy_unit': {
+      const team = (payload.team as string) || 'ally'
+      const stats = payload.stats as { hp: number; attack: number; defense: number; speed: number; moveRange: number; attackRange: number } | undefined
+      const entity = payload.entity as { id: string; name: string; type?: string } | undefined
+      if (entity && stats) {
+        onDeployEntity(entity, team, stats)
+      }
+      break
+    }
+    case 'move_unit': {
+      const { x, y } = payload as { x: number; y: number }
+      if (typeof x === 'number' && typeof y === 'number') {
+        selectedCell.value = { x, y }
+        if (battlePhase.value === 'battle' && !actionState.value) {
+          beginMoveAction()
+        }
+      }
+      break
+    }
+    case 'get_battle_state': {
+      const state = {
+        phase: battlePhase.value,
+        turn: currentTurn.value,
+        units: units.value.map(u => ({ id: u.id, name: u.name, team: u.team, hp: u.hp, x: u.x, y: u.y, acted: u.acted })),
+        gridType: gridType.value,
+        gridSize: Number(gridSize.value),
+        combatStats: combatStatsSummary.value,
+      }
+      console.log('[TacticalBoard] battle state:', JSON.stringify(state))
+      break
+    }
+    case 'simulate_turn': {
+      if (battlePhase.value === 'battle') {
+        const fullTurn = payload?.full === true
+        if (fullTurn) {
+          onToggleAutoAI()
+        } else {
+          ai.runAISingleStep()
+        }
+      }
+      break
+    }
+    default:
+      console.log(`[Agent→tactical-board] unknown action: ${action}`, payload)
+  }
 })
 </script>
 
@@ -898,18 +960,4 @@ useAgentPluginBridge('tactical-board', (event) => {
   overflow: hidden;
 }
 
-.tb-status {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 16px;
-  background: var(--color-bg-surface);
-  border-top: 1px solid var(--color-border);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  flex-shrink: 0;
-}
-
-.tb-status-sep { color: var(--color-border); }
-.tb-status-hint { margin-left: auto; color: var(--color-text-tertiary); }
 </style>

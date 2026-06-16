@@ -2,6 +2,7 @@ use std::sync::Mutex;
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use std::io::{BufRead, BufReader, Write};
 use tauri::Emitter;
+use tauri::Manager;
 
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -32,7 +33,13 @@ use worldsmith_core::algo::geometry::polygon::{Polygon2D, point_in_polygon, conv
 use worldsmith_core::algo::geometry::bbox::{AABB2D, OBB2D};
 use worldsmith_core::algo::graph::pathfind::{WeightedGraph, dijkstra, dijkstra_path, astar, k_shortest_paths};
 use worldsmith_core::algo::graph::topology::{topological_sort, connected_components, tarjan_scc, find_dangling_references};
-use worldsmith_core::algo::graph::layout::{force_directed_layout, ForceLayoutConfig};
+use worldsmith_core::algo::graph::layout::{
+  force_directed_layout, ForceLayoutConfig,
+  grid_layout, GridLayoutConfig,
+  radial_layout, RadialLayoutConfig,
+  tree_layout, TreeLayoutConfig,
+  compute_layout, LayoutAlgorithm,
+};
 use worldsmith_core::algo::collab::crdt::{LWWRegister, ORSet, RGA, VectorClock};
 use worldsmith_core::algo::terrain::terrain::{NoiseConfig, HeightMap, value_noise_2d, marching_squares};
 use worldsmith_core::algo::draft::constraint::ConstraintSystem;
@@ -41,15 +48,73 @@ use worldsmith_core::algo::geometry::boolean;
 use worldsmith_core::algo::graph::community;
 use worldsmith_core::algo::terrain::erosion;
 
+// ── 安全存储 API（系统 Keyring） ──
+
+const KEYRING_SERVICE: &str = "com.worldsmith.app";
+const KEYRING_USERNAME: &str = "api_keys";
+
+/// 获取 keyring 条目 — 统一 service/username，用 key 名作为条目后缀
+fn keyring_entry(key: &str) -> Result<keyring::Entry, String> {
+    let service = format!("{}:{}", KEYRING_SERVICE, key);
+    keyring::Entry::new(&service, KEYRING_USERNAME).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn cmd_secure_store(key: String, value: String) -> Result<(), String> {
+    if value.is_empty() {
+        // 空值等同于删除
+        let entry = keyring_entry(&key)?;
+        let _ = entry.delete_credential();
+        return Ok(());
+    }
+    let entry = keyring_entry(&key)?;
+    entry.set_password(&value).map_err(|e| {
+        eprintln!("[keyring] set_password 失败 for key={key}: {e}");
+        e.to_string()
+    })
+}
+
+#[tauri::command]
+fn cmd_secure_load(key: String) -> Result<String, String> {
+    let entry = keyring_entry(&key)?;
+    match entry.get_password() {
+        Ok(password) => Ok(password),
+        Err(keyring::Error::NoEntry) => Ok(String::new()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+fn cmd_secure_delete(key: String) -> Result<(), String> {
+    let entry = keyring_entry(&key)?;
+    match entry.delete_credential() {
+        Ok(()) => Ok(()),
+        Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+fn cmd_secure_exists(key: String) -> Result<bool, String> {
+    let entry = keyring_entry(&key)?;
+    match entry.get_password() {
+        Ok(_) => Ok(true),
+        Err(keyring::Error::NoEntry) => Ok(false),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 pub mod workflow;
 
-struct AppState {
+pub struct AppState {
     db: Mutex<SqliteStore>,
     retrofit: Mutex<RetrofitEngine>,
     spatial: Mutex<SpatialIndex>,
     schema: Mutex<worldsmith_core::schema::SchemaRegistry>,
     mcp_processes: Mutex<std::collections::HashMap<String, std::process::Child>>,
     pty_processes: Mutex<std::collections::HashMap<String, PtyProcess>>,
+    /// PTY 输出 channel 接收端，供 cmd_shell_session_exec 读取
+    pty_output_receivers: Mutex<std::collections::HashMap<String, std::sync::mpsc::Receiver<String>>>,
     /// 工作流引擎单例（Phase 2.1+）
     wf_engine: std::sync::Arc<crate::workflow::engine::WorkflowEngine>,
     /// 工作流 Sqlite 数据库路径（spawn executor 时用于开新连接）
@@ -63,12 +128,43 @@ struct PtyProcess {
     writer: Box<dyn std::io::Write + Send>,
     _child: Box<dyn portable_pty::Child + Send + Sync>,
     kill_tx: std::sync::Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+    /// 输出缓冲 channel sender：持有以保持 channel 存活，receiver 在 pty_output_receivers 中
+    #[allow(dead_code)]
+    output_tx: std::sync::Mutex<Option<std::sync::mpsc::Sender<String>>>,
 }
 
 #[tauri::command]
 fn cmd_init_db(state: State<AppState>, path: String) -> Result<(), CoreError> {
     let store = SqliteStore::open(&path)?;
     *state.db.lock().map_err(|e| CoreError::Lock(e.to_string()))? = store;
+    Ok(())
+}
+
+/// 切换项目数据库。根据 project_id 在 app data 目录下创建/打开对应的 SQLite 文件。
+#[tauri::command]
+fn cmd_switch_project(app: tauri::AppHandle, state: State<AppState>, project_id: String) -> Result<String, CoreError> {
+    let data_dir = app.path().app_data_dir()
+        .map_err(|e| CoreError::storage(format!("获取 app data 目录失败: {e}")))?;
+    let projects_dir = data_dir.join("projects");
+    std::fs::create_dir_all(&projects_dir)
+        .map_err(|e| CoreError::storage(format!("创建 projects 目录失败: {e}")))?;
+    let db_path = projects_dir.join(format!("{}.db", project_id));
+    let path_str = db_path.to_string_lossy().to_string();
+    let store = SqliteStore::open(&path_str)?;
+    *state.db.lock().map_err(|e| CoreError::Lock(e.to_string()))? = store;
+    Ok(path_str)
+}
+
+/// 删除项目数据库文件。
+#[tauri::command]
+fn cmd_delete_project_db(app: tauri::AppHandle, project_id: String) -> Result<(), CoreError> {
+    let data_dir = app.path().app_data_dir()
+        .map_err(|e| CoreError::storage(format!("获取 app data 目录失败: {e}")))?;
+    let db_path = data_dir.join("projects").join(format!("{}.db", project_id));
+    if db_path.exists() {
+        std::fs::remove_file(&db_path)
+            .map_err(|e| CoreError::storage(format!("删除项目数据库失败: {e}")))?;
+    }
     Ok(())
 }
 
@@ -204,6 +300,70 @@ fn cmd_kv_set(state: State<AppState>, key: String, value: String) -> Result<(), 
 fn cmd_kv_get_all(state: State<AppState>) -> Result<Vec<(String, String)>, CoreError> {
     let db = state.db.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
     db.kv_get_all().map_err(|e| CoreError::storage(e.to_string()))
+}
+
+#[tauri::command]
+fn cmd_kv_delete(state: State<AppState>, key: String) -> Result<(), CoreError> {
+    let db = state.db.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    db.kv_delete(&key).map_err(|e| CoreError::storage(e.to_string()))
+}
+
+#[tauri::command]
+fn cmd_kv_clear(state: State<AppState>) -> Result<(), CoreError> {
+    let db = state.db.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    db.kv_clear().map_err(|e| CoreError::storage(e.to_string()))
+}
+
+// ── 文件存储命令 ──────────────────────────────────────────
+
+#[tauri::command]
+fn cmd_get_all_files(state: State<AppState>) -> Result<Vec<serde_json::Value>, CoreError> {
+    let db = state.db.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    db.get_all_files().map_err(|e| CoreError::storage(e.to_string()))
+}
+
+#[tauri::command]
+fn cmd_get_file(state: State<AppState>, id: String) -> Result<Option<serde_json::Value>, CoreError> {
+    let db = state.db.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    db.get_file(&id).map_err(|e| CoreError::storage(e.to_string()))
+}
+
+#[tauri::command]
+fn cmd_get_file_by_path(state: State<AppState>, path: String) -> Result<Option<serde_json::Value>, CoreError> {
+    let db = state.db.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    db.get_file_by_path(&path).map_err(|e| CoreError::storage(e.to_string()))
+}
+
+#[tauri::command]
+fn cmd_get_files_by_entity(state: State<AppState>, entity_id: String) -> Result<Vec<serde_json::Value>, CoreError> {
+    let db = state.db.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    db.get_files_by_entity(&entity_id).map_err(|e| CoreError::storage(e.to_string()))
+}
+
+#[tauri::command]
+fn cmd_put_file(state: State<AppState>, file_json: String, content_json: String) -> Result<(), CoreError> {
+    let db = state.db.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    db.put_file(&file_json, &content_json).map_err(|e| CoreError::storage(e.to_string()))
+}
+
+#[tauri::command]
+fn cmd_update_file(state: State<AppState>, id: String, changes_json: String) -> Result<bool, CoreError> {
+    let changes: serde_json::Value = serde_json::from_str(&changes_json)
+        .map_err(|e| CoreError::deserialize(e.to_string()))?;
+    let db = state.db.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    db.update_file(&id, &changes).map_err(|e| CoreError::storage(e.to_string()))
+}
+
+#[tauri::command]
+fn cmd_delete_file(state: State<AppState>, id: String) -> Result<bool, CoreError> {
+    let db = state.db.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    db.delete_file(&id).map_err(|e| CoreError::storage(e.to_string()))
+}
+
+#[tauri::command]
+fn cmd_get_file_content(state: State<AppState>, id: String) -> Result<Option<serde_json::Value>, CoreError> {
+    let db = state.db.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    db.get_file_content(&id).map_err(|e| CoreError::storage(e.to_string()))
 }
 
 #[tauri::command]
@@ -780,6 +940,64 @@ fn cmd_algo_force_layout(
         .and_then(|s| serde_json::from_str(s).ok())
         .unwrap_or_default();
     let result = force_directed_layout(&graph, &config);
+    serde_json::to_value(&result).map_err(|e| CoreError::serialize(e.to_string()))
+}
+
+#[tauri::command]
+fn cmd_algo_grid_layout(
+    graph_json: String,
+    config_json: Option<String>,
+) -> Result<serde_json::Value, CoreError> {
+    let graph: WeightedGraph = serde_json::from_str(&graph_json)
+        .map_err(|e| CoreError::deserialize(e.to_string()))?;
+    let config: GridLayoutConfig = config_json
+        .as_deref()
+        .and_then(|s| serde_json::from_str(s).ok())
+        .unwrap_or_default();
+    let result = grid_layout(&graph, &config);
+    serde_json::to_value(&result).map_err(|e| CoreError::serialize(e.to_string()))
+}
+
+#[tauri::command]
+fn cmd_algo_radial_layout(
+    graph_json: String,
+    config_json: Option<String>,
+) -> Result<serde_json::Value, CoreError> {
+    let graph: WeightedGraph = serde_json::from_str(&graph_json)
+        .map_err(|e| CoreError::deserialize(e.to_string()))?;
+    let config: RadialLayoutConfig = config_json
+        .as_deref()
+        .and_then(|s| serde_json::from_str(s).ok())
+        .unwrap_or_default();
+    let result = radial_layout(&graph, &config);
+    serde_json::to_value(&result).map_err(|e| CoreError::serialize(e.to_string()))
+}
+
+#[tauri::command]
+fn cmd_algo_tree_layout(
+    graph_json: String,
+    config_json: String,
+) -> Result<serde_json::Value, CoreError> {
+    let graph: WeightedGraph = serde_json::from_str(&graph_json)
+        .map_err(|e| CoreError::deserialize(e.to_string()))?;
+    let config: TreeLayoutConfig = serde_json::from_str(&config_json)
+        .map_err(|e| CoreError::deserialize(e.to_string()))?;
+    let result = tree_layout(&graph, &config)
+        .map_err(|e| CoreError::storage(e.to_string()))?;
+    serde_json::to_value(&result).map_err(|e| CoreError::serialize(e.to_string()))
+}
+
+#[tauri::command]
+fn cmd_algo_layout_unified(
+    graph_json: String,
+    algorithm_json: String,
+) -> Result<serde_json::Value, CoreError> {
+    let graph: WeightedGraph = serde_json::from_str(&graph_json)
+        .map_err(|e| CoreError::deserialize(e.to_string()))?;
+    let algorithm: LayoutAlgorithm = serde_json::from_str(&algorithm_json)
+        .map_err(|e| CoreError::deserialize(e.to_string()))?;
+    let result = compute_layout(&graph, &algorithm)
+        .map_err(|e| CoreError::storage(e.to_string()))?;
     serde_json::to_value(&result).map_err(|e| CoreError::serialize(e.to_string()))
 }
 
@@ -1459,6 +1677,329 @@ fn cmd_font_read_file(path: String) -> Result<Vec<u8>, CoreError> {
     std::fs::read(&path).map_err(|e| CoreError::storage(format!("Failed to read font file '{}': {}", path, e)))
 }
 
+// ── 原生文件系统 API（不依赖 Shell） ──
+
+#[derive(Serialize)]
+struct FsEntry {
+    name: String,
+    path: String,
+    is_dir: bool,
+    size: u64,
+    modified: Option<String>,
+}
+
+#[derive(Serialize)]
+struct FsStat {
+    exists: bool,
+    is_dir: bool,
+    is_file: bool,
+    size: u64,
+    modified: Option<String>,
+    created: Option<String>,
+    readonly: bool,
+}
+
+#[tauri::command]
+fn cmd_fs_read(path: String, encoding: Option<String>) -> Result<String, CoreError> {
+    let enc = encoding.unwrap_or_else(|| "utf-8".to_string());
+    if enc.to_lowercase() == "base64" {
+        let bytes = std::fs::read(&path).map_err(|e| CoreError::storage(format!("Failed to read file '{}': {}", path, e)))?;
+        Ok(base64_encode(&bytes))
+    } else {
+        std::fs::read_to_string(&path).map_err(|e| CoreError::storage(format!("Failed to read file '{}': {}", path, e)))
+    }
+}
+
+#[tauri::command]
+fn cmd_fs_read_binary(path: String) -> Result<Vec<u8>, CoreError> {
+    std::fs::read(&path).map_err(|e| CoreError::storage(format!("Failed to read file '{}': {}", path, e)))
+}
+
+#[tauri::command]
+fn cmd_fs_write(path: String, content: String, create_dirs: Option<bool>) -> Result<(), CoreError> {
+    if create_dirs.unwrap_or(false) {
+        if let Some(parent) = std::path::Path::new(&path).parent() {
+            std::fs::create_dir_all(parent).map_err(|e| CoreError::storage(format!("Failed to create dirs for '{}': {}", path, e)))?;
+        }
+    }
+    std::fs::write(&path, &content).map_err(|e| CoreError::storage(format!("Failed to write file '{}': {}", path, e)))
+}
+
+#[tauri::command]
+fn cmd_fs_write_binary(path: String, data: Vec<u8>, create_dirs: Option<bool>) -> Result<(), CoreError> {
+    if create_dirs.unwrap_or(false) {
+        if let Some(parent) = std::path::Path::new(&path).parent() {
+            std::fs::create_dir_all(parent).map_err(|e| CoreError::storage(format!("Failed to create dirs for '{}': {}", path, e)))?;
+        }
+    }
+    std::fs::write(&path, &data).map_err(|e| CoreError::storage(format!("Failed to write file '{}': {}", path, e)))
+}
+
+#[tauri::command]
+fn cmd_fs_list(path: String, recursive: Option<bool>) -> Result<Vec<FsEntry>, CoreError> {
+    let rec = recursive.unwrap_or(false);
+    let root = std::path::Path::new(&path);
+    if !root.is_dir() {
+        return Err(CoreError::storage(format!("Not a directory: {}", path)));
+    }
+    let mut entries = Vec::new();
+    let walker = if rec {
+        walkdir::WalkDir::new(&path).max_depth(3)
+    } else {
+        walkdir::WalkDir::new(&path).max_depth(1)
+    };
+    for entry in walker.into_iter().filter_map(|e| e.ok()) {
+        let p = entry.path();
+        if p == root { continue; }
+        let meta = entry.metadata().ok();
+        entries.push(FsEntry {
+            name: p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
+            path: p.to_string_lossy().to_string(),
+            is_dir: entry.file_type().is_dir(),
+            size: meta.as_ref().map(|m| m.len()).unwrap_or(0),
+            modified: meta.as_ref().and_then(|m| m.modified().ok()).and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs().to_string()),
+        });
+    }
+    Ok(entries)
+}
+
+#[tauri::command]
+fn cmd_fs_mkdir(path: String, recursive: Option<bool>) -> Result<(), CoreError> {
+    if recursive.unwrap_or(true) {
+        std::fs::create_dir_all(&path).map_err(|e| CoreError::storage(format!("Failed to create directory '{}': {}", path, e)))
+    } else {
+        std::fs::create_dir(&path).map_err(|e| CoreError::storage(format!("Failed to create directory '{}': {}", path, e)))
+    }
+}
+
+#[tauri::command]
+fn cmd_fs_stat(path: String) -> Result<FsStat, CoreError> {
+    let _p = std::path::Path::new(&path);
+    match std::fs::metadata(&path) {
+        Ok(meta) => Ok(FsStat {
+            exists: true,
+            is_dir: meta.is_dir(),
+            is_file: meta.is_file(),
+            size: meta.len(),
+            modified: meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs().to_string()),
+            created: meta.created().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs().to_string()),
+            readonly: meta.permissions().readonly(),
+        }),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(FsStat {
+            exists: false, is_dir: false, is_file: false, size: 0, modified: None, created: None, readonly: false,
+        }),
+        Err(e) => Err(CoreError::storage(format!("Failed to stat '{}': {}", path, e))),
+    }
+}
+
+#[tauri::command]
+fn cmd_fs_copy(source: String, destination: String) -> Result<(), CoreError> {
+    let src = std::path::Path::new(&source);
+    if src.is_dir() {
+        // For directories, we need to copy recursively
+        copy_dir_recursive(src, std::path::Path::new(&destination))
+    } else {
+        std::fs::copy(&source, &destination).map_err(|e| CoreError::storage(format!("Failed to copy '{}' to '{}': {}", source, destination, e)))?;
+        Ok(())
+    }
+}
+
+#[tauri::command]
+fn cmd_fs_rename(source: String, destination: String) -> Result<(), CoreError> {
+    std::fs::rename(&source, &destination).map_err(|e| CoreError::storage(format!("Failed to rename '{}' to '{}': {}", source, destination, e)))
+}
+
+#[tauri::command]
+fn cmd_fs_delete(path: String, recursive: Option<bool>) -> Result<(), CoreError> {
+    let p = std::path::Path::new(&path);
+    if p.is_dir() {
+        if recursive.unwrap_or(false) {
+            std::fs::remove_dir_all(&path).map_err(|e| CoreError::storage(format!("Failed to delete directory '{}': {}", path, e)))
+        } else {
+            std::fs::remove_dir(&path).map_err(|e| CoreError::storage(format!("Failed to delete directory '{}': {}", path, e)))
+        }
+    } else {
+        std::fs::remove_file(&path).map_err(|e| CoreError::storage(format!("Failed to delete file '{}': {}", path, e)))
+    }
+}
+
+#[tauri::command]
+fn cmd_fs_search(path: String, pattern: String, search_type: Option<String>) -> Result<Vec<FsEntry>, CoreError> {
+    let stype = search_type.unwrap_or_else(|| "glob".to_string());
+    let mut results = Vec::new();
+    if stype == "content" {
+        // Search file contents - return files that contain the pattern
+        for entry in walkdir::WalkDir::new(&path).max_depth(5).into_iter().filter_map(|e| e.ok()) {
+            if entry.file_type().is_file() {
+                if let Ok(content) = std::fs::read_to_string(entry.path()) {
+                    if content.contains(&pattern) {
+                        let meta = entry.metadata().ok();
+                        results.push(FsEntry {
+                            name: entry.file_name().to_string_lossy().to_string(),
+                            path: entry.path().to_string_lossy().to_string(),
+                            is_dir: false,
+                            size: meta.as_ref().map(|m| m.len()).unwrap_or(0),
+                            modified: meta.as_ref().and_then(|m| m.modified().ok()).and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs().to_string()),
+                        });
+                        if results.len() >= 30 { break; }
+                    }
+                }
+            }
+        }
+    } else {
+        // Glob search by filename
+        for entry in walkdir::WalkDir::new(&path).max_depth(5).into_iter().filter_map(|e| e.ok()) {
+            let name = entry.file_name().to_string_lossy();
+            if glob_match(&pattern, &name) {
+                let meta = entry.metadata().ok();
+                results.push(FsEntry {
+                    name: name.to_string(),
+                    path: entry.path().to_string_lossy().to_string(),
+                    is_dir: entry.file_type().is_dir(),
+                    size: meta.as_ref().map(|m| m.len()).unwrap_or(0),
+                    modified: meta.as_ref().and_then(|m| m.modified().ok()).and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs().to_string()),
+                });
+                if results.len() >= 50 { break; }
+            }
+        }
+    }
+    Ok(results)
+}
+
+/// Simple glob matching: supports * and ? wildcards
+fn glob_match(pattern: &str, text: &str) -> bool {
+    let p: Vec<char> = pattern.chars().collect();
+    let t: Vec<char> = text.chars().collect();
+    let mut dp = vec![vec![false; t.len() + 1]; p.len() + 1];
+    dp[0][0] = true;
+    for i in 1..=p.len() {
+        if p[i-1] == '*' { dp[i][0] = dp[i-1][0]; }
+    }
+    for i in 1..=p.len() {
+        for j in 1..=t.len() {
+            if p[i-1] == '*' {
+                dp[i][j] = dp[i-1][j] || dp[i][j-1];
+            } else if p[i-1] == '?' || p[i-1] == t[j-1] {
+                dp[i][j] = dp[i-1][j-1];
+            }
+        }
+    }
+    dp[p.len()][t.len()]
+}
+
+// ── 文件监听（notify crate） ──────────────────────────────────
+
+use notify::{RecommendedWatcher, RecursiveMode, Event, EventKind, Config as WatcherConfig, Watcher};
+use std::sync::mpsc;
+
+/// 文件变更事件（发送到前端）
+#[derive(Clone, Serialize)]
+struct FsChangeEvent {
+    /// 变更类型：create / modify / remove / other
+    kind: String,
+    /// 受影响的文件路径列表
+    paths: Vec<String>,
+}
+
+/// 启动项目目录监听。
+/// 变更事件通过 Tauri event `fs:change` 推送到前端。
+#[tauri::command]
+fn cmd_fs_watch_start(app: tauri::AppHandle, path: String, watch_id: String) -> Result<String, CoreError> {
+    let (tx, rx) = mpsc::channel();
+
+    let mut watcher: RecommendedWatcher = notify::Watcher::new(
+        move |res: Result<Event, notify::Error>| {
+            if let Ok(event) = res {
+                let _ = tx.send(event);
+            }
+        },
+        WatcherConfig::default(),
+    ).map_err(|e| CoreError::storage(format!("Failed to create watcher: {}", e)))?;
+
+    watcher.watch(std::path::Path::new(&path), RecursiveMode::Recursive)
+        .map_err(|e| CoreError::storage(format!("Failed to watch '{}': {}", path, e)))?;
+
+    // 将 watcher 存入 app state
+    let state = app.state::<FsWatcherState>();
+    let mut watchers = state.watchers.lock().unwrap();
+    watchers.insert(watch_id.clone(), watcher);
+
+    // 在后台线程中转发事件到前端
+    let app_handle = app.clone();
+    let wid = watch_id.clone();
+    std::thread::spawn(move || {
+        while let Ok(event) = rx.recv() {
+            let kind = match event.kind {
+                EventKind::Create(_) => "create",
+                EventKind::Modify(_) => "modify",
+                EventKind::Remove(_) => "remove",
+                _ => "other",
+            };
+            let paths: Vec<String> = event.paths.iter()
+                .map(|p| p.to_string_lossy().to_string())
+                .collect();
+            let change = FsChangeEvent { kind: kind.to_string(), paths };
+            let _ = app_handle.emit("fs:change", serde_json::json!({
+                "watchId": wid,
+                "kind": change.kind,
+                "paths": change.paths,
+            }));
+        }
+    });
+
+    Ok(watch_id)
+}
+
+/// 停止目录监听
+#[tauri::command]
+fn cmd_fs_watch_stop(app: tauri::AppHandle, watch_id: String) -> Result<(), CoreError> {
+    let state = app.state::<FsWatcherState>();
+    let mut watchers = state.watchers.lock().unwrap();
+    if watchers.remove(&watch_id).is_some() {
+        Ok(())
+    } else {
+        Err(CoreError::storage(format!("Watcher '{}' not found", watch_id)))
+    }
+}
+
+/// 文件监听状态管理
+struct FsWatcherState {
+    watchers: Mutex<std::collections::HashMap<String, RecommendedWatcher>>,
+}
+
+/// Copy directory recursively
+fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<(), CoreError> {
+    std::fs::create_dir_all(dst).map_err(|e| CoreError::storage(format!("Failed to create directory '{}': {}", dst.display(), e)))?;
+    for entry in std::fs::read_dir(src).map_err(|e| CoreError::storage(format!("Failed to read directory '{}': {}", src.display(), e)))? {
+        let entry = entry.map_err(|e| CoreError::storage(format!("Failed to read entry: {}", e)))?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if src_path.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else {
+            std::fs::copy(&src_path, &dst_path).map_err(|e| CoreError::storage(format!("Failed to copy '{}': {}", src_path.display(), e)))?;
+        }
+    }
+    Ok(())
+}
+
+/// Base64 encode helper (avoid importing base64 crate)
+fn base64_encode(data: &[u8]) -> String {
+    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut result = String::new();
+    for chunk in data.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = if chunk.len() > 1 { chunk[1] as u32 } else { 0 };
+        let b2 = if chunk.len() > 2 { chunk[2] as u32 } else { 0 };
+        let triple = (b0 << 16) | (b1 << 8) | b2;
+        result.push(CHARS[((triple >> 18) & 0x3F) as usize] as char);
+        result.push(CHARS[((triple >> 12) & 0x3F) as usize] as char);
+        if chunk.len() > 1 { result.push(CHARS[((triple >> 6) & 0x3F) as usize] as char); } else { result.push('='); }
+        if chunk.len() > 2 { result.push(CHARS[(triple & 0x3F) as usize] as char); } else { result.push('='); }
+    }
+    result
+}
+
 #[tauri::command]
 fn cmd_pty_spawn(
     app: tauri::AppHandle,
@@ -1498,6 +2039,10 @@ fn cmd_pty_spawn(
     let pty_id = id.clone();
     let app_handle = app.clone();
 
+    // 创建输出 channel，供 cmd_shell_session_exec 直接读取
+    let (output_tx, output_rx): (std::sync::mpsc::Sender<String>, std::sync::mpsc::Receiver<String>) = std::sync::mpsc::channel();
+
+    let output_tx_clone = output_tx.clone();
     std::thread::spawn(move || {
         let mut buf_reader = BufReader::new(reader);
         let mut line = String::new();
@@ -1507,6 +2052,8 @@ fn cmd_pty_spawn(
                 Ok(0) | Err(_) => break,
                 Ok(_) => {
                     let _ = app_handle.emit(&format!("pty-output-{}", pty_id), &line);
+                    // 同时发送到 channel，供 session_exec 读取
+                    let _ = output_tx_clone.send(line.clone());
                 }
             }
             if kill_rx.try_recv().is_ok() { break; }
@@ -1516,7 +2063,19 @@ fn cmd_pty_spawn(
     let master = pair.master;
     let writer = master.take_writer().map_err(|e| CoreError::InvalidArgument(format!("PTY writer failed: {}", e)))?;
     let mut processes = state.pty_processes.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
-    processes.insert(id, PtyProcess { master, writer, _child: child, kill_tx: std::sync::Mutex::new(Some(kill_tx)) });
+    processes.insert(id.clone(), PtyProcess {
+        master,
+        writer,
+        _child: child,
+        kill_tx: std::sync::Mutex::new(Some(kill_tx)),
+        output_tx: std::sync::Mutex::new(Some(output_tx)),
+    });
+
+    // 将 output_rx 存到全局 map 中供 session_exec 使用
+    {
+        let mut rx_map = state.pty_output_receivers.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+        rx_map.insert(id.clone(), output_rx);
+    }
 
     Ok(())
 }
@@ -1547,6 +2106,384 @@ fn cmd_pty_kill(state: State<AppState>, id: String) -> Result<(), CoreError> {
             }
         }
     }
+    // 清理 output channel
+    let _ = state.pty_output_receivers.lock().map(|mut m| m.remove(&id));
+    Ok(())
+}
+
+// ─── Shell 检测 ──────────────────────────────────────────────
+
+/// 检测到的 Shell 信息
+#[derive(Serialize)]
+struct ShellInfo {
+    id: String,
+    name: String,
+    path: String,
+    is_default: bool,
+}
+
+/// 检测系统中可用的 Shell
+#[tauri::command]
+fn cmd_detect_shells() -> Vec<ShellInfo> {
+    let is_windows = cfg!(target_os = "windows");
+    let mut shells = Vec::new();
+
+    if is_windows {
+        // Windows: 检测 CMD、PowerShell 5.x、PowerShell 7、Git Bash、WSL
+        let candidates: Vec<(&str, &str, &str)> = vec![
+            ("cmd", "CMD", "cmd.exe"),
+            ("powershell", "PowerShell", "powershell.exe"),
+            ("pwsh", "PowerShell 7", "pwsh.exe"),
+            ("git-bash", "Git Bash", "C:\\Program Files\\Git\\bin\\bash.exe"),
+            ("wsl", "WSL (Ubuntu)", "wsl.exe"),
+        ];
+        for (id, name, path) in candidates {
+            let found = which_shell(path);
+            if let Some(full_path) = found {
+                shells.push(ShellInfo {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    path: full_path,
+                    is_default: id == "powershell",
+                });
+            }
+        }
+        // CMD 总是可用
+        if shells.iter().all(|s| s.id != "cmd") {
+            shells.insert(0, ShellInfo {
+                id: "cmd".to_string(),
+                name: "CMD".to_string(),
+                path: "cmd.exe".to_string(),
+                is_default: false,
+            });
+        }
+    } else {
+        // Unix: 检测 sh、bash、zsh、fish、dash、ksh
+        let candidates: Vec<(&str, &str, &str)> = vec![
+            ("sh", "POSIX Shell", "/bin/sh"),
+            ("bash", "Bash", "/bin/bash"),
+            ("zsh", "Zsh", "/bin/zsh"),
+            ("fish", "Fish", "/usr/bin/fish"),
+            ("dash", "Dash", "/bin/dash"),
+        ];
+        for (id, name, path) in candidates {
+            let found = which_shell(path);
+            if let Some(full_path) = found {
+                shells.push(ShellInfo {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    path: full_path,
+                    is_default: id == "bash",
+                });
+            }
+        }
+        // /bin/sh 总是可用
+        if shells.iter().all(|s| s.id != "sh") {
+            shells.insert(0, ShellInfo {
+                id: "sh".to_string(),
+                name: "POSIX Shell".to_string(),
+                path: "/bin/sh".to_string(),
+                is_default: false,
+            });
+        }
+    }
+    shells
+}
+
+/// 查找 Shell 可执行文件路径
+fn which_shell(name: &str) -> Option<String> {
+    // 先尝试绝对路径
+    if std::path::Path::new(name).is_absolute() && std::path::Path::new(name).exists() {
+        return Some(name.to_string());
+    }
+    // 再尝试 which/where
+    let cmd = if cfg!(target_os = "windows") { "where" } else { "which" };
+    std::process::Command::new(cmd)
+        .arg(name)
+        .output()
+        .ok()
+        .and_then(|o| {
+            if o.status.success() {
+                String::from_utf8(o.stdout)
+                    .ok()
+                    .and_then(|s| s.lines().next().map(|l| l.trim().to_string()))
+            } else {
+                None
+            }
+        })
+}
+
+// ─── 持久化 Shell 会话 ────────────────────────────────────────
+
+/// Shell 会话信息
+#[derive(Serialize)]
+struct ShellSessionInfo {
+    id: String,
+    shell_id: String,
+    shell_path: String,
+    cwd: String,
+    created_at: u64,
+}
+
+/// 创建持久化 Shell 会话（PTY 保持活跃，支持多轮命令）
+#[tauri::command]
+fn cmd_shell_session_create(
+    app: tauri::AppHandle,
+    state: State<AppState>,
+    id: String,
+    shell: Option<String>,
+    cwd: Option<String>,
+    env: Option<std::collections::HashMap<String, String>>,
+    cols: Option<u16>,
+    rows: Option<u16>,
+) -> Result<ShellSessionInfo, CoreError> {
+    let pty_system = native_pty_system();
+    let pair = pty_system
+        .openpty(PtySize {
+            rows: rows.unwrap_or(24),
+            cols: cols.unwrap_or(200),
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|e| CoreError::InvalidArgument(format!("PTY open failed: {}", e)))?;
+
+    // 确定 Shell
+    let is_windows = cfg!(target_os = "windows");
+    let shell_path = shell.unwrap_or_else(|| {
+        if is_windows { "powershell.exe".to_string() } else { "/bin/bash".to_string() }
+    });
+
+    let mut cmd = CommandBuilder::new(&shell_path);
+    if let Some(cwd) = &cwd { cmd.cwd(cwd); }
+
+    // 环境变量注入
+    if let Some(env_vars) = env {
+        for (k, v) in env_vars {
+            cmd.env(k, v);
+        }
+    }
+
+    // Windows PowerShell 加载 Profile 以获取完整 PATH
+    if is_windows && (shell_path.contains("powershell") || shell_path.contains("pwsh")) {
+        // 不传 -NoProfile，让 PowerShell 加载用户 Profile
+        // 但传 -NoLogo 减少启动噪音
+    }
+
+    let child = pair
+        .slave
+        .spawn_command(cmd)
+        .map_err(|e| CoreError::InvalidArgument(format!("PTY spawn failed: {}", e)))?;
+
+    let reader = pair
+        .master
+        .try_clone_reader()
+        .map_err(|e| CoreError::InvalidArgument(format!("PTY reader failed: {}", e)))?;
+
+    let (kill_tx, mut kill_rx) = tokio::sync::oneshot::channel::<()>();
+    let pty_id = id.clone();
+    let app_handle = app.clone();
+
+    // 创建输出 channel
+    let (output_tx, output_rx): (std::sync::mpsc::Sender<String>, std::sync::mpsc::Receiver<String>) = std::sync::mpsc::channel();
+    let output_tx_clone = output_tx.clone();
+
+    // 读取线程：持续输出到事件和 channel
+    std::thread::spawn(move || {
+        let mut buf_reader = BufReader::new(reader);
+        let mut line = String::new();
+        loop {
+            line.clear();
+            match buf_reader.read_line(&mut line) {
+                Ok(0) | Err(_) => break,
+                Ok(_) => {
+                    let _ = app_handle.emit(&format!("pty-output-{}", pty_id), &line);
+                    let _ = output_tx_clone.send(line.clone());
+                }
+            }
+            if kill_rx.try_recv().is_ok() { break; }
+        }
+    });
+
+    let master = pair.master;
+    let writer = master.take_writer().map_err(|e| CoreError::InvalidArgument(format!("PTY writer failed: {}", e)))?;
+    let mut processes = state.pty_processes.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    processes.insert(id.clone(), PtyProcess {
+        master,
+        writer,
+        _child: child,
+        kill_tx: std::sync::Mutex::new(Some(kill_tx)),
+        output_tx: std::sync::Mutex::new(Some(output_tx)),
+    });
+
+    // 存储 output_rx
+    {
+        let mut rx_map = state.pty_output_receivers.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+        rx_map.insert(id.clone(), output_rx);
+    }
+
+    let created_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    // 等待 Shell 启动就绪（发送空输入触发提示符）
+    // 短暂等待让 Shell 初始化
+    std::thread::sleep(std::time::Duration::from_millis(300));
+
+    Ok(ShellSessionInfo {
+        id,
+        shell_id: extract_shell_id(&shell_path),
+        shell_path,
+        cwd: cwd.unwrap_or_else(|| std::env::current_dir().unwrap_or_default().to_string_lossy().to_string()),
+        created_at,
+    })
+}
+
+/// 从 Shell 路径提取简短 ID
+fn extract_shell_id(path: &str) -> String {
+    let lower = path.to_lowercase();
+    if lower.contains("pwsh") { "pwsh".to_string() }
+    else if lower.contains("powershell") { "powershell".to_string() }
+    else if lower.contains("cmd") { "cmd".to_string() }
+    else if lower.contains("bash") { "bash".to_string() }
+    else if lower.contains("zsh") { "zsh".to_string() }
+    else if lower.contains("fish") { "fish".to_string() }
+    else if lower.contains("dash") { "dash".to_string() }
+    else if lower.contains("wsl") { "wsl".to_string() }
+    else { "unknown".to_string() }
+}
+
+/// 在持久化会话中执行命令并收集输出
+#[tauri::command]
+async fn cmd_shell_session_exec(
+    state: State<'_, AppState>,
+    id: String,
+    command: String,
+    timeout_ms: Option<u64>,
+) -> Result<ExecResult, CoreError> {
+    let pty_id = id.clone();
+
+    // 写入命令到 PTY
+    {
+        let mut processes = state.pty_processes.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+        let pty = processes.get_mut(&pty_id).ok_or_else(|| CoreError::InvalidArgument(format!("Session {} not found", pty_id)))?;
+        let cmd_bytes = format!("{}\n", command);
+        pty.writer.write_all(cmd_bytes.as_bytes()).map_err(|e| CoreError::InvalidArgument(format!("Write failed: {}", e)))?;
+        pty.writer.flush().map_err(|e| CoreError::InvalidArgument(format!("Flush failed: {}", e)))?;
+    }
+
+    // 从 channel 读取输出
+    let timeout = timeout_ms.unwrap_or(30000);
+    let rx = {
+        let mut rx_map = state.pty_output_receivers.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+        rx_map.remove(&pty_id).ok_or_else(|| CoreError::InvalidArgument(format!("No output channel for session {}", pty_id)))?
+    };
+
+    // 收集输出直到稳定或超时
+    let start = std::time::Instant::now();
+    let mut chunks: Vec<String> = Vec::new();
+    let mut last_output_time = std::time::Instant::now();
+
+    loop {
+        match rx.recv_timeout(std::time::Duration::from_millis(200)) {
+            Ok(data) => {
+                chunks.push(data);
+                last_output_time = std::time::Instant::now();
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                // 检查是否输出稳定（800ms 无新输出）或超时
+                let stable_ms = last_output_time.elapsed().as_millis() as u64;
+                let elapsed_ms = start.elapsed().as_millis() as u64;
+                if !chunks.is_empty() && stable_ms > 800 {
+                    break;
+                }
+                if elapsed_ms > timeout {
+                    break;
+                }
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                break;
+            }
+        }
+    }
+
+    // 把 rx 放回去供下次调用使用
+    // 注意：由于 channel 的 rx 已经被移出，我们需要重新创建
+    // 实际上 channel 是持续的，rx 在 recv 后仍然可用
+    // 但我们上面用了 remove，需要重新插入
+    {
+        let mut rx_map = state.pty_output_receivers.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+        rx_map.insert(pty_id.clone(), rx);
+    }
+
+    let raw = chunks.join("");
+    let stdout = clean_ansi(&raw);
+    let timed_out = start.elapsed().as_millis() as u64 > timeout;
+
+    Ok(ExecResult {
+        stdout,
+        stderr: String::new(),
+        exit_code: if timed_out { None } else { Some(0) },
+        timed_out,
+    })
+}
+
+/// 执行结果
+#[derive(Serialize)]
+struct ExecResult {
+    stdout: String,
+    stderr: String,
+    exit_code: Option<i32>,
+    timed_out: bool,
+}
+
+/// 清理 ANSI 转义码和不可打印字符
+fn clean_ansi(input: &str) -> String {
+    let re_csi = regex::Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]").unwrap();
+    let re_osc = regex::Regex::new(r"\x1b\].*?\x07").unwrap();
+    let result = re_csi.replace_all(input, "");
+    let result = re_osc.replace_all(&result, "");
+    // 移除不可打印字符（保留换行/制表符/回车）
+    result.chars().filter(|c| {
+        !c.is_control() || *c == '\n' || *c == '\r' || *c == '\t'
+    }).collect()
+}
+
+/// 销毁持久化 Shell 会话
+#[tauri::command]
+fn cmd_shell_session_destroy(state: State<AppState>, id: String) -> Result<(), CoreError> {
+    let mut processes = state.pty_processes.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    if let Some(pty) = processes.remove(&id) {
+        if let Ok(mut tx) = pty.kill_tx.lock() {
+            if let Some(sender) = tx.take() {
+                let _ = sender.send(());
+            }
+        }
+    }
+    // 清理 output channel
+    let _ = state.pty_output_receivers.lock().map(|mut m| m.remove(&id));
+    Ok(())
+}
+
+/// 列出活跃的 Shell 会话
+#[tauri::command]
+fn cmd_shell_session_list(state: State<AppState>) -> Result<Vec<String>, CoreError> {
+    let processes = state.pty_processes.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    Ok(processes.keys().cloned().collect())
+}
+
+/// 在持久化会话中发送输入（用于交互式命令）
+#[tauri::command]
+fn cmd_shell_session_input(
+    state: State<AppState>,
+    id: String,
+    data: String,
+) -> Result<(), CoreError> {
+    let mut processes = state.pty_processes.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    let pty = processes.get_mut(&id).ok_or_else(|| CoreError::InvalidArgument(format!("Session {} not found", id)))?;
+    let input = format!("{}\n", data);
+    pty.writer.write_all(input.as_bytes()).map_err(|e| CoreError::InvalidArgument(format!("Write failed: {}", e)))?;
+    pty.writer.flush().map_err(|e| CoreError::InvalidArgument(format!("Flush failed: {}", e)))?;
     Ok(())
 }
 
@@ -3349,6 +4286,10 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(AppState {
             db: Mutex::new(db),
             retrofit: Mutex::new(RetrofitEngine::new()),
@@ -3356,13 +4297,19 @@ pub fn run() {
             schema: Mutex::new(schema_reg),
             mcp_processes: Mutex::new(std::collections::HashMap::new()),
             pty_processes: Mutex::new(std::collections::HashMap::new()),
+            pty_output_receivers: Mutex::new(std::collections::HashMap::new()),
             wf_engine: std::sync::Arc::new(crate::workflow::engine::WorkflowEngine::new()),
             wf_db_path: Mutex::new(String::new()),
             plugin_node_metas: Mutex::new(std::collections::HashMap::new()),
             dispatcher_registry: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         })
+        .manage(FsWatcherState {
+            watchers: Mutex::new(std::collections::HashMap::new()),
+        })
         .invoke_handler(tauri::generate_handler![
             cmd_init_db,
+            cmd_switch_project,
+            cmd_delete_project_db,
             cmd_put_entity,
             cmd_get_entity,
             cmd_get_all_entities,
@@ -3383,6 +4330,16 @@ pub fn run() {
             cmd_kv_get,
             cmd_kv_set,
             cmd_kv_get_all,
+            cmd_kv_delete,
+            cmd_kv_clear,
+            cmd_get_all_files,
+            cmd_get_file,
+            cmd_get_file_by_path,
+            cmd_get_files_by_entity,
+            cmd_put_file,
+            cmd_update_file,
+            cmd_delete_file,
+            cmd_get_file_content,
             cmd_validate_entity,
             cmd_validate_entities,
             cmd_validate_pack,
@@ -3434,6 +4391,10 @@ pub fn run() {
             cmd_algo_tarjan_scc,
             cmd_algo_find_dangling,
             cmd_algo_force_layout,
+            cmd_algo_grid_layout,
+            cmd_algo_radial_layout,
+            cmd_algo_tree_layout,
+            cmd_algo_layout_unified,
             cmd_algo_crdt_lww_new,
             cmd_algo_crdt_lww_set,
             cmd_algo_crdt_lww_merge,
@@ -3483,6 +4444,19 @@ pub fn run() {
             cmd_mcp_list,
             cmd_font_scan_system,
             cmd_font_read_file,
+            cmd_fs_read,
+            cmd_fs_read_binary,
+            cmd_fs_write,
+            cmd_fs_write_binary,
+            cmd_fs_list,
+            cmd_fs_mkdir,
+            cmd_fs_stat,
+            cmd_fs_copy,
+            cmd_fs_rename,
+            cmd_fs_delete,
+            cmd_fs_search,
+            cmd_fs_watch_start,
+            cmd_fs_watch_stop,
             // ─── workflow plugin (Phase 1) ─────────────────────────────
             crate::workflow::commands::definitions::workflow_list,
             crate::workflow::commands::definitions::workflow_get,
@@ -3511,6 +4485,22 @@ pub fn run() {
             crate::workflow::commands::settings::workflow_get_setting,
             crate::workflow::commands::settings::workflow_set_setting,
             crate::workflow::commands::settings::workflow_purge_runs_now,
+            cmd_secure_store,
+            cmd_secure_load,
+            cmd_secure_delete,
+            cmd_secure_exists,
+            // ─── PTY 终端命令 ─────────────────────────────────────────
+            cmd_pty_spawn,
+            cmd_pty_write,
+            cmd_pty_resize,
+            cmd_pty_kill,
+            // ─── Shell 检测与会话管理 ──────────────────────────────────
+            cmd_detect_shells,
+            cmd_shell_session_create,
+            cmd_shell_session_exec,
+            cmd_shell_session_destroy,
+            cmd_shell_session_list,
+            cmd_shell_session_input,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

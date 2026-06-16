@@ -3,11 +3,22 @@
     <div class="toolbar">
       <input v-model="searchQuery" class="search-input" :placeholder="`搜索${entityLabel}...`" />
       <CustomDropdown v-if="filterOptions.length > 1" v-model="typeFilter" :options="filterOptions" />
+      <CustomDropdown
+        v-for="fd in filterDefs"
+        :key="fd.key"
+        v-model="filters[fd.key]"
+        :options="fd.options || dynamicFilterOptions(fd.key, fd.label)"
+      />
+      <CustomDropdown v-if="sortOptions.length > 0" v-model="sortBy" :options="[{ value: '', label: '默认排序' }, ...sortOptions]" />
       <slot name="toolbar-extra" />
-      <CreateButton :label="`新建${entityLabel}`" @click="openNewForm" />
+      <CreateButton v-if="!hideCreateButton" :label="`新建${entityLabel}`" @click="openNewForm" />
       <button v-if="selectedIds.size > 0" class="btn-danger btn-sm" @click="onBatchDel">删除 ({{ selectedIds.size }})</button>
       <button v-if="selectedIds.size > 0" class="btn-ghost btn-sm" @click="clearSelection">取消选择</button>
     </div>
+
+    <n-alert v-if="filteredList.length > 200" type="warning" :show-icon="true" class="large-list-warning">
+      当前显示 {{ filteredList.length }} 项，建议使用筛选器缩小范围以获得最佳体验。
+    </n-alert>
 
     <div class="entity-grid">
       <slot name="list" :entities="filteredList" :selected-ids="selectedIds" :toggle-select="toggleSelect" :select="selectEntity">
@@ -32,8 +43,19 @@
                 <div class="card-body">
                   <h3>{{ e.name }}</h3>
                   <slot name="card-subtitle" :entity="e">
-                    <p>{{ e.properties[typeFieldKey] || '' }}</p>
+                    <p v-if="cardSubtitle">{{ e.properties[cardSubtitle] }}</p>
+                    <p v-else>{{ e.properties[typeFieldKey] || '' }}</p>
                   </slot>
+                </div>
+                <div v-if="cardFooterFields?.length" class="card-footer">
+                  <span
+                    v-for="ff in cardFooterFields"
+                    :key="ff.key"
+                    class="card-tag"
+                    :class="ff.classMap?.[String(e.properties[ff.key] || '')]"
+                  >
+                    {{ e.properties[ff.key] }}
+                  </span>
                 </div>
               </div>
               <button class="card-flip-btn" @click.stop="toggleFlip(e.id)" title="翻转查看图片">🔄</button>
@@ -42,7 +64,8 @@
               <EntityCardBack :entity="e" :cover-field-key="coverFieldKey" />
               <div class="card-back-info">
                 <h3>{{ e.name }}</h3>
-                <p>{{ e.properties[typeFieldKey] || '' }}</p>
+                <p v-if="cardSubtitle">{{ e.properties[cardSubtitle] }}</p>
+                <p v-else>{{ e.properties[typeFieldKey] || '' }}</p>
               </div>
               <button class="card-flip-btn" @click.stop="toggleFlip(e.id)" title="翻转回正面">🔄</button>
             </div>
@@ -54,21 +77,33 @@
               <div class="card-body">
                 <h3>{{ e.name }}</h3>
                 <slot name="card-subtitle" :entity="e">
-                  <p>{{ e.properties[typeFieldKey] || '' }}</p>
+                  <p v-if="cardSubtitle">{{ e.properties[cardSubtitle] }}</p>
+                  <p v-else>{{ e.properties[typeFieldKey] || '' }}</p>
                 </slot>
+              </div>
+              <div v-if="cardFooterFields?.length" class="card-footer">
+                <span
+                  v-for="ff in cardFooterFields"
+                  :key="ff.key"
+                  class="card-tag"
+                  :class="ff.classMap?.[String(e.properties[ff.key] || '')]"
+                >
+                  {{ e.properties[ff.key] }}
+                </span>
               </div>
             </div>
           </div>
         </div>
+        <WsEmpty v-if="filteredList.length === 0" :title="`暂无${entityLabel}`" :description="`点击上方按钮创建第一个${entityLabel}`">
+          <template #icon>
+            <WsIcon :name="resolvedIconFn({ properties: {} } as any) || 'manuscript'" size="xl" />
+          </template>
+        </WsEmpty>
       </slot>
-      <WsEmpty v-if="filteredList.length === 0" :title="`暂无${entityLabel}`" :description="`点击上方按钮创建第一个${entityLabel}`">
-        <template #icon>
-          <WsIcon :name="resolvedIconFn({ properties: {} } as any) || 'manuscript'" size="xl" />
-        </template>
-      </WsEmpty>
     </div>
 
     <EntityDetailPanel
+      ref="detailPanelRef"
       :visible="!!selectedEntity"
       :entity="selectedEntity"
       :icon="selectedEntity ? resolvedIconFn(selectedEntity) : ''"
@@ -81,64 +116,91 @@
       @close="selectedEntity = null"
       @edit="isEditing ? cancelEdit() : startEdit()"
     >
+      <template #header="{ entity, editing }">
+        <slot name="detail-header" :entity="entity" :editing="editing">
+          <WsIcon v-if="selectedEntity ? resolvedIconFn(selectedEntity) : ''" :name="selectedEntity ? resolvedIconFn(selectedEntity) : ''" size="sm" />
+          <div class="dp-title-area">
+            <h3>{{ selectedEntity?.name || '' }}</h3>
+            <span v-if="selectedEntity?.properties[typeFieldKey] || entityLabel" class="dp-subtitle">{{ selectedEntity?.properties[typeFieldKey] || entityLabel }}</span>
+          </div>
+        </slot>
+      </template>
       <template #info="{ entity, editing }">
-        <div class="detail-fields">
-          <DetailField
-            v-for="f in displayFields"
-            :key="f.key"
-            :label="f.label"
-            :value="entity.properties[f.key]"
-            :editing="editing"
-            :type="(f.type as any)"
-            :options="f.options"
+        <slot name="detail-info" :entity="entity" :editing="editing" :edit-form="editForm">
+          <AutoLinkSuggestions
+            v-if="entity && !editing"
             :entity-id="entity.id"
-            :cover-position="entity.coverPosition"
-            :cover-zoom="entity.coverZoom"
-            :auto-link="(f as any).autoLink"
-            @update:value="editForm[f.key] = $event"
-            @update:cover-position="(val) => { editForm._coverPosition = val; entityStore.update(entity.id, { coverPosition: val }) }"
-            @update:cover-zoom="(val) => { editForm._coverZoom = val; entityStore.update(entity.id, { coverZoom: val }) }"
+            :entity-type="entityType"
+            :properties="entity.properties"
+          />
+
+          <div class="detail-fields">
+            <DetailField
+              v-for="f in displayFields"
+              :key="f.key"
+              :label="f.label"
+              :value="entity.properties[f.key]"
+              :editing="editing"
+              :type="(f.type as any)"
+              :options="f.options"
+              :entity-id="entity.id"
+              :cover-position="entity.coverPosition"
+              :cover-zoom="entity.coverZoom"
+              :auto-link="(f as any).autoLink"
+              @update:value="editForm[f.key] = $event"
+              @update:cover-position="(val) => { editForm._coverPosition = val; entityStore.update(entity.id, { coverPosition: val }) }"
+              @update:cover-zoom="(val) => { editForm._coverZoom = val; entityStore.update(entity.id, { coverZoom: val }) }"
+              @commit="saveEdit"
+            />
+          </div>
+
+          <DetailField
+            label="描述"
+            :value="entity.description"
+            :editing="editing"
+            type="textarea"
+            @update:value="editForm._description = $event"
             @commit="saveEdit"
           />
-        </div>
 
-        <DetailField
-          label="描述"
-          :value="entity.description"
-          :editing="editing"
-          type="textarea"
-          @update:value="editForm._description = $event"
-          @commit="saveEdit"
-        />
+          <DynamicFieldsAdder
+            :entity-type="entityType"
+            v-model="editForm"
+            :field-defs="customFieldDefs"
+            @update:field-defs="customFieldDefs = $event"
+          />
 
-        <DynamicFieldsAdder
-          :entity-type="entityType"
-          v-model="editForm"
-          :field-defs="customFieldDefs"
-          @update:field-defs="customFieldDefs = $event"
-        />
+          <slot name="detail-extra" :entity="entity" :editing="editing" />
 
-        <slot name="detail-extra" :entity="entity" :editing="editing" />
+          <div class="detail-actions" v-if="editing">
+            <button class="btn-danger btn-sm" @click="deleteEntity">删除</button>
+          </div>
+          <div class="detail-edit-bar" v-if="editing">
+            <button class="btn-primary btn-sm" @click="saveEdit()">保存</button>
+          </div>
+        </slot>
+      </template>
 
-        <div class="detail-actions" v-if="editing">
-          <button class="btn-danger btn-sm" @click="deleteEntity">删除</button>
-        </div>
-        <div class="detail-edit-bar" v-if="editing">
-          <button class="btn-primary btn-sm" @click="saveEdit()">保存</button>
-        </div>
+      <template v-for="ct in customTabs" :key="ct.id" #[ct.id]="{ entity }">
+        <slot :name="`tab-${ct.id}`" :entity="entity" :editing="isEditing" />
       </template>
 
       <template v-for="rt in relationTabs" :key="rt.id" #[rt.id]="{ entity }">
-        <div v-for="r in getRelations(entity.id, rt.relationType)" :key="r.id" class="dp-rel-item">
-          <span class="dp-rel-icon"><WsIcon :name="rt.targetIcon || 'link'" size="xs" /></span>
-          <span class="dp-rel-name">{{ getEntityName(r) }}</span>
-        </div>
-        <WsEmpty v-if="getRelations(entity.id, rt.relationType).length === 0" preset="no-data" :title="`暂无${rt.label}`" />
-        <EntityRelationSelector v-if="entity" :entity-id="entity.id" :entity-type="entityType" :relation-type="rt.relationType" :reverse-direction="rt.reverseDirection" />
+        <slot :name="`detail-${rt.id}`" :entity="entity">
+          <div v-for="r in getRelations(entity.id, rt.relationType)" :key="r.id" class="dp-rel-item">
+            <span class="dp-rel-icon"><WsIcon :name="rt.targetIcon || 'link'" size="xs" /></span>
+            <span class="dp-rel-name">{{ getEntityName(r) }}</span>
+            <span v-if="rt.showProperty && r.properties[rt.showProperty]" class="dp-rel-meta">{{ r.properties[rt.showProperty] }}</span>
+          </div>
+          <WsEmpty v-if="getRelations(entity.id, rt.relationType).length === 0" preset="no-data" :title="`暂无${rt.label}`" />
+          <EntityRelationSelector v-if="entity" :entity-id="entity.id" :entity-type="entityType" :relation-type="rt.relationType" :reverse-direction="rt.reverseDirection" />
+        </slot>
       </template>
 
       <template #relations="{ entity }">
-        <UniversalRelationPanel v-if="entity" :entity-id="entity.id" :entity-type="entityType" :storage-scope="entityType" />
+        <slot name="detail-relations" :entity="entity">
+          <UniversalRelationPanel v-if="entity" :entity-id="entity.id" :entity-type="entityType" :storage-scope="entityType" />
+        </slot>
       </template>
     </EntityDetailPanel>
 
@@ -154,11 +216,12 @@
 </template>
 
 <script setup lang="ts">
-import { toastSuccess } from '@worldsmith/ui-kit'
-import { useEntityEdit, useBatchDelete, useDuplicateNameCheck, useConfirm, useHighlight } from '../composables'
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { toastSuccess, toastWithUndo } from '@worldsmith/ui-kit'
+import { useEntityEdit, useBatchDelete, useDuplicateNameCheck, useShortcuts, useConfirm, useHighlight } from '../composables'
+import { ref, computed, onMounted, onBeforeUnmount, reactive } from 'vue'
 import { useEntityStore, useRelationStore, entitySchemaRegistry } from '@worldsmith/entity-core'
 import type { Entity } from '@worldsmith/entity-core'
+import { NAlert } from 'naive-ui'
 import DetailField from './DetailField.vue'
 import CustomDropdown from './CustomDropdown.vue'
 import CreateButton from './CreateButton.vue'
@@ -167,10 +230,15 @@ import UniversalRelationPanel from './UniversalRelationPanel.vue'
 import EntityFormModal from './EntityFormModal.vue'
 import EntityDetailPanel from './EntityDetailPanel.vue'
 import EntityRelationSelector from './EntityRelationSelector.vue'
-import type { FormFieldDef, RelationTabDef } from './types'
+import type { FormFieldDef, RelationTabDef, CardFieldDef, CustomTabDef, FilterDef } from './types'
 import { WsIcon, WsEmpty } from '@worldsmith/ui-kit'
 import EntityCardCover from './EntityCardCover.vue'
 import EntityCardBack from './EntityCardBack.vue'
+import AutoLinkSuggestions from './AutoLinkSuggestions.vue'
+
+const emit = defineEmits<{
+  (e: 'select-entity', entity: Entity): void
+}>()
 
 const props = withDefaults(defineProps<{
   entityType: string
@@ -178,27 +246,46 @@ const props = withDefaults(defineProps<{
   iconFn?: (entity: Entity) => string
   filterOptions?: { value: string; label: string }[]
   filterFieldKey?: string
+  filterDefs?: FilterDef[]
   additionalFilter?: (entity: Entity) => boolean
   idPrefix?: string
   entityLabel?: string
   detailTabs?: RelationTabDef[]
+  customTabs?: CustomTabDef[]
+  cardFooterFields?: CardFieldDef[]
+  cardSubtitle?: string
+  sortOptions?: { key: string; label: string }[]
+  hideCreateButton?: boolean
+  facetOnCreate?: string
 }>(), {
   filterOptions: () => [{ value: '', label: '全部' }],
+  filterDefs: () => [],
   idPrefix: '',
   entityLabel: '',
   detailTabs: () => [],
+  customTabs: () => [],
+  cardFooterFields: () => [],
+  cardSubtitle: '',
+  sortOptions: () => [],
+  hideCreateButton: false,
+  facetOnCreate: '',
 })
 
 const entityStore = useEntityStore()
 const relationStore = useRelationStore()
 const { checkAndConfirmName } = useDuplicateNameCheck()
 const { confirm } = useConfirm()
+const { register, unregister } = useShortcuts()
 
 const listHighlight = useHighlight({
   getRelations: () => relationStore.relations,
 })
 
 const flippedCardIds = ref<string[]>([])
+const sortBy = ref('')
+const filters = reactive<Record<string, string>>(
+  Object.fromEntries((props.filterDefs || []).map(fd => [fd.key, '']))
+)
 
 function toggleFlip(entityId: string) {
   const idx = flippedCardIds.value.indexOf(entityId)
@@ -218,6 +305,7 @@ const typeFilter = ref('')
 const selectedEntity = ref<Entity | null>(null)
 const showForm = ref(false)
 const editingEntity = ref<Entity | null>(null)
+const detailPanelRef = ref<InstanceType<typeof EntityDetailPanel> | null>(null)
 
 const { isEditing, editForm, customFieldDefs, startEdit, cancelEdit, saveEdit } = useEntityEdit(selectedEntity)
 const { selectedIds, toggleSelect, clearSelection, batchDelete } = useBatchDelete()
@@ -254,12 +342,27 @@ const relationTabs = computed(() => props.detailTabs || [])
 
 const resolvedTabs = computed(() => {
   const tabs = [{ id: 'info', label: '信息', icon: 'outline' }]
+  for (const ct of props.customTabs || []) {
+    tabs.push({ id: ct.id, label: ct.label, icon: ct.icon })
+  }
   for (const rt of relationTabs.value) {
     tabs.push({ id: rt.id, label: rt.label, icon: rt.icon })
   }
   tabs.push({ id: 'relations', label: '关联', icon: 'link' })
   return tabs
 })
+
+function dynamicFilterOptions(key: string, label: string): { value: string; label: string }[] {
+  const values = new Set<string>()
+  for (const item of list.value) {
+    const v = item.properties[key] as string
+    if (v) values.add(v)
+  }
+  return [
+    { value: '', label: `全部${label}` },
+    ...Array.from(values).sort().map(v => ({ value: v, label: v })),
+  ]
+}
 
 function getRelations(entityId: string, relationType: string) {
   return relationStore.relations.filter(r =>
@@ -281,8 +384,21 @@ const filteredList = computed(() => {
   if (typeFilter.value && props.filterFieldKey) {
     l = l.filter(e => e.properties[props.filterFieldKey!] === typeFilter.value)
   }
+  for (const fd of props.filterDefs || []) {
+    const val = filters[fd.key]
+    if (val) {
+      l = l.filter(e => e.properties[fd.key] === val)
+    }
+  }
   if (props.additionalFilter) {
     l = l.filter(props.additionalFilter)
+  }
+  if (sortBy.value) {
+    l = [...l].sort((a, b) => {
+      const va = String(a.properties[sortBy.value] || '')
+      const vb = String(b.properties[sortBy.value] || '')
+      return va.localeCompare(vb, 'zh')
+    })
   }
   return l
 })
@@ -294,17 +410,37 @@ onMounted(async () => {
   } catch (err) {
     console.warn(`[GenericEntityView:${props.entityType}]`, err)
   }
+
+  register({
+    id: `${props.entityType}.delete`,
+    keys: ['delete'],
+    scope: 'view',
+    description: `删除选中${entityLabel.value}`,
+    handler: () => { if (selectedIds.value.size) onBatchDel() },
+  })
+  register({
+    id: `${props.entityType}.new`,
+    keys: ['n'],
+    scope: 'view',
+    description: `新建${entityLabel.value}`,
+    handler: openNewForm,
+  })
+  register({
+    id: `${props.entityType}.close`,
+    keys: ['escape'],
+    scope: 'view',
+    description: '关闭详情',
+    handler: () => { selectedEntity.value = null },
+  })
 })
 
-function onGlobalKeyDown(e: KeyboardEvent) {
-  if (e.key === 'Escape' && selectedEntity.value) {
-    selectedEntity.value = null
-  }
-}
-onMounted(() => window.addEventListener('keydown', onGlobalKeyDown))
-onUnmounted(() => window.removeEventListener('keydown', onGlobalKeyDown))
+onBeforeUnmount(() => {
+  unregister(`${props.entityType}.delete`)
+  unregister(`${props.entityType}.new`)
+  unregister(`${props.entityType}.close`)
+})
 
-function selectEntity(e: Entity) { selectedEntity.value = e; listHighlight.select(e.id) }
+function selectEntity(e: Entity) { selectedEntity.value = e; listHighlight.select(e.id); emit('select-entity', e) }
 function openNewForm() { editingEntity.value = null; showForm.value = true }
 
 async function onFormSave(data: { name: string; description: string; properties: Record<string, any>; tags: string[]; _autoLinkFields?: any[]; _coverPosition?: string; _coverZoom?: number }) {
@@ -334,6 +470,7 @@ async function onFormSave(data: { name: string; description: string; properties:
     }
     if (data._coverPosition) entityData.coverPosition = data._coverPosition
     if (data._coverZoom) entityData.coverZoom = data._coverZoom
+    if (props.facetOnCreate) entityData.facets = { [props.facetOnCreate]: {} }
     await entityStore.add(entityData as Entity)
     savedEntityId = id
     toastSuccess('已创建')
@@ -356,6 +493,17 @@ async function onFormSave(data: { name: string; description: string; properties:
   showForm.value = false
   editingEntity.value = null
   await entityStore.loadAll()
+
+  // 触发 AutoLink 索引（新架构）
+  if (savedEntityId) {
+    try {
+      const { indexPotentialLinks } = await import('@worldsmith/entity-core')
+      const savedEntity = entityStore.entities.find(e => e.id === savedEntityId)
+      if (savedEntity) {
+        await indexPotentialLinks(savedEntityId, savedEntity.type, savedEntity.properties ?? {})
+      }
+    } catch { /* AutoLink 索引失败不影响主流程 */ }
+  }
 }
 
 async function onBatchDel() {
@@ -373,15 +521,64 @@ async function deleteEntity() {
     ? `将删除「${entity?.name}」及其 ${relCount} 条关联关系，此操作不可完全撤销。`
     : `将删除「${entity?.name}」，此操作不可完全撤销。`
   if (!(await confirm({ type: 'danger', title: '确认删除', description: msg }))) return
+  const entityData = { ...entity } as Entity
   await entityStore.remove(selectedEntity.value.id)
   selectedEntity.value = null
   await entityStore.loadAll()
+  toastWithUndo(`已删除「${entityData.name}」`, async () => {
+    await entityStore.add(entityData)
+    await entityStore.loadAll()
+    toastSuccess('已撤销删除')
+  })
 }
+
+defineExpose({
+  /** Select an entity by id (opens detail panel) */
+  selectEntityById(id: string) {
+    const entity = entityStore.entityMap.get(id)
+    if (entity && entity.type === props.entityType) {
+      selectedEntity.value = entity
+      listHighlight.select(id)
+    }
+  },
+  /** Open the create form with optional pre-filled defaults */
+  openFormWithDefaults(defaults?: Record<string, any>) {
+    if (defaults) {
+      const now = new Date().toISOString()
+      editingEntity.value = {
+        id: '',
+        type: props.entityType,
+        name: '',
+        description: '',
+        tags: [],
+        properties: { ...defaults },
+        createdAt: now,
+        updatedAt: now,
+      } as Entity
+    } else {
+      editingEntity.value = null
+    }
+    showForm.value = true
+  },
+  /** Get the currently selected entity */
+  getSelectedEntity() {
+    return selectedEntity.value
+  },
+  /** Switch to a specific tab in the detail panel */
+  switchTab(tabId: string) {
+    detailPanelRef.value?.switchTab(tabId)
+  },
+})
 </script>
 
 <style scoped>
 .gev-root { display: flex; flex-direction: column; height: 100%; padding: 20px; }
+.entity-grid:has(> .ws-empty:only-child) { display: flex !important; align-items: center; justify-content: center; grid-template-columns: unset; }
+.large-list-warning { margin-bottom: 12px; }
+.card-footer { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.card-tag { font-size: var(--font-size-xs); padding: 1px 6px; background: var(--hover-bg); border-radius: 4px; color: var(--text-secondary); }
 .dp-rel-item { display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: var(--font-size-sm); }
 .dp-rel-icon { color: var(--text-tertiary); }
 .dp-rel-name { color: var(--text); }
+.dp-rel-meta { color: var(--text-tertiary); font-size: var(--font-size-xs); margin-left: auto; }
 </style>

@@ -1,37 +1,20 @@
 <template>
   <div class="group-chat-layout">
-    <div
-      class="group-sidebar"
-      :class="{ collapsed: sidebarCollapsed }"
-      :style="{ width: sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH + 'px' : sidebarWidth + 'px' }"
-      v-if="showSidebar"
-    >
-      <GroupChatList
-        v-if="!sidebarCollapsed"
-        @select-group="onSelectGroup"
-        @create-group="onCreateGroup"
-      />
-      <div v-else class="sidebar-collapsed-icons">
-        <button class="collapse-btn" @click="toggleSidebar" title="展开侧边栏">☰</button>
+    <SidebarStrip :active-panel="activePanel" @toggle="onStripToggle" />
+    <Transition name="sidebar-expand">
+      <div v-if="activePanel === 'groups'" class="sidebar-panel">
+        <GroupChatList
+          @close="activePanel = null"
+          @select-group="onSelectGroup"
+          @create-group="onCreateGroup"
+        />
       </div>
-      <div
-        v-if="!sidebarCollapsed"
-        class="resize-handle"
-        @mousedown="onResizeStart"
-      ></div>
-    </div>
-    <button
-      v-if="showSidebar && !sidebarCollapsed"
-      class="sidebar-toggle-btn"
-      @click="toggleSidebar"
-      title="折叠侧边栏"
-    >◂</button>
-    <button
-      v-else-if="sidebarCollapsed"
-      class="sidebar-toggle-btn expand"
-      @click="toggleSidebar"
-      title="展开侧边栏"
-    >▸</button>
+    </Transition>
+    <Transition name="sidebar-expand">
+      <div v-if="activePanel === 'friends'" class="sidebar-panel">
+        <FriendList @close="activePanel = null" @private-chat="onFriendPrivateChat" />
+      </div>
+    </Transition>
     <div class="group-main">
       <GroupChatSetup
         v-if="store.state === 'idle' && effectiveGroupMode === 'meeting'"
@@ -46,7 +29,7 @@
       <template v-else-if="effectiveGroupMode === 'meeting' && store.state !== 'idle'">
         <div class="chat-header">
           <div class="header-left">
-            <span class="topic-label">👥 {{ store.topic }}</span>
+            <span class="topic-label"><WsIcon name="users" size="xs" /> {{ store.topic }}</span>
             <GroupChatBudgetBar
               :cost-usd="store.costTracker.totalCostUsd"
               :max-cost="store.budget.maxCostUsd"
@@ -55,10 +38,10 @@
               :is-local="isLocal"
             />
             <span v-if="store.config.parallelCount > 1" class="parallel-badge">
-              ⚡×{{ store.config.parallelCount }}
+              <WsIcon name="zap" size="xs" />×{{ store.config.parallelCount }}
             </span>
             <span v-if="store.state === 'completed'" class="state-tag completed-tag">已完成</span>
-            <span v-else-if="store.state === 'terminated'" class="state-tag terminated-tag">⏹ 已终止</span>
+            <span v-else-if="store.state === 'terminated'" class="state-tag terminated-tag"><WsIcon name="square" size="xs" /> 已终止</span>
           </div>
           <div v-if="store.isCompleted" class="header-actions">
             <button class="action-btn new-btn" @click="onNewGroupChat">新建群聊</button>
@@ -83,9 +66,18 @@
                 <span v-if="store.degradedAgents[agentId]" class="degraded-tag">降级</span>
               </div>
               <div class="msg-body" :style="{ borderLeftColor: getSpeakerColor(agentId) }">
+                <!-- Layer 1: 流式工具调用状态指示器 -->
+                <div v-if="getStreamingToolCalls(agentId).length > 0" class="streaming-tools">
+                  <span v-for="tc in getStreamingToolCalls(agentId)" :key="tc.id" class="streaming-tool-tag" :class="tc.status">
+                    <WsIcon v-if="tc.status === 'running'" name="loader" size="xs" class="tc-spin" />
+                    <WsIcon v-else-if="tc.status === 'completed'" name="check" size="xs" />
+                    <WsIcon v-else name="x" size="xs" />
+                    {{ getToolLabel(tc.name) }}
+                  </span>
+                </div>
                 <div class="msg-text">
                   <div v-html="renderStreamingContent(agentId)"></div>
-                  <span class="streaming-cursor">●</span>
+                  <span v-if="!getStreamingToolCalls(agentId).some(tc => tc.status === 'running')" class="streaming-cursor">●</span>
                 </div>
               </div>
             </div>
@@ -124,7 +116,7 @@
       </template>
 
       <div v-else class="empty-state">
-        <div class="empty-icon">👥</div>
+        <div class="empty-icon"><WsIcon name="users" size="lg" /></div>
         <div class="empty-text">选择或创建一个群聊开始</div>
       </div>
     </div>
@@ -141,8 +133,8 @@ import { createGroupSession, saveGroupSession, getGroupSession, saveCasualGroupS
 import { useAgent } from '../../../agent/composables/useAgent'
 import { useSettingsStore } from '../../../stores/settingsStore'
 import { useMessageTime } from '../composables/useMessageTime'
-import type { GroupMember, GroupChatMode } from '../types'
-import { assignAgentColor } from '../types'
+import type { GroupMember, GroupChatMode, ToolCallInfo } from '../types'
+import { assignAgentColor, getToolLabel } from '../types'
 import GroupChatSetup from './GroupChatSetup.vue'
 import GroupMessageBubble from './GroupMessageBubble.vue'
 import GroupChatControls from './GroupChatControls.vue'
@@ -150,7 +142,11 @@ import GroupChatBudgetBar from './GroupChatBudgetBar.vue'
 import GroupReviewCheckpoint from './GroupReviewCheckpoint.vue'
 import CasualChatView from './CasualChatView.vue'
 import GroupChatList from './GroupChatList.vue'
+import FriendList from './FriendList.vue'
+import SidebarStrip from './SidebarStrip.vue'
+import type { PanelType } from './SidebarStrip.vue'
 import type { CreateGroupData } from './CreateGroupDialog.vue'
+import type { ChatAgent } from '../types'
 
 defineEmits<{ close: [] }>()
 
@@ -159,41 +155,7 @@ const spaceStore = useSpaceStore()
 const groupStore = useGroupStore()
 
 const effectiveGroupMode = computed(() => spaceStore.groupChatMode)
-const showSidebar = ref(true)
-
-const SIDEBAR_MIN = 180
-const SIDEBAR_MAX = 400
-const SIDEBAR_COLLAPSED_WIDTH = 48
-
-const sidebarWidth = ref(Number(localStorage.getItem('group-sidebar-width')) || 240)
-const sidebarCollapsed = ref(false)
-const isResizing = ref(false)
-
-function onResizeStart(e: MouseEvent): void {
-  e.preventDefault()
-  isResizing.value = true
-  const startX = e.clientX
-  const startWidth = sidebarWidth.value
-
-  function onMouseMove(e: MouseEvent): void {
-    const delta = e.clientX - startX
-    sidebarWidth.value = Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, startWidth + delta))
-  }
-
-  function onMouseUp(): void {
-    isResizing.value = false
-    localStorage.setItem('group-sidebar-width', String(sidebarWidth.value))
-    document.removeEventListener('mousemove', onMouseMove)
-    document.removeEventListener('mouseup', onMouseUp)
-  }
-
-  document.addEventListener('mousemove', onMouseMove)
-  document.addEventListener('mouseup', onMouseUp)
-}
-
-function toggleSidebar(): void {
-  sidebarCollapsed.value = !sidebarCollapsed.value
-}
+const activePanel = ref<PanelType>(null)
 
 watch(() => spaceStore.groupChatMode, (mode) => {
   store.setGroupMode(mode)
@@ -242,6 +204,10 @@ function renderStreamingContent(agentId: string): string {
     .replace(/\n/g, '<br>')
 }
 
+function getStreamingToolCalls(agentId: string): ToolCallInfo[] {
+  return store.streamingAgents[agentId]?.toolCalls ?? []
+}
+
 async function onCreateGroup(data: CreateGroupData): Promise<void> {
   const groupId = crypto.randomUUID()
   const now = Date.now()
@@ -262,6 +228,9 @@ async function onCreateGroup(data: CreateGroupData): Promise<void> {
     lastSpokeAt: 0,
     enabledTools: m.enabledTools || [],
     enabledSkills: m.enabledSkills || [],
+    baseLayerMode: m.baseLayerMode || 'empty',
+    customBaseLayer: m.customBaseLayer,
+    toolSource: m.toolSource || 'derived',
   }))
 
   const groupInfo = {
@@ -304,6 +273,18 @@ async function onCreateGroup(data: CreateGroupData): Promise<void> {
 
 async function onSelectGroup(payload: { id: string; mode: GroupChatMode }): Promise<void> {
   store.setGroupMode(payload.mode)
+}
+
+function onStripToggle(panel: PanelType): void {
+  if (activePanel.value === panel) {
+    activePanel.value = null
+  } else {
+    activePanel.value = panel
+  }
+}
+
+function onFriendPrivateChat(_agent: ChatAgent): void {
+  // 会议模式下暂不支持私聊，后续可扩展
 }
 
 async function onStart(config: {
@@ -439,16 +420,19 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .group-chat-layout { display: flex; height: 100%; }
-.group-sidebar { border-right: 1px solid var(--color-border); flex-shrink: 0; position: relative; transition: width 0.2s ease; overflow: hidden; }
-.group-sidebar.collapsed { transition: width 0.2s ease; }
-.sidebar-collapsed-icons { display: flex; flex-direction: column; align-items: center; padding-top: 8px; }
-.collapse-btn { width: 32px; height: 32px; border: none; background: transparent; border-radius: 6px; cursor: pointer; font-size: 16px; }
-.collapse-btn:hover { background: var(--color-surface); }
-.resize-handle { position: absolute; top: 0; right: -2px; width: 4px; height: 100%; cursor: col-resize; z-index: 10; }
-.resize-handle:hover { background: var(--color-primary); opacity: 0.3; }
-.sidebar-toggle-btn { width: 20px; height: 40px; border: 1px solid var(--color-border); background: var(--color-surface-elevated); border-radius: 0 6px 6px 0; cursor: pointer; font-size: 10px; color: var(--color-text-tertiary); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.15s; }
-.sidebar-toggle-btn:hover { background: var(--color-surface); color: var(--color-text); }
-.sidebar-toggle-btn.expand { border-radius: 0 6px 6px 0; }
+
+/* 展开面板 */
+.sidebar-panel {
+  width: 260px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.sidebar-expand-enter-active { transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease; }
+.sidebar-expand-leave-active { transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s ease; }
+.sidebar-expand-enter-from, .sidebar-expand-leave-to { width: 0; opacity: 0; }
+
 .group-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 
 .group-chat-view { display: flex; flex-direction: column; height: 100%; }
@@ -478,6 +462,20 @@ onBeforeUnmount(() => {
 .streaming-msg .msg-body { margin-left: 36px; padding: 8px 12px; border-radius: 0 12px 12px 12px; background: var(--color-surface-elevated); border-left: 3px solid var(--color-border); max-width: 85%; }
 .streaming-msg .msg-text { font-size: var(--font-size-sm); line-height: 1.6; color: var(--color-text); }
 .streaming-cursor { color: var(--color-primary); animation: pulse 1s infinite; font-size: 10px; margin-left: 2px; }
+
+/* Layer 1: 流式工具调用状态指示器 */
+.streaming-tools { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+.streaming-tool-tag {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 8px; border-radius: 4px; font-size: 11px;
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  color: var(--color-text-secondary); transition: all 0.2s;
+}
+.streaming-tool-tag.running { border-color: var(--color-primary); color: var(--color-primary); }
+.streaming-tool-tag.completed { border-color: rgba(16, 185, 129, 0.3); color: #10b981; }
+.streaming-tool-tag.failed { border-color: rgba(239, 68, 68, 0.3); color: #ef4444; }
+.tc-spin { animation: spin 1s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 .header-actions { display: flex; gap: 6px; }
 .action-btn { padding: 3px 10px; border: 1px solid var(--color-border); border-radius: 6px; font-size: var(--font-size-2xs); cursor: pointer; background: var(--color-surface-elevated); color: var(--color-text); transition: all 0.15s; }

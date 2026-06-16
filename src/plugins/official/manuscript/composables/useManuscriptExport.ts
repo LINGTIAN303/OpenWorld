@@ -1,4 +1,5 @@
 import type { Entity } from '@worldsmith/entity-core'
+import { useFontStore } from '../../../../stores/fontStore'
 
 function stripHTML(html: string): string {
   const div = document.createElement('div')
@@ -49,9 +50,12 @@ async function htmlToDocx(html: string, title: string): Promise<Blob> {
     spacing: { after: 200 },
   }))
 
+  const fontStore = useFontStore()
+  const exportFont = fontStore.prefs.preview.family || fontStore.prefs.content.family || 'Microsoft YaHei'
+
   for (const line of lines) {
     children.push(new Paragraph({
-      children: [new TextRun({ text: line, size: 24, font: 'Microsoft YaHei' })],
+      children: [new TextRun({ text: line, size: 24, font: exportFont })],
       spacing: { after: 120 },
     }))
   }

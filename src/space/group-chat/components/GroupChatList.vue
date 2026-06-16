@@ -2,7 +2,8 @@
   <div class="group-chat-list">
     <div class="list-header">
       <input class="search-input" v-model="searchQuery" placeholder="搜索群聊..." />
-      <button class="new-btn" @click="showCreateDialog = true">＋ 新群</button>
+      <button class="new-btn" @click="showCreateDialog = true"><WsIcon name="plus" size="xs" /> 新群</button>
+      <button class="close-btn" @click="emit('close')" title="关闭"><WsIcon name="x" size="xs" /></button>
     </div>
 
     <div class="mode-tabs">
@@ -42,59 +43,12 @@
       <div class="context-menu-item danger" @click="onDeleteGroup(groupContextMenu.groupId!)">删除</div>
     </div>
 
-    <CollapsibleSection title="Agent" :badge="String(agentRegistry.agents.length)" :default-open="true">
-      <template #header-actions>
-        <button class="agent-add-btn" @click="showCreateAgentDialog = true">＋</button>
-      </template>
-      <div class="agent-list-inner">
-        <div
-          v-for="agent in agentRegistry.agents"
-          :key="agent.id"
-          class="agent-item"
-          @click="onEditAgent(agent)"
-          @contextmenu.prevent="onAgentContextMenu(agent.id)"
-        >
-          <div class="agent-avatar" :style="{ background: agent.color }">{{ agent.avatar }}</div>
-          <div class="agent-info">
-            <span class="agent-name">{{ agent.name }}</span>
-            <span class="agent-role">{{ agent.role }}</span>
-          </div>
-          <span class="agent-source"><WsIcon :name="agent.sourceType === 'entity' ? 'landmark' : 'pencil'" size="xs" /></span>
-        </div>
-        <div v-if="agentRegistry.agents.length === 0" class="agent-empty">暂无 Agent，点击 + 创建</div>
-      </div>
-    </CollapsibleSection>
-
     <CreateGroupDialog
       v-if="showCreateDialog"
       :available-agents="availableAgents"
       @close="showCreateDialog = false"
       @created="onGroupCreated"
     />
-
-    <CreateAgentDialog
-      v-if="showCreateAgentDialog"
-      @close="showCreateAgentDialog = false"
-      @created="onAgentCreated"
-      @updated="onAgentUpdated"
-    />
-
-    <CreateAgentDialog
-      v-if="showEditAgentDialog && editingAgent"
-      :agent="editingAgent"
-      @close="showEditAgentDialog = false; editingAgent = null"
-      @updated="onAgentUpdated"
-    />
-
-    <div v-if="deleteConfirmId" class="delete-confirm-overlay" @click.self="deleteConfirmId = null">
-      <div class="delete-confirm-dialog">
-        <div class="delete-confirm-text">确定删除此 Agent？已有群中的成员不受影响。</div>
-        <div class="delete-confirm-actions">
-          <button class="delete-cancel-btn" @click="deleteConfirmId = null">取消</button>
-          <button class="delete-confirm-btn" @click="confirmDeleteAgent">删除</button>
-        </div>
-      </div>
-    </div>
 
     <div v-if="deleteConfirmGroupId" class="delete-confirm-overlay" @click.self="deleteConfirmGroupId = null">
       <div class="delete-confirm-dialog">
@@ -109,16 +63,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useGroupStore } from '../management/GroupStore'
 import { useGroupChatStore } from '../GroupChatStore'
 import { useAgentRegistryStore } from '../management/AgentRegistryStore'
 import { useSpaceStore } from '../../stores/space-store'
 import { getAllGroupSessions, getGroupSession, getCasualGroupSession, deleteGroupSession, deleteCasualGroupSession } from '../GroupSessionManager'
-import type { GroupChatMode, ChatAgent } from '../types'
+import type { GroupChatMode } from '../types'
 import CreateGroupDialog, { type AgentItem, type CreateGroupData } from './CreateGroupDialog.vue'
-import CreateAgentDialog from './CreateAgentDialog.vue'
-import CollapsibleSection from './CollapsibleSection.vue'
 import WsIcon from '../../../ui/WsIcon.vue'
 
 defineProps<{}>()
@@ -126,6 +78,7 @@ defineProps<{}>()
 const emit = defineEmits<{
   'select-group': [payload: { id: string; mode: GroupChatMode }]
   'create-group': [data: CreateGroupData]
+  close: []
 }>()
 
 const groupStore = useGroupStore()
@@ -135,10 +88,6 @@ const agentRegistry = useAgentRegistryStore()
 const searchQuery = ref('')
 const modeFilter = ref<'all' | 'casual' | 'meeting'>('all')
 const showCreateDialog = ref(false)
-const showCreateAgentDialog = ref(false)
-const showEditAgentDialog = ref(false)
-const editingAgent = ref<ChatAgent | null>(null)
-const deleteConfirmId = ref<string | null>(null)
 const deleteConfirmGroupId = ref<string | null>(null)
 
 interface GroupContextMenu {
@@ -276,34 +225,6 @@ function onGroupCreated(data: CreateGroupData): void {
   emit('create-group', data)
 }
 
-async function onAgentCreated(agent: ChatAgent): Promise<void> {
-  await agentRegistry.persistAgent(agent)
-  showCreateAgentDialog.value = false
-}
-
-async function onAgentUpdated(agent: ChatAgent): Promise<void> {
-  agentRegistry.updateAgent(agent.id, agent)
-  await agentRegistry.persistAgent(agent)
-  showEditAgentDialog.value = false
-  editingAgent.value = null
-}
-
-function onEditAgent(agent: ChatAgent): void {
-  editingAgent.value = { ...agent }
-  showEditAgentDialog.value = true
-}
-
-function onAgentContextMenu(agentId: string): void {
-  deleteConfirmId.value = agentId
-}
-
-async function confirmDeleteAgent(): Promise<void> {
-  if (deleteConfirmId.value) {
-    await agentRegistry.deleteAgentAndPersist(deleteConfirmId.value)
-    deleteConfirmId.value = null
-  }
-}
-
 function formatTime(ts: number): string {
   const d = new Date(ts)
   const now = new Date()
@@ -312,10 +233,6 @@ function formatTime(ts: number): string {
   }
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
-
-watch(() => groupStore.groups.length, async () => {
-  await agentRegistry.loadFromDB()
-})
 
 onMounted(() => {
   loadGroups()
@@ -335,18 +252,51 @@ function onDocumentClick(event: MouseEvent): void {
 <style scoped>
 .group-chat-list { display: flex; flex-direction: column; height: 100%; }
 .list-header { padding: 8px; display: flex; gap: 6px; }
-.search-input { flex: 1; padding: 6px 10px; border: 1px solid var(--color-border); border-radius: 8px; font-size: 12px; background: var(--color-surface); outline: none; }
+.search-input { flex: 1; padding: 6px 10px; border: 1px solid var(--color-border); border-radius: 8px; font-size: 12px; background: var(--color-surface); outline: none; color: var(--color-text); }
 .search-input:focus { border-color: var(--color-primary); }
 .new-btn { padding: 6px 10px; border: none; background: var(--color-primary); color: white; border-radius: 8px; cursor: pointer; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.close-btn { width: 24px; height: 24px; border: none; background: transparent; border-radius: 4px; cursor: pointer; font-size: 12px; color: var(--color-text-tertiary); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.close-btn:hover { background: var(--color-surface-elevated); color: var(--color-text); }
 
 .mode-tabs { display: flex; gap: 2px; padding: 0 8px 6px; }
-.mode-tab { flex: 1; padding: 4px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); cursor: pointer; font-size: 11px; text-align: center; transition: all 0.15s; }
-.mode-tab.active { background: rgba(108,92,231,0.1); border-color: var(--color-primary); font-weight: 600; }
+.mode-tab { flex: 1; padding: 4px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); cursor: pointer; font-size: 11px; text-align: center; transition: all 0.15s; color: var(--color-text-secondary); }
+.mode-tab.active { background: rgba(108,92,231,0.1); border-color: var(--color-primary); font-weight: 600; color: var(--color-text); }
 
 .list-body { flex: 1; overflow-y: auto; min-height: 0; }
-.group-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; border-left: 3px solid transparent; }
-.group-item:hover { background: var(--color-surface); }
-.group-item.active { background: rgba(108,92,231,0.08); border-left-color: var(--color-primary); }
+.group-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  position: relative;
+  transition: background 0.2s ease, border-left-color 0.25s ease, transform 0.2s ease;
+}
+.group-item::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 0 6px 6px 0;
+  background: var(--color-primary);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+.group-item:hover {
+  background: var(--color-surface);
+  transform: translateX(2px);
+}
+.group-item:hover::after {
+  opacity: 0.04;
+}
+.group-item.active {
+  background: rgba(108,92,231,0.08);
+  border-left-color: var(--color-primary);
+}
+.group-item.active:hover {
+  background: rgba(108,92,231,0.12);
+}
 .group-avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #6c5ce7, #a29bfe); display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
 .group-info { flex: 1; min-width: 0; }
 .group-top { display: flex; justify-content: space-between; align-items: center; }
@@ -355,19 +305,6 @@ function onDocumentClick(event: MouseEvent): void {
 .group-bottom { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--color-text-tertiary); }
 .group-preview { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .unread-badge { min-width: 16px; height: 16px; border-radius: 8px; background: #ef4444; color: white; font-size: 9px; display: flex; align-items: center; justify-content: center; font-weight: 700; padding: 0 4px; }
-
-.agent-add-btn { background: none; border: none; color: var(--color-primary); cursor: pointer; font-size: 14px; font-weight: 700; padding: 0 4px; }
-.agent-add-btn:hover { opacity: 0.7; }
-
-.agent-list-inner { display: flex; flex-direction: column; }
-.agent-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; cursor: pointer; border-radius: 6px; }
-.agent-item:hover { background: var(--color-surface); }
-.agent-avatar { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 11px; flex-shrink: 0; }
-.agent-info { flex: 1; min-width: 0; }
-.agent-name { font-size: 12px; font-weight: 600; }
-.agent-role { font-size: 10px; color: var(--color-text-tertiary); margin-left: 4px; }
-.agent-source { font-size: 10px; }
-.agent-empty { padding: 8px; font-size: 11px; color: var(--color-text-tertiary); text-align: center; }
 
 .delete-confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 9998; display: flex; align-items: center; justify-content: center; }
 .delete-confirm-dialog { background: var(--color-surface-elevated); border: 1px solid var(--color-border); border-radius: 12px; padding: 20px; min-width: 260px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }

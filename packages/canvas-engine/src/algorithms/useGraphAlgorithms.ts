@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import Graph from 'graphology'
 import { type WeightedGraph, getBackend } from '../core/backendProvider'
 import type { GraphNode, GraphEdge } from '../graph/useGraphData'
@@ -22,6 +23,9 @@ export function graphToWeightedGraph(graph: Graph): WeightedGraph {
 }
 
 export function useGraphAlgorithms() {
+  /** WASM 后端状态：'wasm' 表示加权最短路径；'js-fallback' 表示无权降级 */
+  const backendUsed = ref<'wasm' | 'js-fallback'>('js-fallback')
+
   function buildGraph(nodes: GraphNode[], edges: GraphEdge[]): Graph {
     const g = new Graph({ multi: false })
     for (const n of nodes) {
@@ -47,9 +51,15 @@ export function useGraphAlgorithms() {
       if (backend?.algoDijkstraPath) {
         const wg = graphToWeightedGraph(graph)
         const result = await backend.algoDijkstraPath(wg, from, to)
-        if (result?.found) return result.path
+        if (result?.found) {
+          backendUsed.value = 'wasm'
+          return result.path
+        }
       }
-    } catch { /* fallback to JS */ }
+    } catch {
+      console.warn('[useGraphAlgorithms] WASM 路径不可用，降级到 JS Dijkstra')
+    }
+    backendUsed.value = 'js-fallback'
     return dijkstraFallback(graph, from, to)
   }
 
@@ -139,5 +149,6 @@ export function useGraphAlgorithms() {
     detectCommunities,
     getNeighbors,
     getDegree,
+    backendUsed,
   }
 }

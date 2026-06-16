@@ -37,6 +37,8 @@ export interface GroupParticipant {
   role: string
   systemPrompt: string
   providerConfig?: ProviderConfig
+  /** 引用的 ProviderSlot ID（同厂商多 Key 负载均衡） */
+  providerSlotId?: string
   modelId?: string
   speakCount: number
   lastSpokeAt: number
@@ -84,6 +86,8 @@ export interface DegradedAgentInfo {
 export interface StreamingAgentState {
   content: string
   thinking: string
+  /** 当前正在执行的工具调用 */
+  toolCalls: ToolCallInfo[]
 }
 
 export interface GroupSession {
@@ -132,6 +136,12 @@ export type GroupChatMode = 'meeting' | 'casual'
 
 export type GroupRole = 'owner' | 'admin' | 'member'
 
+/** 基础层模式：空（不共享）/ 共享（使用标准基础层）/ 自定义（用户填写） */
+export type BaseLayerMode = 'empty' | 'shared' | 'custom'
+
+/** 工具来源：derived=从技能派生，manual=手动指定 */
+export type ToolSource = 'derived' | 'manual'
+
 export interface GroupMember extends GroupParticipant {
   groupRole: GroupRole
   joinedAt: number
@@ -140,9 +150,109 @@ export interface GroupMember extends GroupParticipant {
   lastActiveAt: number
   enabledTools: string[]
   enabledSkills: string[]
+  /** 基础层模式：默认 empty（空基础层），可选 shared（共享标准基础层）或 custom（自定义） */
+  baseLayerMode: BaseLayerMode
+  /** 自定义基础层内容（仅 baseLayerMode='custom' 时使用） */
+  customBaseLayer?: string
+  /** 工具来源：derived=从 enabledSkills 派生，manual=使用 enabledTools 列表。默认 derived */
+  toolSource?: ToolSource
+  /** 输出字体 family（空字符串=跟随全局 Agent 字体） */
+  fontFamily?: string
+  /** 输出字体 weight（默认 400） */
+  fontWeight?: number
+  /** 输出字体 style（默认 normal） */
+  fontStyle?: string
 }
 
-export type MessageType = 'text' | 'image' | 'file' | 'system' | 'action'
+export type MessageType = 'text' | 'image' | 'file' | 'system' | 'action' | 'world-event'
+
+/** 工具调用信息（群聊公共动作事件） */
+export interface ToolCallInfo {
+  id: string
+  name: string
+  status: 'running' | 'completed' | 'failed'
+  /** 工具调用参数摘要（可选，用于展开详情） */
+  params?: string
+  /** 工具调用结果摘要（可选，用于展开详情） */
+  result?: string
+}
+
+/** 世界事件：修改共享世界状态的操作，作为轻量系统消息插入对话流 */
+export interface WorldEvent {
+  id: string
+  /** 触发者 Agent ID */
+  agentId: string
+  /** 触发者 Agent 名称 */
+  agentName: string
+  /** 动作类型：create/update/delete */
+  action: 'create' | 'update' | 'delete'
+  /** 目标对象类型 */
+  targetType: string
+  /** 目标对象名称 */
+  targetName: string
+  /** 触发的工具调用 ID（用于关联） */
+  toolCallId?: string
+  timestamp: number
+}
+
+/** 工具重要性分级 */
+export type ToolImportance = 'world-change' | 'output-gen' | 'info-retrieval'
+
+/** 工具分类映射 */
+export const TOOL_CATEGORIES: Record<string, { label: string; importance: ToolImportance; icon: string }> = {
+  entity_create: { label: '创建实体', importance: 'world-change', icon: 'plus' },
+  entity_get: { label: '获取实体', importance: 'info-retrieval', icon: 'search' },
+  entity_update: { label: '更新实体', importance: 'world-change', icon: 'edit' },
+  entity_delete: { label: '删除实体', importance: 'world-change', icon: 'trash' },
+  entity_list: { label: '实体列表', importance: 'info-retrieval', icon: 'list' },
+  relation_create: { label: '创建关系', importance: 'world-change', icon: 'link' },
+  relation_delete: { label: '删除关系', importance: 'world-change', icon: 'unlink' },
+  relation_list: { label: '关系列表', importance: 'info-retrieval', icon: 'list' },
+  web_search: { label: '联网搜索', importance: 'info-retrieval', icon: 'globe' },
+  web_crawl: { label: '网页抓取', importance: 'info-retrieval', icon: 'download' },
+  doc_convert: { label: '文档转换', importance: 'info-retrieval', icon: 'file-text' },
+  output_table: { label: '表格', importance: 'output-gen', icon: 'table' },
+  output_choice: { label: '选项', importance: 'output-gen', icon: 'check-square' },
+  output_code: { label: '代码', importance: 'output-gen', icon: 'code' },
+  output_entity_card: { label: '实体卡', importance: 'output-gen', icon: 'credit-card' },
+  output_alert: { label: '提示', importance: 'output-gen', icon: 'alert-circle' },
+  output_stat: { label: '统计', importance: 'output-gen', icon: 'bar-chart' },
+  output_list: { label: '列表', importance: 'output-gen', icon: 'list' },
+  output_progress: { label: '进度', importance: 'output-gen', icon: 'loader' },
+  output_comparison: { label: '对比', importance: 'output-gen', icon: 'columns' },
+  output_timeline: { label: '时间线', importance: 'output-gen', icon: 'clock' },
+  output_image: { label: '图片', importance: 'output-gen', icon: 'image' },
+  output_accordion: { label: '折叠区', importance: 'output-gen', icon: 'chevron-down' },
+  consistency_check: { label: '一致性检查', importance: 'info-retrieval', icon: 'shield' },
+  content_search: { label: '内容搜索', importance: 'info-retrieval', icon: 'search' },
+  memory_store: { label: '存储记忆', importance: 'world-change', icon: 'database' },
+  memory_recall: { label: '回忆记忆', importance: 'info-retrieval', icon: 'brain' },
+  memory_delete: { label: '删除记忆', importance: 'world-change', icon: 'trash' },
+  project_export: { label: '项目导出', importance: 'output-gen', icon: 'download' },
+  project_import: { label: '项目导入', importance: 'world-change', icon: 'upload' },
+  load_skill: { label: '加载技能', importance: 'info-retrieval', icon: 'zap' },
+  daily_report: { label: '每日报告', importance: 'output-gen', icon: 'file-text' },
+}
+
+/** 判断工具是否属于世界变更类 */
+export function isWorldChangeTool(toolName: string): boolean {
+  return TOOL_CATEGORIES[toolName]?.importance === 'world-change'
+}
+
+/** 获取工具标签（友好名称） */
+export function getToolLabel(toolName: string): string {
+  return TOOL_CATEGORIES[toolName]?.label ?? toolName.replace(/_/g, ' ')
+}
+
+/** 获取工具图标 */
+export function getToolIcon(toolName: string): string {
+  return TOOL_CATEGORIES[toolName]?.icon ?? 'wrench'
+}
+
+/** 获取工具重要性级别 */
+export function getToolImportance(toolName: string): ToolImportance {
+  return TOOL_CATEGORIES[toolName]?.importance ?? 'info-retrieval'
+}
 
 export interface GroupChatMessage {
   id: string
@@ -154,12 +264,20 @@ export interface GroupChatMessage {
   speakerName?: string
   speakerAvatar?: string
   speakerColor?: string
+  /** Agent 输出字体 family */
+  speakerFontFamily?: string
+  /** Agent 输出字体 weight */
+  speakerFontWeight?: number
+  /** Agent 输出字体 style */
+  speakerFontStyle?: string
   type: MessageType
   replyTo?: string
   mentions?: string[]
   imageUrl?: string
   fileName?: string
   fileUrl?: string
+  /** 工具调用信息（群聊公共动作事件） */
+  toolCalls?: ToolCallInfo[]
 }
 
 export interface SpeakingDesire {
@@ -192,6 +310,34 @@ export interface GroupInfo {
   updatedAt: number
 }
 
+/** 单次 API 请求追踪记录 */
+export interface RequestRecord {
+  id: string
+  agentId: string
+  agentName: string
+  startTime: number
+  endTime?: number
+  status: 'pending' | 'success' | 'error'
+  error?: string
+  inputTokens?: number
+  outputTokens?: number
+  latencyMs?: number
+  /** 请求使用的 API 协议（openai-completions / anthropic-messages / google-generative-ai） */
+  protocol?: string
+}
+
+/** 请求追踪快照（供 UI 展示） */
+export interface RequestTrackerSnapshot {
+  records: RequestRecord[]
+  perAgent: Record<string, {
+    total: number
+    success: number
+    errors: number
+    avgLatencyMs: number
+    lastError?: string
+  }>
+}
+
 export interface CasualGroupSession {
   info: GroupInfo
   members: GroupMember[]
@@ -210,10 +356,26 @@ export interface ChatAgent {
   role: string
   systemPrompt: string
   modelId?: string
+  /** 独立 Provider 配置（不使用全局配置时设置） */
+  providerConfig?: ProviderConfig
+  /** 引用的 ProviderSlot ID（同厂商多 Key 负载均衡） */
+  providerSlotId?: string
   sourceType: 'entity' | 'custom'
   sourceEntityId?: string
   enabledTools: string[]
   enabledSkills: string[]
+  /** 基础层模式：默认 empty */
+  baseLayerMode: BaseLayerMode
+  /** 自定义基础层内容 */
+  customBaseLayer?: string
+  /** 工具来源：derived=从 enabledSkills 派生，manual=使用 enabledTools 列表。默认 derived */
+  toolSource?: ToolSource
+  /** 输出字体 family（空字符串=跟随全局 Agent 字体） */
+  fontFamily?: string
+  /** 输出字体 weight（默认 400） */
+  fontWeight?: number
+  /** 输出字体 style（默认 normal） */
+  fontStyle?: string
   createdAt: number
   updatedAt: number
 }

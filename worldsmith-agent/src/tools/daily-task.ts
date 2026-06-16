@@ -7,7 +7,6 @@
  */
 
 import type { ToolDefinition } from '../bridge-types'
-import { unwrap } from './types'
 
 /** daily_report — 生成项目每日统计报告 */
 export const dailyReportTool: ToolDefinition = {

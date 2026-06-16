@@ -9,16 +9,16 @@ description: >
   世界构建、编年史、泳道、甘特图、并行、缩放、折叠。
 allowed-tools:
   [
-    timeline_create_event,
-    timeline_update_event,
-    timeline_sort_events,
-    timeline_detect_conflicts,
-    timeline_get_events,
-    timeline_export_timeline,
-    timeline_set_layout_mode,
-    timeline_set_group_mode,
-    timeline_zoom,
-    timeline_toggle_collapse,
+    timeline(action='create_event'),
+    timeline(action='update_event'),
+    timeline(action='sort_events'),
+    timeline(action='detect_conflicts'),
+    timeline(action='get_events'),
+    timeline(action='export_timeline'),
+    timeline(action='set_layout_mode'),
+    timeline(action='set_group_mode'),
+    timeline(action='zoom'),
+    timeline(action='toggle_collapse'),
     entity_create,
     entity_update,
     relation_create,
@@ -106,16 +106,16 @@ allowed-tools:
 
 1. **年代确认**：询问用户该事件属于哪个年代。若年代不存在，提示用户先定义或自动建议新建年代。
 2. **信息收集**：收集事件的名称、描述、日期（支持模糊/相对输入）、重要程度。
-3. **创建执行**：调用 `timeline_create_event`，传入结构化参数。
+3. **创建执行**：调用 `timeline(action='create_event')`，传入结构化参数。
    ```
-   timeline_create_event(name, description, date, era_id, importance)
+   timeline(action='create_event')(name, description, date, era_id, importance)
    ```
-4. **冲突预检**：创建后立即调用 `timeline_detect_conflicts`（限定该事件相关时间范围），检查是否与相邻事件产生时序冲突。
+4. **冲突预检**：创建后立即调用 `timeline(action='detect_conflicts')`（限定该事件相关时间范围），检查是否与相邻事件产生时序冲突。
 5. **结果呈现**：展示创建成功的事件卡片，标注其在时间线中的位置（前驱/后继事件）。
 
 ### 阶段二：冲突检测
 
-1. **全量扫描**：调用 `timeline_detect_conflicts` 扫描整个时间线。
+1. **全量扫描**：调用 `timeline(action='detect_conflicts')` 扫描整个时间线。
 2. **严重级别判定**（Agent 根据输出自行判定）：
    - `致命`：两事件日期完全相同但无合理解释（如同一天内"角色出生"和"角色去世"）→ 必须修正
    - `严重`：因果倒置（结果事件日期早于原因事件）→ 需立即调整
@@ -124,7 +124,7 @@ allowed-tools:
    - 调整日期
    - 拆分事件为多个阶段
    - 重新建立因果关系以解释异常
-4. **修正执行**：使用 `timeline_update_event` 应用用户选择的修正。
+4. **修正执行**：使用 `timeline(action='update_event')` 应用用户选择的修正。
 
 ### 阶段三：因果图谱构建
 
@@ -144,21 +144,21 @@ allowed-tools:
 
 1. **布局切换**：根据用户需求切换水平/垂直模式。
    ```
-   timeline_set_layout_mode(mode)  // 'horizontal' | 'vertical'
+   timeline(action='set_layout_mode')(mode)  // 'horizontal' | 'vertical'
    ```
 2. **泳道分组**：按角色/地点/纪元/标签查看并行事件。
    ```
-   timeline_set_group_mode(mode)  // 'none' | 'character' | 'location' | 'era' | 'tag'
+   timeline(action='set_group_mode')(mode)  // 'none' | 'character' | 'location' | 'era' | 'tag'
    ```
 3. **缩放导航**：缩放到特定时间范围。
    ```
-   timeline_zoom(action)  // 'zoomIn' | 'zoomOut' | 'fitAll'
+   timeline(action='zoom')(action)  // 'zoomIn' | 'zoomOut' | 'fitAll'
    ```
 4. **折叠展开**：控制事件层级的显示。
    ```
-   timeline_toggle_collapse(eventId)  // 切换单个节点
-   timeline_toggle_collapse(expandAll)  // 全部展开
-   timeline_toggle_collapse(collapseAll)  // 全部折叠
+   timeline(action='toggle_collapse')(eventId)  // 切换单个节点
+   timeline(action='toggle_collapse')(expandAll)  // 全部展开
+   timeline(action='toggle_collapse')(collapseAll)  // 全部折叠
    ```
 
 ### 阶段五：时间线导出
@@ -167,12 +167,12 @@ allowed-tools:
    - 继续编辑/分析 → JSON
    - 表格查看 → CSV
    - 可视化展示 → 图谱数据（配合 MermaidRender）或时间线可视化（配合 output_timeline）
-2. **导出执行**：调用 `timeline_export_timeline(format, era_ids, include_relations)`。
+2. **导出执行**：调用 `timeline(action='export_timeline')(format, era_ids, include_relations)`。
 3. **输出交付**：返回导出内容与文件路径。
 
 ## 工具使用规范
 
-### `timeline_create_event`
+### `timeline(action='create_event')`
 
 - **触发条件**：用户要求新建事件，且已完成年代确认和信息收集
 - **必填参数**：`name`, `date`, `era_id`
@@ -180,36 +180,36 @@ allowed-tools:
 - **返回**：创建的事件对象（含ID）
 - **失败回退**：若调用失败，告知用户"事件创建暂时失败，请检查参数是否完整"，不重复调用超过2次
 
-### `timeline_set_layout_mode`
+### `timeline(action='set_layout_mode')`
 
 - **触发条件**：用户要求切换布局模式
 - **参数**：`mode`（'horizontal' | 'vertical'）
 - **默认**：'vertical'
 
-### `timeline_set_group_mode`
+### `timeline(action='set_group_mode')`
 
 - **触发条件**：用户要求按维度分组查看并行事件
 - **参数**：`mode`（'none' | 'character' | 'location' | 'era' | 'tag'）
 - **默认**：'none'
 
-### `timeline_zoom`
+### `timeline(action='zoom')`
 
 - **触发条件**：用户要求缩放时间轴
 - **参数**：`action`（'zoomIn' | 'zoomOut' | 'fitAll'）
 
-### `timeline_toggle_collapse`
+### `timeline(action='toggle_collapse')`
 
 - **触发条件**：用户要求折叠/展开事件层级
 - **参数**：`eventId`（切换特定节点）或 `expandAll`/`collapseAll`（全局操作）
 
-### `timeline_detect_conflicts`
+### `timeline(action='detect_conflicts')`
 
 - **触发条件**：创建/更新事件后；用户主动要求检测；导出前的最终检查
 - **参数**：`event_ids`（可选，限定检测范围）
 - **返回**：冲突事件对列表，每对含 `event_a`, `event_b`, `conflict_type`, `severity`
 - **注意事项**：冲突检测结果不能直接认定为"错误"，需结合叙事逻辑判断；模糊日期的冲突默认标记为`警告`
 
-### `timeline_export_timeline`
+### `timeline(action='export_timeline')`
 
 - **参数**：`format` (json|csv|graph)，`era_ids`，`include_relations` (bool)
 - **失败回退**：若指定格式导出失败，尝试 JSON 格式兜底，告知用户所选格式当前不可用

@@ -1,6 +1,7 @@
 import './design-tokens/primitive.css'
 import './design-tokens/semantic.css'
 import './design-tokens/component.css'
+import './design-tokens/interaction-modes.css'
 import './assets/themes.css'
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
@@ -12,6 +13,7 @@ import { useSettingsStore } from './stores/settingsStore'
 import { eventBus } from './modules/runtime/events'
 import { useConfirm, useDialog, injectAllKeyframes } from '@worldsmith/ui-kit'
 import { toastSuccess, toastError, toastWarn, toastInfo } from './composables/useToast'
+import { registerAllManifests } from '@worldsmith/theme-kit'
 
 registerBackend({
   getBackendType: coreBackend.getBackendType,
@@ -55,6 +57,7 @@ registerSettingsApi(useSettingsStore())
 
 document.documentElement.setAttribute('data-theme', localStorage.getItem('worldsmith-theme') || 'aurora-abyss')
 injectAllKeyframes()
+registerAllManifests()
 setUndoHistoryProvider(() => useSettingsStore().undoHistoryLimit || 20)
 fieldRegistry.loadPersisted()
 app.mount('#app')

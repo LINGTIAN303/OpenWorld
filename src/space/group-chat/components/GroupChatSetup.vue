@@ -78,7 +78,7 @@
                 <input v-model="p.name" class="pc-name" placeholder="名称" :class="{ 'has-error': isDuplicateName(i) }" />
                 <input v-model="p.role" class="pc-role" placeholder="角色描述" />
               </div>
-              <button class="pc-remove" @click="participants.splice(i, 1)" :disabled="participants.length <= 2">✕</button>
+              <button class="pc-remove" @click="participants.splice(i, 1)" :disabled="participants.length <= 2"><WsIcon name="x" size="xs" /></button>
             </div>
             <div class="pc-model-row">
               <ModelFlyoutSelect :model-id="p.modelId" @update:model-id="onModelChange(i, $event)" />

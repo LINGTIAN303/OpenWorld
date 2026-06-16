@@ -46,7 +46,7 @@ export async function runCli(): Promise<void> {
       }
 
       const config: ProviderConfig = opts.baseUrl
-        ? { mode: 'custom', baseUrl: opts.baseUrl, apiType: 'openai', modelId: opts.model, apiKey }
+        ? { mode: 'custom', baseUrl: opts.baseUrl, apiType: 'openai-compatible', modelId: opts.model, apiKey }
         : { mode: 'cloud', provider: opts.provider, modelId: opts.model, apiKey }
 
       const toolContext = createCliToolContext(opts.data, config)

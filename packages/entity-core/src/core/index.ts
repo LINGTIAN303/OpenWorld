@@ -1,8 +1,14 @@
 export { WorldDatabase, db } from './database'
-export type { ModuleInstance } from './database'
+export type { ModuleInstance, ProjectSetting } from './database'
+
+export { getProjectManager } from './ProjectManager'
+export type { ProjectInfo, ProjectManagerClass } from './ProjectManager'
+
+export { migrateIfNeeded } from './ProjectMigration'
 
 export type { StorageBackend } from './StorageBackend'
-export { isTauri, getStorageBackend, storage } from './StorageBackend'
+export { isTauri, getStorageBackend, storage, StorageError, setStorageProjectDir, getFileStorageBackend } from './StorageBackend'
+export { FileStorageBackend } from './FileStorageBackend'
 
 export { entitySchemaRegistry } from './EntitySchema'
 
@@ -67,3 +73,32 @@ export type {
   DialogApi,
   SettingsApi,
 } from './serviceProvider'
+
+export {
+  traitRegistry,
+  facetRegistry,
+  entitySchemaRegistryV2,
+  defineTrait,
+  defineFacet,
+  defineEntity,
+  compileEntitySchema,
+} from './TraitRuntime'
+
+export {
+  relationshipRegistry,
+  defineRelation,
+  syncToLegacyRegistry,
+} from './RelationshipRegistry'
+
+export {
+  semanticHintRegistry,
+  autoLinkStrategyRegistry,
+  registerDefaultStrategies,
+  potentialLinkIndex,
+  indexPotentialLinks,
+  refreshLinksForTarget,
+  inferSemanticHintFromKey,
+  inferDirectTargetFromKey,
+  userFieldMappingStore,
+} from './AutoLinkEngine'
+export type { UserFieldMapping } from './AutoLinkEngine'

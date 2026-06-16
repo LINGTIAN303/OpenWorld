@@ -16,6 +16,11 @@ export interface AgentPersona {
   statusMessage: string
 }
 
+export interface InputInjectionChip {
+  label: string
+  ref: string
+}
+
 const PERSONA_STORAGE_KEY = 'worldsmith_agent_persona'
 
 function loadPersona(): AgentPersona {
@@ -43,6 +48,8 @@ export const useSpaceStore = defineStore('space', () => {
   const rightPanel = ref<RightPanel>(null)
   const leftPanelWidth = ref(340)
   const rightPanelWidth = ref(340)
+  const planPanelOpen = ref(false)
+  const planPanelWidth = ref(300)
   const MIN_PANEL_WIDTH = 240
   const MAX_PANEL_WIDTH = 560
   const chatMode = ref<ChatMode>('normal')
@@ -51,6 +58,8 @@ export const useSpaceStore = defineStore('space', () => {
   const sessionSidebarOpen = ref(false)
   const sessionSidebarWidth = ref(260)
   const persona = ref<AgentPersona>(loadPersona())
+  const activityPinned = ref(false)
+  const inputInjection = ref<InputInjectionChip | null>(null)
 
   function setMode(m: SpaceMode) { mode.value = m }
   function toggleLeftPanel(panel: LeftPanel) {
@@ -70,6 +79,12 @@ export const useSpaceStore = defineStore('space', () => {
   function setRightPanelWidth(w: number) {
     rightPanelWidth.value = Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, w))
   }
+  function setPlanPanelWidth(w: number) {
+    planPanelWidth.value = Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, w))
+  }
+  function togglePlanPanel() {
+    planPanelOpen.value = !planPanelOpen.value
+  }
   function updatePersona(patch: Partial<AgentPersona>) {
     persona.value = { ...persona.value, ...patch }
     savePersona(persona.value)
@@ -77,9 +92,12 @@ export const useSpaceStore = defineStore('space', () => {
 
   return {
     mode, leftPanel, rightPanel, leftPanelWidth, rightPanelWidth,
+    planPanelOpen, planPanelWidth,
     chatMode, groupChatMode, workspaceDrawerOpen, sessionSidebarOpen, sessionSidebarWidth, persona,
+    activityPinned, inputInjection,
     setMode, toggleLeftPanel, toggleRightPanel, setChatMode, setGroupChatMode,
     setWorkspaceDrawerOpen, setSessionSidebarOpen, toggleSessionSidebar,
-    setLeftPanelWidth, setRightPanelWidth, updatePersona,
+    setLeftPanelWidth, setRightPanelWidth, setPlanPanelWidth, togglePlanPanel,
+    updatePersona,
   }
 })

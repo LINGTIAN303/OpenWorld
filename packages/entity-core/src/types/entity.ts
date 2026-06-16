@@ -1,7 +1,7 @@
 export interface FieldSchema {
   key: string
   label: string
-  type: 'text' | 'textarea' | 'number' | 'boolean' | 'date' | 'image' | 'select' | 'multi-select' | 'formula' | 'color' | 'entityRef'
+  type: 'text' | 'textarea' | 'number' | 'boolean' | 'date' | 'image' | 'select' | 'multi-select' | 'tags' | 'formula' | 'color' | 'entityRef'
   required?: boolean
   defaultValue?: unknown
   options?: string[]
@@ -36,6 +36,8 @@ export interface Entity {
   coverImage?: string
   coverPosition?: string
   coverZoom?: number
+  /** Facet 数据块，key 为 facet ID，value 为 facet 字段数据 */
+  facets?: Record<string, Record<string, unknown>>
   createdAt: string
   updatedAt: string
 }

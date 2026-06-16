@@ -1,81 +1,98 @@
 <template>
   <div class="chat-input-area">
-    <div
-      class="capsule-input"
-      :class="{ expanded: isExpanded, focused: isFocused, 'drag-over': isDragOver }"
-      @dragover.prevent="isDragOver = true"
-      @dragleave.prevent="isDragOver = false"
-      @drop.prevent="onDrop"
-    >
-      <Transition name="attach-fade">
-        <button
-          v-if="isExpanded"
-          class="attach-btn"
-          type="button"
-          :disabled="isStreaming"
-          title="添加文件（图片 / Word / PDF / 文本）"
-          @click="triggerFileInput"
+      <div class="input-row">
+        <div
+          class="capsule-input"
+          :class="{ expanded: isExpanded, focused: isFocused, 'drag-over': isDragOver }"
+          @dragover.prevent="isDragOver = true"
+          @dragleave.prevent="isDragOver = false"
+          @drop.prevent="onDrop"
         >
-          <WsIcon name="paperclip" size="sm" />
-        </button>
-      </Transition>
-      <div class="input-stack">
-        <div v-if="attachments.length" class="attachments-preview">
-          <div
-            v-for="(att, i) in attachments"
-            :key="i"
-            class="att-item"
-            :class="{ 'att-image': att.type === 'image', 'att-file': att.type === 'file' }"
-          >
-            <img v-if="att.type === 'image' && att.previewUrl" :src="att.previewUrl" class="att-thumb" />
-            <span v-if="att.type === 'file'" class="att-file-icon"><WsIcon name="file" size="xs" /></span>
-            <span class="att-name">{{ att.name }}</span>
-            <button class="att-remove" type="button" @click.stop="removeAttachment(i)">✕</button>
+          <Transition name="attach-fade">
+            <button
+              v-if="isExpanded"
+              class="attach-btn"
+              type="button"
+              :disabled="isStreaming"
+              title="添加文件（图片 / Word / PDF / 文本）"
+              @click="triggerFileInput"
+            >
+              <WsIcon name="paperclip" size="sm" />
+            </button>
+          </Transition>
+          <div class="input-stack">
+            <div v-if="kbChips.length" class="kb-chips-area">
+              <div
+                v-for="(chip, i) in kbChips"
+                :key="i"
+                class="kb-chip"
+              >
+                <WsIcon name="file" size="xs" />
+                <span class="kb-chip-label">{{ chip.label }}</span>
+                <button class="kb-chip-remove" type="button" @click.stop="removeKbChip(i)">✕</button>
+              </div>
+            </div>
+            <div v-if="attachments.length" class="attachments-preview">
+              <div
+                v-for="(att, i) in attachments"
+                :key="i"
+                class="att-item"
+                :class="{ 'att-image': att.type === 'image', 'att-file': att.type === 'file' }"
+              >
+                <img v-if="att.type === 'image' && att.previewUrl" :src="att.previewUrl" class="att-thumb" />
+                <span v-if="att.type === 'file'" class="att-file-icon"><WsIcon name="file" size="xs" /></span>
+                <span class="att-name">{{ att.name }}</span>
+                <button class="att-remove" type="button" @click.stop="removeAttachment(i)">✕</button>
+              </div>
+            </div>
+            <textarea
+              ref="textareaRef"
+              v-model="inputText"
+              class="chat-textarea"
+              :placeholder="placeholder"
+              rows="1"
+              @focus="onFocus"
+              @blur="onBlur"
+              @keydown.enter.exact="onEnter"
+              @input="autoResize"
+              @paste="onPaste"
+            ></textarea>
           </div>
+          <input
+            ref="fileInputRef"
+            type="file"
+            class="hidden-file-input"
+            multiple
+            @change="onFileInputChange"
+          />
+          <Transition name="send-fade">
+            <button
+              v-if="isExpanded"
+              class="send-btn"
+              :class="{ 'stop-btn': isStreaming }"
+              :disabled="!isStreaming && (!inputText.trim() && !attachments.length && !kbChips.length)"
+              @click="isStreaming ? onStop() : onSend()"
+            >
+              <WsIcon v-if="isStreaming" name="square" size="sm" />
+              <WsIcon v-else name="send" size="sm" />
+            </button>
+          </Transition>
         </div>
-        <textarea
-          ref="textareaRef"
-          v-model="inputText"
-          class="chat-textarea"
-          :placeholder="placeholder"
-          rows="1"
-          @focus="onFocus"
-          @blur="onBlur"
-          @keydown.enter.exact="onEnter"
-          @input="autoResize"
-          @paste="onPaste"
-        ></textarea>
+        <ModelSwitcher :is-expanded="isExpanded" @change="onModelChange" />
       </div>
-      <input
-        ref="fileInputRef"
-        type="file"
-        class="hidden-file-input"
-        multiple
-        @change="onFileInputChange"
-      />
-      <Transition name="send-fade">
-        <button
-          v-if="isExpanded"
-          class="send-btn"
-          :disabled="(!inputText.trim() && !attachments.length) || isStreaming"
-          @click="onSend"
-        >
-          <WsIcon name="send" size="sm" />
-        </button>
-      </Transition>
-    </div>
     <Transition name="warning-fade">
       <div v-if="visionWarning" class="vision-warning">{{ visionWarning }}</div>
     </Transition>
   </div>
 </template>
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, watch } from 'vue'
 import WsIcon from '../../ui/WsIcon.vue'
-import { useSpaceStore } from '../stores/space-store'
+import { useSpaceStore, type InputInjectionChip } from '../stores/space-store'
 import { useAgent } from '../../agent/composables/useAgent'
 import { modelSupportsVision } from '../../agent/modelRegistry'
 import { useSettingsStore } from '../../stores/settingsStore'
+import ModelSwitcher from './ModelSwitcher.vue'
 
 interface FileAttachment {
   type: 'image' | 'file'
@@ -101,7 +118,7 @@ const emit = defineEmits<{
 
 const spaceStore = useSpaceStore()
 const settingsStore = useSettingsStore()
-const { isStreaming } = useAgent()
+const { isStreaming, abort } = useAgent()
 
 function currentModelId(): string {
   return settingsStore.aiProviderMode === 'cloud'
@@ -117,6 +134,14 @@ const isFocused = ref(false)
 const isDragOver = ref(false)
 const attachments = ref<FileAttachment[]>([])
 const visionWarning = ref('')
+const kbChips = ref<InputInjectionChip[]>([])
+
+function removeKbChip(index: number): void {
+  kbChips.value.splice(index, 1)
+  if (!inputText.value.trim() && !attachments.value.length && !kbChips.value.length) {
+    isExpanded.value = false
+  }
+}
 
 const placeholder = computed(() => {
   const modeHint = (() => {
@@ -142,7 +167,7 @@ function onFocus() {
 
 function onBlur() {
   isFocused.value = false
-  if (!inputText.value.trim() && !attachments.value.length) {
+  if (!inputText.value.trim() && !attachments.value.length && !kbChips.value.length) {
     isExpanded.value = false
   }
 }
@@ -382,7 +407,9 @@ function onEnter(e: KeyboardEvent) {
 
 function onSend() {
   const text = inputText.value.trim()
-  if ((!text && !attachments.value.length) || isStreaming.value) return
+  const kbPrefix = kbChips.value.map(c => c.ref).join('')
+  const fullText = kbPrefix + text
+  if ((!fullText && !attachments.value.length) || isStreaming.value) return
   const hasImages = attachments.value.some(a => a.type === 'image')
   if (hasImages && !visionSupported()) {
     showVisionWarning('当前模型不支持图片理解，请切换到支持视觉的模型')
@@ -390,10 +417,31 @@ function onSend() {
   }
   const currentAttachments = [...attachments.value]
   inputText.value = ''
+  kbChips.value = []
   attachments.value = []
   if (textareaRef.value) textareaRef.value.style.height = 'auto'
-  emit('send', text, currentAttachments)
+  emit('send', fullText, currentAttachments)
 }
+
+function onStop() {
+  abort()
+}
+
+function onModelChange(_provider: string, _modelId: string) {
+}
+
+// 监听知识墙挂载注入
+watch(() => spaceStore.inputInjection, (injection) => {
+  if (injection) {
+    kbChips.value.push(injection)
+    spaceStore.inputInjection = null
+    isExpanded.value = true
+    nextTick(() => {
+      textareaRef.value?.focus()
+      autoResize()
+    })
+  }
+})
 </script>
 
 <style scoped>
@@ -425,8 +473,8 @@ function onSend() {
 }
 
 .capsule-input.expanded {
-  width: 80%;
-  max-width: 80%;
+  width: calc(80% - 120px);
+  max-width: calc(80% - 120px);
   border-radius: 16px;
   padding: 8px 12px;
   align-items: flex-end;
@@ -443,6 +491,14 @@ function onSend() {
   box-shadow: 0 0 0 2px var(--color-primary);
 }
 
+.input-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+
 .input-stack {
   flex: 1;
   display: flex;
@@ -455,6 +511,57 @@ function onSend() {
   flex-wrap: wrap;
   gap: 6px;
   padding: 4px 0 6px;
+}
+
+.kb-chips-area {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 0 2px;
+}
+
+.kb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 8px;
+  background: var(--color-primary-muted, rgba(59, 130, 246, 0.1));
+  border: 1px solid var(--color-primary, rgba(59, 130, 246, 0.3));
+  border-radius: 10px;
+  font-size: var(--font-size-xs);
+  color: var(--color-primary);
+  max-width: 180px;
+  line-height: 1.4;
+}
+
+.kb-chip-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.kb-chip-remove {
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  flex-shrink: 0;
+  padding: 0;
+  opacity: 0.6;
+}
+
+.kb-chip-remove:hover {
+  opacity: 1;
+  background: var(--color-primary, rgba(59, 130, 246, 0.15));
 }
 
 .att-item {
@@ -585,7 +692,7 @@ function onSend() {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.15s;
+  transition: background 0.15s, opacity 0.15s;
   margin-left: 8px;
 }
 
@@ -596,6 +703,16 @@ function onSend() {
 
 .send-btn:not(:disabled):hover {
   opacity: 0.85;
+}
+
+.send-btn.stop-btn {
+  background: var(--color-danger, #e74c3c);
+  animation: stop-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes stop-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
 }
 
 .send-fade-enter-active,

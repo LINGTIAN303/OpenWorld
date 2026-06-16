@@ -18,6 +18,11 @@ class RelationSchemaRegistry {
   unregister(type: string): void {
     this.schemas.delete(type)
   }
+
+  /** 清空所有已注册的 schema（项目切换时使用） */
+  clear(): void {
+    this.schemas.clear()
+  }
 }
 
 export const relationSchemaRegistry = new RelationSchemaRegistry()

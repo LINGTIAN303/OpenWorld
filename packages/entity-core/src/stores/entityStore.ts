@@ -4,6 +4,9 @@ import { storage } from '../core/StorageBackend'
 import { useUndoRedo, isUndoing } from '../composables/useUndoRedo'
 import { entitySchemaRegistry } from '../core/EntitySchema'
 import { getValidationApi, getEventBus } from '../core/serviceProvider'
+import { useRelationStore } from './relationStore'
+import { useDirtyTracker } from '../composables/useDirtyTracker'
+import { useTrashStore } from './trashStore'
 import type { Entity } from '../types/entity'
 
 export const useEntityStore = defineStore('entity', () => {
@@ -11,6 +14,7 @@ export const useEntityStore = defineStore('entity', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
   const { record } = useUndoRedo()
+  const { markEntityDirty, markEntityClean, clearAllDirty } = useDirtyTracker()
 
   function clearError() { error.value = null }
   function setError(msg: string) { error.value = msg; console.error('[EntityStore]', msg) }
@@ -47,6 +51,7 @@ export const useEntityStore = defineStore('entity', () => {
     try {
       entities.value = sanitize(await storage.getAllEntities())
       refreshAllTypeCounts()
+      clearAllDirty()
     } catch (e: any) {
       setError(e?.message ?? '加载实体失败')
     } finally {
@@ -72,7 +77,7 @@ export const useEntityStore = defineStore('entity', () => {
 
   async function add(entity: Entity, source: 'user' | 'agent' | 'import' = 'user'): Promise<string> {
     clearError()
-    const clean = JSON.parse(JSON.stringify(entity))
+    const clean = structuredClone(entity)
     clean.createdAt = new Date().toISOString()
     clean.updatedAt = clean.createdAt
 
@@ -108,7 +113,7 @@ export const useEntityStore = defineStore('entity', () => {
 
   async function update(id: string, changes: Partial<Entity>, source: 'user' | 'agent' | 'import' = 'user') {
     clearError()
-    const clean = JSON.parse(JSON.stringify(changes))
+    const clean = structuredClone(changes)
     clean.updatedAt = new Date().toISOString()
 
     const old = entities.value.find(e => e.id === id)
@@ -122,12 +127,18 @@ export const useEntityStore = defineStore('entity', () => {
       record('entity', 'update', id, before, changes, old.name)
     }
 
-    await storage.updateEntity(id, clean)
+    // 先更新内存状态（同步，确保 UI 立即响应）
     const idx = entities.value.findIndex((e) => e.id === id)
     if (idx !== -1) {
       entities.value[idx] = { ...entities.value[idx], ...changes }
     }
 
+    // 异步持久化 + 事件发射（不阻塞 UI 更新）
+    storage.updateEntity(id, clean).then(() => {
+      markEntityDirty(id)
+    }).catch(e => setError(e?.message ?? '更新实体失败'))
+
+    // 事件发射（EventBus.emit 已改为非阻塞）
     const newProps = entities.value[idx]?.properties ?? {}
     const changedFields = Object.keys(clean).filter(k => k !== 'updatedAt')
     getEventBus().emit('entity:update', {
@@ -153,7 +164,13 @@ export const useEntityStore = defineStore('entity', () => {
   async function remove(id: string, source: 'user' | 'agent' | 'import' = 'user') {
     clearError()
     const old = entities.value.find(e => e.id === id)
+    if (!old) return
 
+    // 收集关联关系信息（用于回收站和undo）
+    const rs = useRelationStore()
+    const connectedRels = rs.relations.filter(r => r.sourceId === id || r.targetId === id)
+
+    // 从存储中删除实体和关联关系（deleteEntityAtomic 内置级联清理）
     try {
       const result = await storage.deleteEntityAtomic(id)
       if (!result.success) {
@@ -165,11 +182,52 @@ export const useEntityStore = defineStore('entity', () => {
       return
     }
 
-    if (!isUndoing && old) record('entity', 'delete', id, { ...old }, null)
+    // 更新内存状态
     entities.value = entities.value.filter((e) => e.id !== id)
-    if (old) {
-      getEventBus().emit('entity:delete', { entityId: id, entityType: old.type, properties: old.properties || {}, source })
+    if (connectedRels.length > 0) {
+      const connectedIds = new Set(connectedRels.map(r => r.id))
+      rs.relations = rs.relations.filter(r => !connectedIds.has(r.id))
     }
+
+    // 清理脏标记
+    markEntityClean(id)
+    for (const rel of connectedRels) {
+      const { markRelationClean } = useDirtyTracker()
+      markRelationClean(rel.id)
+    }
+
+    // 记录到 undo 栈
+    if (!isUndoing) {
+      for (const rel of connectedRels) {
+        record('relation', 'delete', rel.id, { ...rel }, null)
+      }
+      record('entity', 'delete', id, { ...old }, null)
+    }
+
+    // 放入回收站（Undo 操作跳过，避免重复入站）
+    if (!isUndoing) {
+      const trashStore = useTrashStore()
+      const cascadedRelationIds = connectedRels.map(r => r.id)
+      trashStore.add({
+        id: `trash_entity_${id}_${Date.now()}`,
+        entityType: 'entity',
+        data: { ...old },
+        deletedAt: new Date().toISOString(),
+        deletedBy: source,
+        cascadedRelationIds,
+      })
+      for (const rel of connectedRels) {
+        trashStore.add({
+          id: `trash_rel_${rel.id}_${Date.now()}`,
+          entityType: 'relation',
+          data: { ...rel },
+          deletedAt: new Date().toISOString(),
+          deletedBy: source,
+        })
+      }
+    }
+
+    getEventBus().emit('entity:delete', { entityId: id, entityType: old.type, properties: old.properties || {}, source })
     refreshAllTypeCounts()
   }
 
@@ -184,8 +242,44 @@ export const useEntityStore = defineStore('entity', () => {
     )
   }
 
+  /** @deprecated 使用 loadByPage 代替；图谱等需全量数据的场景仍可使用 */
   async function getAllEntities(): Promise<Entity[]> {
     return storage.getAllEntities()
+  }
+
+  /**
+   * 分页加载实体，支持排序和类型筛选。
+   * 对大列表场景提供 O(N log N) 排序 + O(1) 切片，替代全量加载。
+   */
+  async function loadByPage(opts: {
+    type?: string
+    offset: number
+    limit: number
+    sortBy?: 'updatedAt' | 'createdAt' | 'name'
+    sortDir?: 'asc' | 'desc'
+  }): Promise<{ items: Entity[]; total: number }> {
+    clearError()
+    loading.value = true
+    try {
+      const t = opts.type
+      const raw = t ? await storage.getEntitiesByType(t) : await storage.getAllEntities()
+      const all = sanitize(raw)
+      const sortKey = opts.sortBy ?? 'updatedAt'
+      const sorted = [...all].sort((a, b) => {
+        const av = String((a as any)[sortKey] ?? '')
+        const bv = String((b as any)[sortKey] ?? '')
+        return opts.sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+      })
+      return {
+        items: sorted.slice(opts.offset, opts.offset + opts.limit),
+        total: sorted.length,
+      }
+    } catch (e: any) {
+      setError(e?.message ?? '分页加载失败')
+      return { items: [], total: 0 }
+    } finally {
+      loading.value = false
+    }
   }
 
   return {
@@ -200,6 +294,7 @@ export const useEntityStore = defineStore('entity', () => {
     types,
     loadAll,
     loadByType,
+    loadByPage,
     getById,
     getAllEntities,
     add,

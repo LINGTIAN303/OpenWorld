@@ -80,6 +80,86 @@ function rollbackTransaction() {
   }
 }
 
+/**
+ * 逆操作：给定一个 entry，生成其反向操作。
+ * 用于两阶段撤销中预计算所有逆操作。
+ */
+function invertEntry(entry: UndoEntry): {
+  execute: (entityStore: any, relationStore: any) => Promise<unknown>
+  rollback: (entityStore: any, relationStore: any) => Promise<unknown>
+} {
+  const store = (type: StoreType, es: any, rs: any) => type === 'entity' ? es : rs
+
+  if (entry.action === 'add') {
+    // 逆操作：删除 → 回滚：重新添加
+    return {
+      execute: async (es, rs) => store(entry.type, es, rs).remove(entry.id),
+      rollback: async (es, rs) => {
+        if (entry.after) {
+          const data = { ...entry.after, id: entry.id }
+          await store(entry.type, es, rs).add(data)
+        }
+      },
+    }
+  } else if (entry.action === 'delete' && entry.before) {
+    // 逆操作：恢复 → 回滚：重新删除
+    const data = { ...entry.before, id: entry.id }
+    return {
+      execute: async (es, rs) => {
+        await store(entry.type, es, rs).add(data)
+        // Undo 恢复删除时，从回收站移除对应条目
+        if (entry.type === 'entity') {
+          try {
+            const { useTrashStore } = await import('../stores/trashStore')
+            const trashStore = useTrashStore()
+            const trashItem = trashStore.items.find(
+              i => i.entityType === 'entity' && (i.data as any).id === entry.id,
+            )
+            if (trashItem) {
+              // 同时移除关联的关系回收站条目
+              if (trashItem.cascadedRelationIds) {
+                for (const relId of trashItem.cascadedRelationIds) {
+                  const relTrash = trashStore.items.find(
+                    ri => ri.entityType === 'relation' && (ri.data as any).id === relId,
+                  )
+                  if (relTrash) trashStore.permanentDelete(relTrash.id)
+                }
+              }
+              trashStore.permanentDelete(trashItem.id)
+            }
+          } catch { /* 回收站清理失败不影响主流程 */ }
+        } else if (entry.type === 'relation') {
+          try {
+            const { useTrashStore } = await import('../stores/trashStore')
+            const trashStore = useTrashStore()
+            const trashItem = trashStore.items.find(
+              i => i.entityType === 'relation' && (i.data as any).id === entry.id,
+            )
+            if (trashItem) trashStore.permanentDelete(trashItem.id)
+          } catch { /* 回收站清理失败不影响主流程 */ }
+        }
+      },
+      rollback: async (es, rs) => store(entry.type, es, rs).remove(entry.id),
+    }
+  } else if (entry.action === 'update' && entry.before) {
+    // 逆操作：恢复旧值 → 回滚：重新应用新值
+    return {
+      execute: async (es, rs) => store(entry.type, es, rs).update(entry.id, entry.before),
+      rollback: async (es, rs) => {
+        if (entry.after) {
+          await store(entry.type, es, rs).update(entry.id, entry.after)
+        }
+      },
+    }
+  }
+
+  // 空操作（不应到达）
+  return {
+    execute: async () => {},
+    rollback: async () => {},
+  }
+}
+
 async function undo(
   entityStore: { add: (e: Entity) => Promise<unknown>; update: (id: string, data: Partial<Entity>) => Promise<unknown>; remove: (id: string) => Promise<unknown> },
   relationStore: { add: (r: Relation) => Promise<unknown>; update: (id: string, data: Partial<Relation>) => Promise<unknown>; remove: (id: string) => Promise<unknown> }
@@ -87,20 +167,35 @@ async function undo(
   const group = undoStack.value.pop()
   if (!group) return false
 
+  // 先将 group 放入 redoStack（两阶段完成后才是最终状态）
   redoStack.value.push(group)
   isUndoing = true
 
-  for (let i = group.entries.length - 1; i >= 0; i--) {
-    const entry = group.entries[i]
-    if (entry.action === 'add') {
-      await (entry.type === 'entity' ? entityStore.remove(entry.id) : relationStore.remove(entry.id))
-    } else if (entry.action === 'delete' && entry.before) {
-      const data = entry.before as any
-      data.id = entry.id
-      await (entry.type === 'entity' ? entityStore.add(data) : relationStore.add(data))
-    } else if (entry.action === 'update' && entry.before) {
-      await (entry.type === 'entity' ? entityStore.update(entry.id, entry.before) : relationStore.update(entry.id, entry.before))
+  // 预计算所有逆操作（逆序）
+  const ops = group.entries.slice().reverse().map(e => invertEntry(e))
+
+  // 两阶段执行：阶段1 — 执行所有逆操作，记录已成功的
+  const executed: typeof ops = []
+  try {
+    for (const op of ops) {
+      await op.execute(entityStore, relationStore)
+      executed.push(op)
     }
+  } catch (e) {
+    // 阶段2 — 执行失败的回滚：逆序回滚已成功的操作
+    console.error('[UndoRedo] 撤销操作失败，正在回滚:', e)
+    for (let i = executed.length - 1; i >= 0; i--) {
+      try {
+        await executed[i].rollback(entityStore, relationStore)
+      } catch (rollbackErr) {
+        console.error('[UndoRedo] 回滚操作也失败，数据可能不一致:', rollbackErr)
+      }
+    }
+    // 回滚栈状态：将 group 从 redoStack 移回 undoStack
+    redoStack.value.pop()
+    undoStack.value.push(group)
+    isUndoing = false
+    throw new Error(`撤销操作失败，已回滚所有变更: ${e instanceof Error ? e.message : String(e)}`)
   }
 
   isUndoing = false
@@ -117,14 +212,56 @@ async function redo(
   undoStack.value.push(group)
   isUndoing = true
 
-  for (const entry of group.entries) {
-    if (entry.action === 'add' && entry.after) {
-      await (entry.type === 'entity' ? entityStore.add(entry.after as Entity) : relationStore.add(entry.after as Relation))
-    } else if (entry.action === 'delete') {
-      await (entry.type === 'entity' ? entityStore.remove(entry.id) : relationStore.remove(entry.id))
-    } else if (entry.action === 'update' && entry.after) {
-      await (entry.type === 'entity' ? entityStore.update(entry.id, entry.after) : relationStore.update(entry.id, entry.after))
+  // 预计算所有重做操作
+  const ops = group.entries.map(e => {
+    const store = (type: StoreType, es: any, rs: any) => type === 'entity' ? es : rs
+    if (e.action === 'add' && e.after) {
+      return {
+        execute: async (es: any, rs: any) => store(e.type, es, rs).add({ ...e.after, id: e.id }),
+        rollback: async (es: any, rs: any) => store(e.type, es, rs).remove(e.id),
+      }
+    } else if (e.action === 'delete') {
+      return {
+        execute: async (es: any, rs: any) => store(e.type, es, rs).remove(e.id),
+        rollback: async (es: any, rs: any) => {
+          if (e.before) await store(e.type, es, rs).add({ ...e.before, id: e.id })
+        },
+      }
+    } else if (e.action === 'update' && e.after) {
+      return {
+        execute: async (es: any, rs: any) => store(e.type, es, rs).update(e.id, e.after),
+        rollback: async (es: any, rs: any) => {
+          if (e.before) await store(e.type, es, rs).update(e.id, e.before)
+        },
+      }
     }
+    return {
+      execute: async () => {},
+      rollback: async () => {},
+    }
+  })
+
+  // 两阶段执行
+  const executed: typeof ops = []
+  try {
+    for (const op of ops) {
+      await op.execute(entityStore, relationStore)
+      executed.push(op)
+    }
+  } catch (e) {
+    console.error('[UndoRedo] 重做操作失败，正在回滚:', e)
+    for (let i = executed.length - 1; i >= 0; i--) {
+      try {
+        await executed[i].rollback(entityStore, relationStore)
+      } catch (rollbackErr) {
+        console.error('[UndoRedo] 回滚操作也失败，数据可能不一致:', rollbackErr)
+      }
+    }
+    // 回滚栈状态
+    undoStack.value.pop()
+    redoStack.value.push(group)
+    isUndoing = false
+    throw new Error(`重做操作失败，已回滚所有变更: ${e instanceof Error ? e.message : String(e)}`)
   }
 
   isUndoing = false

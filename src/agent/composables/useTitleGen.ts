@@ -1,4 +1,5 @@
-import type { ProviderConfig } from '@agent/index'
+﻿import type { ProviderConfig } from '@agent/index'
+import { buildDirectEndpoint, getProviderManifest } from '@agent/providers/provider-registry'
 
 const TITLE_PROMPT = `根据以下对话内容，生成一个简短的会话标题（不超过20个字，不要加引号，不要加句号，只输出标题本身）：
 
@@ -7,51 +8,8 @@ const TITLE_PROMPT = `根据以下对话内容，生成一个简短的会话标�
 
 export function resolveEndpoint(cfg: ProviderConfig): { url: string; headers: Record<string, string>; model: string } {
   if (cfg.mode === 'cloud') {
-    const p = cfg.provider
-    if (p === 'anthropic') {
-      return {
-        url: 'https://api.anthropic.com/v1/messages',
-        headers: {
-          'x-api-key': cfg.apiKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-        },
-        model: cfg.modelId,
-      }
-    }
-    if (p === 'google') {
-      return {
-        url: `https://generativelanguage.googleapis.com/v1beta/models/${cfg.modelId}:generateContent?key=${cfg.apiKey}`,
-        headers: { 'content-type': 'application/json' },
-        model: cfg.modelId,
-      }
-    }
-    if (p === 'deepseek') {
-      return {
-        url: 'https://api.deepseek.com/v1/chat/completions',
-        headers: { 'Authorization': `Bearer ${cfg.apiKey}`, 'content-type': 'application/json' },
-        model: cfg.modelId,
-      }
-    }
-    if (p === 'groq') {
-      return {
-        url: 'https://api.groq.com/openai/v1/chat/completions',
-        headers: { 'Authorization': `Bearer ${cfg.apiKey}`, 'content-type': 'application/json' },
-        model: cfg.modelId,
-      }
-    }
-    if (p === 'openrouter') {
-      return {
-        url: 'https://openrouter.ai/api/v1/chat/completions',
-        headers: { 'Authorization': `Bearer ${cfg.apiKey}`, 'content-type': 'application/json' },
-        model: cfg.modelId,
-      }
-    }
-    return {
-      url: 'https://api.openai.com/v1/chat/completions',
-      headers: { 'Authorization': `Bearer ${cfg.apiKey}`, 'content-type': 'application/json' },
-      model: cfg.modelId,
-    }
+    const endpoint = buildDirectEndpoint(cfg.provider, cfg.apiKey, cfg.modelId)
+    return { url: endpoint.url, headers: endpoint.headers, model: cfg.modelId }
   }
 
   if (cfg.mode === 'local') {
@@ -73,31 +31,6 @@ export function resolveEndpoint(cfg: ProviderConfig): { url: string; headers: Re
   }
 }
 
-function buildOpenAIBody(model: string, prompt: string) {
-  return {
-    model,
-    messages: [{ role: 'user', content: prompt }],
-    max_tokens: 60,
-    temperature: 0.3,
-  }
-}
-
-function buildAnthropicBody(model: string, prompt: string) {
-  return {
-    model,
-    messages: [{ role: 'user', content: prompt }],
-    max_tokens: 60,
-    temperature: 0.3,
-  }
-}
-
-function buildGoogleBody(model: string, prompt: string) {
-  return {
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    generationConfig: { maxOutputTokens: 60, temperature: 0.3 },
-  }
-}
-
 export function buildLLMBody(
   cfg: ProviderConfig,
   model: string,
@@ -105,24 +38,25 @@ export function buildLLMBody(
   maxTokens: number,
   temperature: number,
 ): any {
-  const isAnthropic = cfg.mode === 'cloud' && cfg.provider === 'anthropic'
-  const isGoogle = cfg.mode === 'cloud' && cfg.provider === 'google'
+  const manifest = cfg.mode === 'cloud' ? getProviderManifest(cfg.provider) : undefined
+  const bodyType = manifest?.bodyBuilderType || 'openai'
 
-  if (isAnthropic) {
-    return { model, messages: [{ role: 'user', content: prompt }], max_tokens: maxTokens, temperature }
-  }
-  if (isGoogle) {
+  if (bodyType === 'google') {
     return { contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: maxTokens, temperature } }
   }
+  // anthropic 和 openai 共用相同结构
   return { model, messages: [{ role: 'user', content: prompt }], max_tokens: maxTokens, temperature }
 }
 
 export function extractTitle(cfg: ProviderConfig, json: any): string | null {
   try {
-    if (cfg.mode === 'cloud' && cfg.provider === 'google') {
+    const manifest = cfg.mode === 'cloud' ? getProviderManifest(cfg.provider) : undefined
+    const parserType = manifest?.responseParserType || 'openai'
+
+    if (parserType === 'google') {
       return json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null
     }
-    if (cfg.mode === 'cloud' && cfg.provider === 'anthropic') {
+    if (parserType === 'anthropic') {
       return json?.content?.[0]?.text?.trim() || json?.content?.[0]?.input?.trim() || null
     }
     return json?.choices?.[0]?.message?.content?.trim() || null

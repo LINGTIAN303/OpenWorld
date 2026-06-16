@@ -41,6 +41,13 @@ export interface WasmBattleUnit {
   acted: boolean
 }
 
+export interface GameEvent {
+  kind: string
+  unit_id?: string
+  target_id?: string
+  data?: Record<string, any>
+}
+
 export interface TacticalEngineAPI {
   place_unit(
     id: string, name: string, team: string,
@@ -65,6 +72,7 @@ export interface TacticalEngineAPI {
   check_victory(): string
   ai_decide(team: string): WasmAiAction
   calculate_awareness(): { cells: any[] }
+  drain_events(): GameEvent[]
 }
 
 let wasmModule: typeof import('@worldsmith/tactical-engine') | null = null

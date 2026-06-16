@@ -1,7 +1,7 @@
-import type { ExecutionAdapter, ExecOptions, ExecResult, PtyOptions } from './adapter'
+import type { ExecutionAdapter, ExecOptions, ExecResult, PtyOptions, ShellInfo, ShellSessionInfo, ShellExecResult } from './adapter'
 
 function isTauri(): boolean {
-  return typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
+  return typeof window !== 'undefined' && (!!(window as any).__TAURI_INTERNALS__ || !!(window as any).__TAURI__)
 }
 
 export class TauriExecutionAdapter implements ExecutionAdapter {
@@ -78,6 +78,9 @@ export class TauriExecutionAdapter implements ExecutionAdapter {
       if (unlistenExitFn && typeof unlistenExitFn === 'function') (unlistenExitFn as () => void)()
 
       const stdout = chunks.join('')
+        .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+        .replace(/\x1b\].*?\x07/g, '')
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
       const timedOut = !exitResolved && (Date.now() - startTime >= timeout - 100)
       return { stdout, stderr: '', exitCode: exitResolved ? exitCode : (timedOut ? null : 0), timedOut }
     } catch (err) {
@@ -120,5 +123,54 @@ export class TauriExecutionAdapter implements ExecutionAdapter {
     const { listen } = await import('@tauri-apps/api/event')
     const unlisten = await listen<string>(`pty-output-${id}`, (e) => callback(e.payload))
     return unlisten
+  }
+
+  // ─── Shell 检测与会话管理 ────────────────────────────────────
+
+  async detectShells(): Promise<ShellInfo[]> {
+    if (!isTauri()) return []
+    const { invoke } = await import('@tauri-apps/api/core')
+    return invoke<ShellInfo[]>('cmd_detect_shells')
+  }
+
+  async createSession(id: string, opts?: PtyOptions): Promise<ShellSessionInfo> {
+    if (!isTauri()) throw new Error('Shell 会话仅在 Tauri 桌面环境中可用')
+    const { invoke } = await import('@tauri-apps/api/core')
+    return invoke<ShellSessionInfo>('cmd_shell_session_create', {
+      id,
+      shell: opts?.shell || null,
+      cwd: opts?.cwd || null,
+      env: opts?.env || null,
+      cols: opts?.cols || 200,
+      rows: opts?.rows || 50,
+    })
+  }
+
+  async execInSession(id: string, command: string, timeoutMs?: number): Promise<ShellExecResult> {
+    if (!isTauri()) throw new Error('Shell 会话仅在 Tauri 桌面环境中可用')
+    const { invoke } = await import('@tauri-apps/api/core')
+    return invoke<ShellExecResult>('cmd_shell_session_exec', {
+      id,
+      command,
+      timeout_ms: timeoutMs || null,
+    })
+  }
+
+  async destroySession(id: string): Promise<void> {
+    if (!isTauri()) return
+    const { invoke } = await import('@tauri-apps/api/core')
+    await invoke('cmd_shell_session_destroy', { id })
+  }
+
+  async listSessions(): Promise<string[]> {
+    if (!isTauri()) return []
+    const { invoke } = await import('@tauri-apps/api/core')
+    return invoke<string[]>('cmd_shell_session_list')
+  }
+
+  async sendInput(id: string, data: string): Promise<void> {
+    if (!isTauri()) throw new Error('Shell 会话仅在 Tauri 桌面环境中可用')
+    const { invoke } = await import('@tauri-apps/api/core')
+    await invoke('cmd_shell_session_input', { id, data })
   }
 }

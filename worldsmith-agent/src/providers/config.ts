@@ -7,11 +7,13 @@
  * - custom: 自定义 API 端点（兼容 OpenAI/Anthropic 格式的第三方服务）
  */
 
+import { getAllProviderManifests, getDefaultModelMap } from './provider-registry'
+
 /** 部署模式 */
 export type ProviderMode = 'cloud' | 'local' | 'custom'
 
-/** 内置云端供应商 */
-export type CloudProvider = 'anthropic' | 'openai' | 'google' | 'deepseek' | 'groq' | 'openrouter' | 'zhipu' | 'qwen' | 'minimax' | 'kimi'
+/** 内置云端供应商（从 provider-registry 自动生成） */
+export type CloudProvider = ReturnType<typeof getAllProviderManifests>[number]['id']
 
 /** 本地模型 API 类型 */
 export type LocalApiType = 'ollama' | 'lm-studio' | 'vllm' | 'llama-cpp'
@@ -51,19 +53,15 @@ export type ProviderConfig =
   | ({ mode: 'local' } & LocalProviderConfig)
   | ({ mode: 'custom' } & CustomProviderConfig)
 
-/** 各云端供应商的默认模型 */
-export const DEFAULT_CLOUD_CONFIGS: Record<CloudProvider, { provider: CloudProvider; modelId: string }> = {
-  anthropic: { provider: 'anthropic', modelId: 'claude-sonnet-4-6' },
-  openai: { provider: 'openai', modelId: 'gpt-5.4' },
-  google: { provider: 'google', modelId: 'gemini-2.5-flash' },
-  deepseek: { provider: 'deepseek', modelId: 'deepseek-v4-flash' },
-  groq: { provider: 'groq', modelId: 'openai/gpt-oss-120b' },
-  openrouter: { provider: 'openrouter', modelId: 'openai/gpt-4o' },
-  zhipu: { provider: 'zhipu', modelId: 'glm-5.1' },
-  qwen: { provider: 'qwen', modelId: 'qwen3.6-plus' },
-  minimax: { provider: 'minimax', modelId: 'MiniMax-M3' },
-  kimi: { provider: 'kimi', modelId: 'kimi-k2.6' },
-}
+/** 各云端供应商的默认模型（从 provider-registry 自动生成） */
+export const DEFAULT_CLOUD_CONFIGS: Record<CloudProvider, { provider: CloudProvider; modelId: string }> = (() => {
+  const defaultModels = getDefaultModelMap()
+  const configs: Record<string, { provider: string; modelId: string }> = {}
+  for (const m of getAllProviderManifests()) {
+    configs[m.id] = { provider: m.id, modelId: defaultModels[m.id] || m.defaultModelId }
+  }
+  return configs as Record<CloudProvider, { provider: CloudProvider; modelId: string }>
+})()
 
 /** 本地模式的默认配置（Ollama 默认地址） */
 export const DEFAULT_LOCAL_CONFIG: Omit<LocalProviderConfig, 'modelId'> = {

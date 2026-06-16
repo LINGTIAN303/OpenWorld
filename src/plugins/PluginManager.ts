@@ -1,6 +1,7 @@
 import type { PluginInstance, PluginManifest } from '@worldsmith/entity-core/types'
-import { pluginAPI, usePluginStore, entitySchemaRegistry, relationSchemaRegistry } from '@worldsmith/entity-core'
+import { pluginAPI, usePluginStore, entitySchemaRegistry, relationSchemaRegistry, entitySchemaRegistryV2 } from '@worldsmith/entity-core'
 import { PluginSandbox } from './PluginSandbox'
+import { OFFICIAL_PLUGINS } from './plugin-manifest'
 
 interface PluginRegistration {
   entityTypes: string[]
@@ -15,6 +16,51 @@ export class PluginManager {
   private loaded = new Map<string, PluginInstance>()
   private registrations = new Map<string, PluginRegistration>()
   private viewHook?: (viewId: string) => void
+  /** 全局预注册的实体类型——即使插件未激活，元数据也可查询 */
+  private preRegisteredTypes = new Map<string, { type: string; label: string; pluginId: string; active: boolean }>()
+
+  /**
+   * 全局预注册所有27个插件的实体类型元数据。
+   * 确保即使插件未激活，关系查询和类型引用也不会断裂。
+   * 应在应用启动时调用一次。
+   */
+  preRegisterAllEntityTypes(): void {
+    const knownTypes: Array<{ type: string; label: string; pluginId: string }> = [
+      { type: 'character', label: '角色', pluginId: 'official.characters' },
+      { type: 'region', label: '区域', pluginId: 'official.regions' },
+      { type: 'event', label: '事件', pluginId: 'official.timeline' },
+      { type: 'organization', label: '组织', pluginId: 'official.organizations' },
+      { type: 'concept', label: '概念', pluginId: 'official.concepts' },
+      { type: 'item', label: '道具', pluginId: 'official.items' },
+      { type: 'building', label: '建筑', pluginId: 'official.buildings' },
+      { type: 'species', label: '物种', pluginId: 'official.species' },
+      { type: 'magic', label: '技能', pluginId: 'official.magic' },
+      { type: 'language', label: '语言', pluginId: 'official.languages' },
+      { type: 'culture', label: '文化', pluginId: 'official.culture' },
+      { type: 'conflict', label: '冲突', pluginId: 'official.conflict' },
+      { type: 'inspiration', label: '素材', pluginId: 'official.inspiration' },
+      { type: 'plant', label: '植物', pluginId: 'official.plants' },
+      { type: 'combat_stat', label: '战力', pluginId: 'official.combat_stats' },
+      { type: 'manuscript', label: '正文', pluginId: 'official.manuscript' },
+      { type: 'outline_node', label: '大纲节点', pluginId: 'official.outline' },
+      { type: 'notebook', label: '笔记', pluginId: 'official.notebook' },
+      { type: 'tactical_board', label: '战术板', pluginId: 'official.tactical-board' },
+      { type: 'pipeline', label: '编排', pluginId: 'official.workflow' },
+    ]
+    for (const entry of knownTypes) {
+      this.preRegisteredTypes.set(entry.type, { ...entry, active: false })
+    }
+  }
+
+  /** 查询实体类型是否已预注册（无论插件是否激活） */
+  isTypePreRegistered(type: string): boolean {
+    return this.preRegisteredTypes.has(type)
+  }
+
+  /** 查询实体类型对应的插件是否已激活 */
+  isTypeActive(type: string): boolean {
+    return this.preRegisteredTypes.get(type)?.active ?? false
+  }
 
   setViewHook(hook: (viewId: string) => void) {
     this.viewHook = hook
@@ -64,6 +110,12 @@ export class PluginManager {
 
     this.loaded.set(plugin.manifest.id, plugin)
 
+    // 更新预注册类型的激活状态
+    for (const type of registeredEntityTypes) {
+      const entry = this.preRegisteredTypes.get(type)
+      if (entry) entry.active = true
+    }
+
     const store = usePluginStore()
     store.registerPlugin(plugin.manifest)
 
@@ -84,9 +136,13 @@ export class PluginManager {
 
     const reg = this.registrations.get(pluginId)
     if (reg) {
+      // 实体类型不再注销——全局预注册保证关系查询不断裂
+      // 仅标记为未激活
       for (const type of reg.entityTypes) {
-        entitySchemaRegistry.unregister(type)
+        const entry = this.preRegisteredTypes.get(type)
+        if (entry) entry.active = false
       }
+      // 关系类型仍可注销（关系注册中心Phase 3重构时改为全局保留）
       for (const type of reg.relationTypes) {
         relationSchemaRegistry.unregister(type)
       }

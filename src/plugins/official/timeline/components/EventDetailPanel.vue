@@ -73,25 +73,25 @@ import WsIcon from '../../../../ui/WsIcon.vue'
 import type { Entity, Relation } from '@worldsmith/entity-core'
 import { DetailField, DynamicFieldsAdder, UniversalRelationPanel, EntityRelationSelector, useEntityEdit, useResizable } from '@worldsmith/ui-kit'
 import CausalGraph from './CausalGraph.vue'
-
 import { entitySchemaRegistry } from '@worldsmith/entity-core'
-
+import { useSettingsStore } from '../../../../stores/settingsStore'
 
 const props = defineProps<{
-  event: Entity | null
+  event: Entity
+  involvedEntities: Entity[]
   allEvents: Entity[]
   allRelations: Relation[]
-  involvedEntities: Entity[]
 }>()
 
 const emit = defineEmits<{
   close: []
-  deleteEvent: [id: string]
   navigateToEvent: [id: string]
-  saveEdit: []
+  deleteEvent: [id: string]
 }>()
 
-const detailResizable = useResizable({ panelId: 'detail-event', defaultWidth: 380, minWidth: 240, side: 'left' })
+const settingsStore = useSettingsStore()
+const detailSide = computed(() => settingsStore.detailPanelPosition === 'left' ? 'right' : 'left')
+const detailResizable = useResizable({ panelId: 'detail-event', defaultWidth: 380, minWidth: 240, sideRef: detailSide })
 
 const eventSchema = computed(() => entitySchemaRegistry.get('event'))
 const activeTab = ref('info')

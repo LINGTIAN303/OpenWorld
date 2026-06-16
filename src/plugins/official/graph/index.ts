@@ -15,6 +15,10 @@ export const manifest = {
     { action: 'cluster_analysis', description: '聚类分析', params: ['method'] },
     { action: 'highlight_nodes', description: '高亮指定节点', params: ['nodeIds'] },
   ],
+  permissions: [
+    { name: 'schema:register', description: '注册实体类型和关系类型' },
+    { name: 'views:register', description: '注册视图' },
+  ],
 }
 
 export function activate(api: PluginAPIType) {

@@ -2,13 +2,13 @@
   <div class="group-info-panel">
     <div class="panel-header">
       <span class="panel-title">群信息</span>
-      <button class="close-btn" @click="$emit('close')">✕</button>
+      <button class="close-btn" @click="$emit('close')"><WsIcon name="x" size="xs" /></button>
     </div>
 
     <div class="panel-body">
       <div class="info-section">
         <div class="avatar-edit">
-          <div class="group-avatar">{{ store.groupInfo?.avatar || '👥' }}</div>
+          <div class="group-avatar"><WsIcon name="users" size="sm" /></div>
           <input class="group-name-input" v-model="groupName" @blur="onNameChange" placeholder="群名" />
         </div>
       </div>
@@ -18,15 +18,21 @@
         <textarea class="announcement-input" v-model="announcement" @blur="onAnnouncementChange" placeholder="暂无公告" rows="3"></textarea>
       </div>
 
-      <div class="info-section">
-        <div class="section-label">模式</div>
-        <div class="mode-switch">
-          <button class="mode-btn" :class="{ active: store.groupMode === 'meeting' }" @click="onModeSwitch('meeting')">会议</button>
-          <button class="mode-btn" :class="{ active: store.groupMode === 'casual' }" @click="onModeSwitch('casual')">闲聊</button>
-        </div>
-      </div>
+      <MemberList @invite="showInviteDialog = true" @private-chat="(id) => $emit('privateChat', id)" @mute-action="(id, muted, duration) => $emit('muteAction', id, muted, duration)" />
 
-      <MemberList @invite="showInviteDialog = true" />
+      <RequestMonitorPanel
+        :get-snapshot="() => store.requestSnapshot || { records: [], perAgent: {} }"
+        :get-agent-name="(id: string) => store.groupMembers.find(m => m.id === id)?.name || id"
+        :on-clear-records="() => store.clearRequestSnapshot()"
+      />
+
+      <div class="sync-mode-section">
+        <label class="toggle-label">
+          <input type="checkbox" :checked="store.syncMode" @change="store.setSyncMode(!store.syncMode)" />
+          <span>同步请求模式</span>
+        </label>
+        <div class="sync-mode-desc">开启后等待完整响应再显示，关闭则实时流式输出</div>
+      </div>
 
       <div class="danger-zone">
         <button class="danger-btn" @click="$emit('dissolve')">解散群聊</button>
@@ -66,23 +72,28 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useGroupChatStore } from '../GroupChatStore'
-import { useSpaceStore } from '../../stores/space-store'
 import { saveCasualGroupSession } from '../GroupSessionManager'
 import { useAgentRegistryStore } from '../management/AgentRegistryStore'
 import type { GroupMember } from '../types'
 import { assignAgentColor } from '../types'
 import MemberList from './MemberList.vue'
+import RequestMonitorPanel from './RequestMonitorPanel.vue'
+import WsIcon from '../../../ui/WsIcon.vue'
 
-defineEmits<{ close: []; dissolve: [] }>()
+defineEmits<{
+  close: []
+  dissolve: []
+  privateChat: [memberId: string]
+  muteAction: [memberId: string, muted: boolean, duration: number | null]
+}>()
 
 const store = useGroupChatStore()
-const spaceStore = useSpaceStore()
 const agentRegistry = useAgentRegistryStore()
 const groupName = ref(store.groupInfo?.name || '')
 const announcement = ref(store.groupInfo?.announcement || '')
 const showInviteDialog = ref(false)
 const inviteSearch = ref('')
-const inviteSelected = ref<Array<{ id: string; name: string; role: string; color: string; avatar: string; systemPrompt: string; modelId?: string; enabledTools: string[]; enabledSkills: string[] }>>([])
+const inviteSelected = ref<Array<{ id: string; name: string; role: string; color: string; avatar: string; systemPrompt: string; modelId?: string; enabledTools: string[]; enabledSkills: string[]; baseLayerMode: string; customBaseLayer?: string; toolSource?: string; providerSlotId?: string }>>([])
 
 const allAgents = computed(() => {
   return agentRegistry.agents.map(a => ({
@@ -95,6 +106,10 @@ const allAgents = computed(() => {
     modelId: a.modelId,
     enabledTools: a.enabledTools,
     enabledSkills: a.enabledSkills,
+    baseLayerMode: a.baseLayerMode,
+    customBaseLayer: a.customBaseLayer,
+    toolSource: a.toolSource,
+    providerSlotId: a.providerSlotId,
   }))
 })
 
@@ -140,6 +155,10 @@ async function onInviteConfirm(): Promise<void> {
     lastSpokeAt: 0,
     enabledTools: a.enabledTools || [],
     enabledSkills: a.enabledSkills || [],
+    baseLayerMode: a.baseLayerMode || 'empty',
+    customBaseLayer: a.customBaseLayer,
+    toolSource: a.toolSource || 'derived',
+    providerSlotId: a.providerSlotId,
   }))
 
   store.setGroupMembers([...store.groupMembers, ...newMembers])
@@ -185,11 +204,6 @@ function schedulePersist(): void {
     })
   }, 500)
 }
-
-function onModeSwitch(mode: 'meeting' | 'casual'): void {
-  store.setGroupMode(mode)
-  spaceStore.setGroupChatMode(mode)
-}
 </script>
 
 <style scoped>
@@ -210,13 +224,12 @@ function onModeSwitch(mode: 'meeting' | 'casual'): void {
 .announcement-input { width: 100%; border: 1px solid var(--color-border); border-radius: 8px; padding: 8px; font-size: 12px; resize: none; outline: none; background: var(--color-surface); color: var(--color-text); }
 .announcement-input:focus { border-color: var(--color-primary); }
 
-.mode-switch { display: flex; gap: 8px; }
-.mode-btn { flex: 1; padding: 8px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); cursor: pointer; font-size: 12px; transition: all 0.15s; color: var(--color-text-secondary); }
-.mode-btn.active { background: var(--color-primary-muted); border-color: var(--color-primary); font-weight: 600; color: var(--color-text); }
-
 .danger-zone { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--color-border); }
 .danger-btn { width: 100%; padding: 8px; border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; background: rgba(239,68,68,0.05); color: #ef4444; cursor: pointer; font-size: 12px; }
 .danger-btn:hover { background: rgba(239,68,68,0.1); }
+
+.sync-mode-section { margin-bottom: 14px; }
+.sync-mode-desc { font-size: 9px; color: var(--color-text-tertiary); margin-top: 2px; }
 
 .invite-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.3); z-index: 60; display: flex; align-items: center; justify-content: center; }
 .invite-dialog { background: rgba(10, 10, 20, 0.08); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 12px; padding: 16px; width: 280px; max-height: 360px; display: flex; flex-direction: column; border: 1px solid var(--color-border); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25); }

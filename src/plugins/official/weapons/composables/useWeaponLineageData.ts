@@ -51,22 +51,26 @@ export function useWeaponLineageData() {
   const rs = useRelationStore()
 
   const weaponEntities = computed(() =>
-    (es.entities ?? []).filter(e => e.type === 'weapon')
+    (es.entities ?? []).filter(e =>
+      e.type === 'item' && (e.facets?.weapon != null || e.properties?.itemType === '武器')
+    )
   )
 
   const nodes = computed<WeaponNode[]>(() =>
     weaponEntities.value.map(e => {
-      const wt = (e.properties.weaponType as string) || '其他'
-      const rank = (e.properties.rank as string) || '凡品'
+      // 迁移后武器特有字段在 facets.weapon 中，通用字段在 properties 中
+      const wf = (e.facets?.weapon ?? {}) as Record<string, unknown>
+      const wt = (wf.weaponType as string) || (e.properties.weaponType as string) || '其他'
+      const rank = (wf.rank as string) || (e.properties.rank as string) || '凡品'
       return {
         id: e.id,
         name: e.name,
         weaponType: wt,
         rank,
-        status: (e.properties.status as string) || '',
+        status: (e.properties.status as string) || (e.properties.condition as string) || '',
         material: (e.properties.material as string) || '',
-        smith: (e.properties.smith as string) || '',
-        specialAbilities: (e.properties.specialAbilities as string) || '',
+        smith: (wf.smith as string) || (e.properties.smith as string) || '',
+        specialAbilities: (wf.specialAbility as string) || (wf.specialAbilities as string) || (e.properties.specialAbilities as string) || '',
         x: 0,
         y: 0,
         color: RANK_COLORS[rank] || TYPE_COLORS[wt] || '#95a5a6',

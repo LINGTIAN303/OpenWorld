@@ -11,8 +11,8 @@
         <WsIcon :name="layoutMode === 'vertical' ? 'timeline' : 'graph'" size="xs" /> {{ layoutMode === 'vertical' ? '垂直' : '水平' }}
       </button>
       <CustomDropdown v-model="groupModeValue" :options="groupModeOptions" />
-      <button class="btn-ghost btn-sm" @click="tree.expandAll()" title="全部展开"><WsIcon name="expand" size="xs" /> 展开</button>
-      <button class="btn-ghost btn-sm" @click="tree.collapseAll()" title="全部折叠"><WsIcon name="collapse" size="xs" /> 折叠</button>
+      <button v-if="sortMode === 'tree'" class="btn-ghost btn-sm" @click="tree.expandAll()" title="全部展开"><WsIcon name="expand" size="xs" /> 展开</button>
+      <button v-if="sortMode === 'tree'" class="btn-ghost btn-sm" @click="tree.collapseAll()" title="全部折叠"><WsIcon name="collapse" size="xs" /> 折叠</button>
       <button v-if="layoutMode === 'vertical'" class="btn-ghost btn-sm" :class="{ active: compactMode }" @click="compactMode = !compactMode" title="紧凑模式"><WsIcon name="list" size="xs" /> {{ compactMode ? '紧凑' : '展开' }}</button>
       <button class="btn-ghost btn-sm" @click="showConflicts = true" :title="hasConflicts ? `${conflicts.length} 个冲突` : '检测时间冲突'">
         <WsIcon name="warning" size="xs" /> 冲突{{ hasConflicts ? ` (${conflicts.length})` : '' }}

@@ -1,13 +1,13 @@
 <template>
-  <SimpleEntityView
+  <GenericEntityView
     entityType="concept"
-    label="概念"
-    idPrefix="con"
-    :fields="fields"
-    :filterDefs="filterDefs"
+    :form-fields="fields"
+    :filter-defs="filterDefs"
     cardSubtitle="definition"
-    :cardFooterFields="cardFooterFields"
-    :detailTabs="detailTabs"
+    :card-footer-fields="cardFooterFields"
+    :detail-tabs="detailTabs"
+    entity-label="概念"
+    id-prefix="con"
   >
     <template #detail-backlinks="{ entity }">
       <div v-for="c in getBacklinks(entity.id)" :key="c.id" class="backlink-item">
@@ -35,12 +35,12 @@
       <WsEmpty v-if="getContradictions(entity.id).length === 0" preset="no-data" title="暂无矛盾设定" />
       <EntityRelationSelector v-if="entity" :entity-id="entity.id" entity-type="concept" relation-type="contradicts" />
     </template>
-  </SimpleEntityView>
+  </GenericEntityView>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { SimpleEntityView, EntityRelationSelector, type FormFieldDef, type FilterDef, type CardFieldDef, type RelationTabDef } from '@worldsmith/plugin-sdk'
+import { GenericEntityView, EntityRelationSelector, type FormFieldDef, type FilterDef, type CardFieldDef, type RelationTabDef } from '@worldsmith/plugin-sdk'
 import WsIcon from '../../../ui/WsIcon.vue'
 import WsEmpty from '../../../ui/WsEmpty.vue'
 import { useEntityStore, useRelationStore } from '@worldsmith/entity-core'

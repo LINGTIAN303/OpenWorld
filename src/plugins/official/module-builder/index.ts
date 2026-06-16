@@ -14,6 +14,10 @@ export const manifest = {
     { action: 'remove_component', description: '移除组件', params: ['componentId'] },
     { action: 'update_config', description: '更新配置', params: ['config'] },
   ],
+  permissions: [
+    { name: 'schema:register', description: '注册实体类型和关系类型' },
+    { name: 'views:register', description: '注册视图' },
+  ],
 }
 
 export function activate(api: PluginAPIType) {

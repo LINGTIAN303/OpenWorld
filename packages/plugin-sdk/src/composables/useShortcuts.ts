@@ -128,12 +128,36 @@ function attachGlobalListener() {
   })
 }
 
+export interface ShortcutConflict {
+  id: string
+  keys: string[]
+  scope: ShortcutScope
+  conflictWith: { id: string; keys: string[]; scope: ShortcutScope }[]
+}
+
 export function useShortcuts() {
   attachGlobalListener()
+
+  /** 检测同 scope 下是否有重复键位，返回冲突列表 */
+  function detectConflicts(id: string, keys: string[], scope: ShortcutScope): ShortcutConflict | null {
+    const conflicts: { id: string; keys: string[]; scope: ShortcutScope }[] = []
+    for (const [otherId, def] of registry) {
+      if (otherId === id) continue
+      if (def.scope !== scope) continue
+      if (sameKeys(keys, def.keys)) {
+        conflicts.push({ id: otherId, keys: def.keys, scope: def.scope })
+      }
+    }
+    return conflicts.length > 0 ? { id, keys, scope, conflictWith: conflicts } : null
+  }
 
   function register(def: ShortcutDef) {
     if (registry.has(def.id)) {
       console.warn(`[useShortcuts] 快捷键 "${def.id}" 被重新注册，覆盖旧定义`)
+    }
+    const c = detectConflicts(def.id, def.keys, def.scope)
+    if (c) {
+      console.warn(`[useShortcuts] 注册 "${def.id}" 键位 ${JSON.stringify(def.keys)} 与 ${c.conflictWith.length} 个已有快捷键冲突`)
     }
     defaultKeysMap.set(def.id, def.keys)
     const overrides = loadOverrides()
@@ -172,5 +196,37 @@ export function useShortcuts() {
     }
   }
 
-  return { register, unregister, getAll, getByScope, getDefaultKeys, getRegisteredKeys, updateKeys }
+  /**
+   * 设置自定义快捷键（供 settings 面板使用），有冲突时阻断并返回冲突列表。
+   * 无冲突时写入 registry 并持久化到 localStorage。
+   */
+  function setShortcut(id: string, newKeys: string[]): { ok: boolean; conflict?: ShortcutConflict } {
+    const def = registry.get(id)
+    if (!def) return { ok: false }
+    const c = detectConflicts(id, newKeys, def.scope)
+    if (c) {
+      console.warn(`[useShortcuts] 设置 "${id}" 键位 ${JSON.stringify(newKeys)} 冲突`)
+      return { ok: false, conflict: c }
+    }
+    registry.set(id, { ...def, keys: newKeys })
+    const overrides = loadOverrides()
+    overrides[id] = newKeys
+    try {
+      localStorage.setItem('worldsmith_shortcuts', JSON.stringify(overrides))
+    } catch {
+      console.warn('[useShortcuts] 持久化快捷键覆盖失败')
+    }
+    cachedOverrides = overrides
+    return { ok: true }
+  }
+
+  return { register, unregister, getAll, getByScope, getDefaultKeys, getRegisteredKeys, updateKeys, setShortcut }
+}
+
+/** 比较两个键位数组是否相等 */
+function sameKeys(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false
+  const sa = [...a].sort()
+  const sb = [...b].sort()
+  return sa.every((k, i) => k === sb[i])
 }

@@ -5,6 +5,11 @@ description: 本地文件系统操作（读写、搜索、移动、删除）
 enabled: true
 baseTools: []
 allowedTools:
+  - read_file
+  - write_file
+  - edit_file
+  - search_files
+  - list_directory
   - fs_read
   - fs_write
   - fs_list

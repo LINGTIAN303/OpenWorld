@@ -23,6 +23,34 @@
             @action="onA2UIAction"
           />
         </div>
+        <div v-if="activeTasks.length > 0" class="gen-section">
+          <div class="gen-section-title">
+            <WsIcon name="image" size="xs" /> 生成进度
+          </div>
+          <div
+            v-for="task in activeTasks"
+            :key="task.id"
+            class="gen-card"
+            :class="[`gen-${task.type}`]"
+          >
+            <div class="gen-card-header">
+              <span class="gen-card-icon">{{ task.type === 'image' ? '🖼' : '🎬' }}</span>
+              <span class="gen-card-label">{{ task.label }}</span>
+              <span class="gen-card-model">{{ task.model }}</span>
+            </div>
+            <div class="gen-card-prompt">{{ task.prompt.length > 50 ? task.prompt.slice(0, 50) + '…' : task.prompt }}</div>
+            <div class="gen-card-progress">
+              <div class="gen-card-track">
+                <div class="gen-card-fill" :style="{ width: task.progress + '%' }"></div>
+              </div>
+              <span class="gen-card-pct">{{ Math.round(task.progress) }}%</span>
+            </div>
+            <div class="gen-card-meta">
+              <span>{{ task.status === 'polling' ? '轮询中' : task.status === 'generating' ? '生成中' : '等待中' }}</span>
+              <span>{{ formatGenDuration(task) }}</span>
+            </div>
+          </div>
+        </div>
         <div
           v-for="tc in runningToolCalls"
           :key="tc.id"
@@ -91,6 +119,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import DOMPurify from 'dompurify'
 import { useAgentEvents } from './composables/useAgentEvents'
 import { useAgent } from './composables/useAgent'
+import { useGenerationProgress } from './composables/useGenerationProgress'
 import type { ToolCallView } from './composables/useAgentEvents'
 import WsIcon from '../ui/WsIcon.vue'
 import A2UIRenderer from './a2ui/A2UIRenderer.vue'
@@ -116,6 +145,7 @@ const runningToolCalls = computed(() => toolCalls.value.filter(tc => tc.status =
 const completedToolCalls = computed(() => toolCalls.value.filter(tc => tc.status !== 'running'))
 const showCompleted = ref(false)
 const { a2uiSurfaces, resolveDataBinding, sendMessage, steer, isStreaming, sendBlockAction } = useAgent()
+const { activeTasks } = useGenerationProgress()
 
 const hasA2UISurfaces = computed(() => Object.keys(a2uiSurfaces.value).length > 0)
 
@@ -840,6 +870,14 @@ function formatDuration(tc: ToolCallView): string {
   if (ms < 1000) return `${ms}毫秒`
   return `${(ms / 1000).toFixed(1)}秒`
 }
+
+function formatGenDuration(task: { startedAt: number; endedAt?: number }): string {
+  const end = task.endedAt || Date.now()
+  const ms = end - task.startedAt
+  if (ms < 1000) return `${ms}ms`
+  if (ms < 60000) return `${(ms / 1000).toFixed(0)}s`
+  return `${(ms / 60000).toFixed(1)}min`
+}
 </script>
 
 <style scoped>
@@ -1264,6 +1302,90 @@ function formatDuration(tc: ToolCallView): string {
   font-family: 'Consolas', 'Monaco', monospace;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.gen-section {
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--agent-border, rgba(58, 58, 106, 0.15));
+}
+
+.gen-section-title {
+  font-size: var(--font-size-xs, 11px);
+  color: var(--agent-text-secondary, #aaa);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.gen-card {
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(108, 92, 231, 0.1);
+}
+
+.gen-card.gen-image { border-left: 2px solid #6c5ce7; }
+.gen-card.gen-video { border-left: 2px solid #e17055; }
+
+.gen-card-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.gen-card-icon { font-size: 12px; }
+.gen-card-label { font-size: var(--font-size-xs, 11px); font-weight: var(--font-weight-medium, 500); color: var(--agent-text, #e0e0e0); flex: 1; }
+.gen-card-model { font-size: 10px; color: var(--agent-text-tertiary, #888); }
+
+.gen-card-prompt {
+  font-size: 10px;
+  color: var(--agent-text-secondary, #aaa);
+  margin-bottom: 4px;
+}
+
+.gen-card-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.gen-card-track {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.gen-card-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+  background: var(--agent-primary, #6c5ce7);
+}
+
+.gen-video .gen-card-fill { background: #e17055; }
+
+.gen-card-pct {
+  font-size: 10px;
+  color: var(--agent-accent, #b388ff);
+  font-weight: var(--font-weight-semibold, 600);
+  min-width: 28px;
+  text-align: right;
+}
+
+.gen-card-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--agent-text-tertiary, #888);
 }
 
 </style>

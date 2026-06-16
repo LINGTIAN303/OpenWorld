@@ -64,6 +64,8 @@ export const useAgentRegistryStore = defineStore('agent-registry', () => {
       sourceEntityId: data.entityId,
       enabledTools: [],
       enabledSkills: [],
+      baseLayerMode: 'empty',
+      toolSource: 'derived',
       createdAt: now,
       updatedAt: now,
     }
@@ -90,6 +92,8 @@ export const useAgentRegistryStore = defineStore('agent-registry', () => {
       sourceType: 'custom',
       enabledTools: [],
       enabledSkills: [],
+      baseLayerMode: 'empty',
+      toolSource: 'derived',
       createdAt: now,
       updatedAt: now,
     }

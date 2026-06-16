@@ -11,7 +11,7 @@
 
 import type { ToolDefinition } from '../bridge-types'
 import { semanticSearchEntities, isEmbeddingReady } from '../embedding/index'
-import type { SearchResult } from '../embedding/vector-store'
+import type { SearchResultV2 } from '../embedding/vector-store-v2'
 
 /** 描述字段预览长度限制 */
 const DESCRIPTION_PREVIEW_LENGTH = 120
@@ -80,16 +80,16 @@ function keywordSearch(
 
 /**
  * 执行语义搜索
- * @returns entityId → SearchResult 的 Map
+ * @returns entityId → SearchResultV2 的 Map
  */
 async function doSemanticSearch(
   keyword: string,
   limit: number,
-): Promise<Map<string, SearchResult>> {
+): Promise<Map<string, SearchResultV2>> {
   if (!isEmbeddingReady()) return new Map()
   try {
     const results = await semanticSearchEntities(keyword, limit, 0.25)
-    const map = new Map<string, SearchResult>()
+    const map = new Map<string, SearchResultV2>()
     for (const r of results) {
       const entityId = r.metadata.entityId || r.id.replace('entity_', '')
       map.set(entityId, r)
@@ -110,7 +110,7 @@ async function doSemanticSearch(
  */
 function mergeResults(
   keywordResults: HybridResult[],
-  semanticMap: Map<string, SearchResult>,
+  semanticMap: Map<string, SearchResultV2>,
   limit: number,
 ): HybridResult[] {
   if (semanticMap.size === 0) {

@@ -39,6 +39,8 @@ export interface IChatStrategy {
   shouldRespond?(trigger: StrategyTrigger, members: GroupMember[]): SpeakingDesire[]
   formatPrompt?(member: GroupMember, messages: GroupChatMessage[], context: StrategyContext): string
   buildSystemPrompt(member: GroupMember, context: StrategyContext): string
+  /** 构建对话级动态上下文（@mention 提示、话题等），不包含系统提示词 */
+  buildDynamicContext(member: GroupMember, context: StrategyContext): string
   shouldTerminate(messages: GroupChatMessage[], state: EngineState): TerminationCheckResult
   getConfig(): MeetingConfig | CasualConfig
   generateThoughts?(messages: GroupChatMessage[], members: GroupMember[]): ThoughtItem[]

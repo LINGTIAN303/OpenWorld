@@ -13,31 +13,31 @@
 
 ### 部署单位
 1. 确认战场范围和坐标系统
-2. 使用 `tactical_deploy_unit` 部署单位到指定坐标
+2. 使用 `tactical(action='deploy_unit')` 部署单位到指定坐标
 3. 可选：指定编队（阵型/队形）
 
 ### 移动单位
-- 使用 `tactical_move_unit` 移动单位到新坐标
+- 使用 `tactical(action='move_unit')` 移动单位到新坐标
 
 ### 获取战场状态
-- 使用 `tactical_get_battle_state` 获取全部单位和部署
+- 使用 `tactical(action='get_battle_state')` 获取全部单位和部署
 
 ### 模拟战斗
-- 使用 `tactical_simulate_turn` 模拟一回合
+- 使用 `tactical(action='simulate_turn')` 模拟一回合
 - 参数包括：行动列表、战斗规则
 
 ### 导出
-- `tactical_export_battle_log` — 导出战斗日志
+- `tactical(action='export_battle_log')` — 导出战斗日志
 
 ## 工具绑定
 
 | 工具 | 用途 |
 |------|------|
-| `tactical_deploy_unit` | 部署单位 |
-| `tactical_move_unit` | 移动单位 |
-| `tactical_get_battle_state` | 获取战场状态 |
-| `tactical_simulate_turn` | 模拟一回合 |
-| `tactical_export_battle_log` | 导出战斗日志 |
+| `tactical(action='deploy_unit')` | 部署单位 |
+| `tactical(action='move_unit')` | 移动单位 |
+| `tactical(action='get_battle_state')` | 获取战场状态 |
+| `tactical(action='simulate_turn')` | 模拟一回合 |
+| `tactical(action='export_battle_log')` | 导出战斗日志 |
 | `entity_create` / `entity_update` | 底层实体操作 |
 | `relation_create` | 建立战斗关系 |
 

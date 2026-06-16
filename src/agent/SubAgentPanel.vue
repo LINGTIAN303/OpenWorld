@@ -38,7 +38,7 @@
 <script setup lang="ts">
 import { ref, computed, onBeforeUnmount } from 'vue'
 import WsIcon from '../ui/WsIcon.vue'
-import type { SubAgentState } from '../composables/useOrchestrator'
+import type { SubAgentState } from './composables/useOrchestrator'
 
 const props = defineProps<{
   agent: SubAgentState

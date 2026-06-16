@@ -18,7 +18,7 @@ const entityStore = useEntityStore()
 const relationStore = useRelationStore()
 const { promptAndCreate } = useAutoCreateEntity()
 
-const containerRef = ref<HTMLDivElement>()
+const containerRef = ref<HTMLDivElement | null>(null)
 
 const CHARACTER_REL_TYPES = ['parent_of', 'knows', 'ally_of', 'rival_of']
 
@@ -122,7 +122,8 @@ async function createRelationWithAutoEntity(params: {
   const { sourceId, targetName, relationType } = params
   const existing = allCharacters.value.find(c => c.name === targetName)
   if (existing) {
-    await relationStore.add({ id: `rel-${Date.now()}`, type: relationType, sourceId, targetId: existing.id })
+    const now = new Date().toISOString()
+    await relationStore.add({ id: `rel-${Date.now()}`, type: relationType, sourceId, targetId: existing.id, properties: {}, createdAt: now, updatedAt: now })
     nextTick(() => buildGraph())
     return
   }

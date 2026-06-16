@@ -31,6 +31,9 @@ export {
   getPreset,
   getTransitionName,
   getAllPresetNames,
+  setTransitionOverrides,
+  clearTransitionOverrides,
+  getEffectivePreset,
 } from './transitions'
 
 export {

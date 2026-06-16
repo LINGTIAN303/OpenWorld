@@ -1,7 +1,7 @@
 <template>
   <div class="session-sidebar">
     <div class="sidebar-header">
-      <h3 class="sidebar-title">会话</h3>
+      <h3 class="sidebar-title">会话 <span class="title-count">{{ sessionCount }}</span></h3>
       <button class="new-session-btn" @click="onNewSession" title="新建会话">+</button>
       <button class="sidebar-close-btn" @click="emit('close')" title="关闭">✕</button>
     </div>
@@ -30,8 +30,12 @@
           @click="onSelect(s.id)"
           @contextmenu.prevent="onContextMenu($event, s)"
         >
-          <div class="session-name">{{ s.name }}</div>
+          <div v-if="renamingId === s.id" class="session-name">
+            <input :ref="captureRenameInput" class="session-name-input" :value="s.name" @click.stop @keyup.enter="submitRename(s.id)" @keyup.esc="cancelRename" @blur="submitRename(s.id)" />
+          </div>
+          <div v-else class="session-name" @dblclick="startRename(s.id)">{{ s.name }}</div>
           <div class="session-meta">
+            <span v-if="s.chatMode" class="session-mode-badge" :class="'mode-' + s.chatMode">{{ modeLabel(s.chatMode) }}</span>
             <span class="session-time">{{ formatTime(s.updatedAt) }}</span>
             <span class="session-count">{{ s.messages.length }} 条</span>
           </div>
@@ -48,8 +52,12 @@
           @click="onSelect(s.id)"
           @contextmenu.prevent="onContextMenu($event, s)"
         >
-          <div class="session-name">{{ s.name }}</div>
+          <div v-if="renamingId === s.id" class="session-name">
+            <input :ref="captureRenameInput" class="session-name-input" :value="s.name" @click.stop @keyup.enter="submitRename(s.id)" @keyup.esc="cancelRename" @blur="submitRename(s.id)" />
+          </div>
+          <div v-else class="session-name" @dblclick="startRename(s.id)">{{ s.name }}</div>
           <div class="session-meta">
+            <span v-if="s.chatMode" class="session-mode-badge" :class="'mode-' + s.chatMode">{{ modeLabel(s.chatMode) }}</span>
             <span class="session-time">{{ formatTime(s.updatedAt) }}</span>
             <span class="session-count">{{ s.messages.length }} 条</span>
           </div>
@@ -64,6 +72,7 @@
         :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
         @click="contextMenu.visible = false"
       >
+        <button class="ctx-item" @click="onRename">重命名</button>
         <button v-if="!contextMenu.pinned" class="ctx-item" @click="onPin">固定</button>
         <button v-else class="ctx-item" @click="onUnpin">取消固定</button>
         <button class="ctx-item ctx-danger" @click="onDelete">删除</button>
@@ -73,9 +82,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { listSessions, deleteSession, pinSession, unpinSession } from '../../../worldsmith-agent/src/session/manager'
-import type { AgentSession } from '../../../worldsmith-agent/src/session/types'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { listSessions, deleteSession, pinSession, unpinSession, renameSession, countSessions } from '@agent/session/manager'
+import type { AgentSession } from '@agent/session/types'
 import { useAgent } from '../../agent/composables/useAgent'
 
 const emit = defineEmits<{ close: [] }>()
@@ -85,6 +94,7 @@ const { currentSessionId, newSession, switchSession } = useAgent()
 const loading = ref(true)
 const sessions = ref<AgentSession[]>([])
 const searchQuery = ref('')
+const sessionCount = ref(0)
 
 const contextMenu = ref<{ visible: boolean; x: number; y: number; sessionId: string; pinned: boolean }>({
   visible: false, x: 0, y: 0, sessionId: '', pinned: false,
@@ -102,6 +112,7 @@ const recentSessions = computed(() => filteredSessions.value.filter(s => !s.pinn
 async function refresh() {
   try {
     sessions.value = await listSessions()
+    sessionCount.value = await countSessions()
   } catch {}
   loading.value = false
 }
@@ -116,6 +127,11 @@ function formatTime(iso: string): string {
   yesterday.setDate(yesterday.getDate() - 1)
   if (d.toDateString() === yesterday.toDateString()) return `昨天 ${time}`
   return `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${time}`
+}
+
+function modeLabel(mode: string): string {
+  const map: Record<string, string> = { normal: '快问', deep: '深度', explore: '探索' }
+  return map[mode] || mode
 }
 
 async function onNewSession() {
@@ -141,6 +157,40 @@ function onContextMenu(e: MouseEvent, s: AgentSession) {
     sessionId: s.id,
     pinned: !!s.pinned,
   }
+}
+
+const renamingId = ref<string | null>(null)
+const renameInputEl = ref<HTMLInputElement | null>(null)
+
+function captureRenameInput(el: any) {
+  if (el) renameInputEl.value = el as HTMLInputElement
+}
+
+function startRename(id: string) {
+  renamingId.value = id
+  nextTick(() => {
+    renameInputEl.value?.focus()
+    renameInputEl.value?.select()
+  })
+}
+
+async function submitRename(id: string) {
+  if (!renamingId.value) return
+  const val = renameInputEl.value?.value?.trim()
+  renamingId.value = null
+  if (val) {
+    await renameSession(id, val)
+    await refresh()
+  }
+}
+
+function cancelRename() {
+  renamingId.value = null
+}
+
+function onRename() {
+  startRename(contextMenu.value.sessionId)
+  contextMenu.value.visible = false
 }
 
 async function onPin() {
@@ -169,10 +219,12 @@ function onClickOutside() {
 onMounted(() => {
   refresh()
   document.addEventListener('click', onClickOutside)
+  window.addEventListener('ws-session-title-updated', refresh)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onClickOutside)
+  window.removeEventListener('ws-session-title-updated', refresh)
 })
 
 watch(currentSessionId, () => {
@@ -204,6 +256,13 @@ watch(currentSessionId, () => {
   font-weight: 600;
   margin: 0;
   flex: 1;
+}
+
+.title-count {
+  font-size: var(--font-size-2xs);
+  font-weight: 500;
+  color: var(--color-text-tertiary);
+  margin-left: 4px;
 }
 
 .new-session-btn {
@@ -311,6 +370,18 @@ watch(currentSessionId, () => {
   text-overflow: ellipsis;
 }
 
+.session-name-input {
+  width: 100%;
+  padding: 2px 4px;
+  border: 1px solid var(--color-primary);
+  border-radius: 4px;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+  outline: none;
+}
+
 .session-meta {
   display: flex;
   gap: 8px;
@@ -321,6 +392,28 @@ watch(currentSessionId, () => {
 
 .session-count {
   margin-left: auto;
+}
+
+.session-mode-badge {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.3px;
+}
+.session-mode-badge.mode-normal {
+  background: rgba(100, 160, 255, 0.15);
+  color: #6ea8fe;
+}
+.session-mode-badge.mode-deep {
+  background: rgba(180, 120, 255, 0.15);
+  color: #b478ff;
+}
+.session-mode-badge.mode-explore {
+  background: rgba(80, 200, 160, 0.15);
+  color: #50c8a0;
 }
 </style>
 

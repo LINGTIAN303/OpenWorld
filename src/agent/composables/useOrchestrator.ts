@@ -1,8 +1,13 @@
-import { reactive, ref, onMounted, onBeforeUnmount } from 'vue'
-import type { AgentInfo, AgentType, SubAgentTask } from '../../../worldsmith-agent/src/orchestrator/types'
-import { AGENT_TYPE_CONFIG } from '../../../worldsmith-agent/src/orchestrator/types'
+﻿import { reactive, ref, onMounted, onBeforeUnmount } from 'vue'
+import type { AgentInfo, AgentType, SubAgentTask } from '@agent/orchestrator/types'
+import { AGENT_TYPE_CONFIG } from '@agent/orchestrator/types'
 
-interface SubAgentState {
+interface PipelineContext {
+  pipelineId: string
+  stepId: string
+}
+
+export interface SubAgentState {
   id: string
   type: AgentType
   icon: string
@@ -15,6 +20,8 @@ interface SubAgentState {
   completedAt: number | null
   duration: number | null
   error: string | null
+  /** 创作编排上下文，子 Agent 完成后自动更新 Pipeline 步骤状态 */
+  pipelineContext?: PipelineContext
 }
 
 type ExecuteFn = (task: {
@@ -34,8 +41,63 @@ let activeExecutions: Map<string, AbortController> = new Map()
 
 function syncToWindow(): void {
   try {
-    ;(window as any).__worldsmith_sub_agents = subAgents
-  } catch {}
+    ; (window as any).__worldsmith_sub_agents = subAgents
+  } catch { }
+}
+
+/** 子 Agent 完成后自动更新 Pipeline 步骤状态 */
+async function autoUpdatePipelineStep(
+  ctx: PipelineContext,
+  success: boolean,
+  output: string,
+): Promise<void> {
+  try {
+    const { useEntityStore } = await import('@worldsmith/entity-core')
+    const store = useEntityStore()
+    const entity = await store.getById(ctx.pipelineId)
+    if (!entity || entity.type !== 'pipeline') return
+
+    const p = entity.properties || {}
+    let steps: any[] = []
+    try { steps = JSON.parse((p.steps as string) || '[]') } catch { return }
+
+    const idx = steps.findIndex((s: any) => s.id === ctx.stepId)
+    if (idx < 0) return
+
+    if (success) {
+      steps[idx] = { ...steps[idx], status: 'completed', output: { summary: output.slice(0, 500) } }
+    } else {
+      steps[idx] = { ...steps[idx], status: 'failed', output: { summary: `失败: ${output.slice(0, 200)}` } }
+    }
+
+    // 检查是否所有步骤都完成（包含失败，因失败步骤可重试）
+    const allTerminal = steps.every(
+      (s: any) => s.status === 'completed' || s.status === 'skipped' || s.status === 'failed',
+    )
+    const anyPendingOrRunning = steps.some(
+      (s: any) => s.status === 'pending' || s.status === 'running',
+    )
+
+    // 只有全部步骤终态且无待执行时才判断最终状态
+    let newStatus: string
+    if (allTerminal && !anyPendingOrRunning) {
+      const anyFailed = steps.some((s: any) => s.status === 'failed')
+      newStatus = anyFailed ? 'failed' : 'completed'
+    } else {
+      newStatus = 'running'
+    }
+
+    await store.update(ctx.pipelineId, {
+      properties: {
+        ...p,
+        steps: JSON.stringify(steps),
+        status: newStatus,
+        ...(allCompleted || anyFailed ? { currentStepId: null } : {}),
+      },
+    }, 'agent')
+  } catch (err) {
+    console.error('[useOrchestrator] autoUpdatePipelineStep failed:', err)
+  }
 }
 
 export function useOrchestrator() {
@@ -62,6 +124,7 @@ export function useOrchestrator() {
       completedAt: null,
       duration: null,
       error: null,
+      pipelineContext: task.pipelineContext,
     })
     syncToWindow()
   }
@@ -133,10 +196,18 @@ export function useOrchestrator() {
     if (!detail) return
 
     const { taskId, type, prompt, timeout, skillIds } = detail
+    const pipelineContext: PipelineContext | undefined = detail.pipelineContext
 
     if (subAgents.has(taskId)) return
 
-    addSubAgent({ id: taskId, type, prompt, skillIds, timeout })
+    addSubAgent({
+      id: taskId,
+      type,
+      prompt,
+      skillIds,
+      timeout,
+      pipelineContext,
+    })
     updateSubAgentStatus(taskId, 'running')
 
     if (!executeFn) {
@@ -152,9 +223,29 @@ export function useOrchestrator() {
       if (controller.signal.aborted) return
       updateSubAgentStatus(taskId, result.success ? 'completed' : 'failed')
       setSubAgentResult(taskId, result.output)
+
+      // 如果有 Pipeline 上下文，自动更新步骤状态
+      if (pipelineContext) {
+        await autoUpdatePipelineStep(pipelineContext, result.success, result.output)
+        // 成功完成时通知前端自动继续下一个步骤
+        if (result.success) {
+          window.dispatchEvent(new CustomEvent('worldsmith:pipeline-step-completed', {
+            detail: {
+              pipelineId: pipelineContext.pipelineId,
+              stepId: pipelineContext.stepId,
+            },
+          }))
+        }
+      }
     } catch (err) {
       if (controller.signal.aborted) return
-      updateSubAgentStatus(taskId, 'failed', err instanceof Error ? err.message : String(err))
+      const errMsg = err instanceof Error ? err.message : String(err)
+      updateSubAgentStatus(taskId, 'failed', errMsg)
+
+      // 子 Agent 失败也更新 Pipeline 步骤状态
+      if (pipelineContext) {
+        await autoUpdatePipelineStep(pipelineContext, false, errMsg)
+      }
     } finally {
       activeExecutions.delete(taskId)
     }
@@ -175,7 +266,7 @@ export function useOrchestrator() {
   }
 
   function handleDispatchEventWrapper(e: Event): void {
-    handleDispatchEvent(e).catch(() => {})
+    handleDispatchEvent(e).catch(() => { })
   }
 
   function attachListeners(): void {
@@ -195,7 +286,7 @@ export function useOrchestrator() {
     window.removeEventListener('worldsmith:get-sub-agent-status', handleGetStatusEvent as EventListener)
     try {
       delete (window as any).__worldsmith_sub_agents
-    } catch {}
+    } catch { }
   }
 
   onMounted(() => {
@@ -203,6 +294,7 @@ export function useOrchestrator() {
   })
 
   onBeforeUnmount(() => {
+    detachListeners()
   })
 
   return {

@@ -81,6 +81,27 @@ export class CasualStrategy implements IChatStrategy {
     return parts.join('\n\n')
   }
 
+  /**
+   * 构建对话级动态上下文
+   *
+   * 系统提示词已在 Agent 创建时通过 systemPromptOverride 隔离设置，
+   * 此方法仅返回对话级的动态信息（话题、@mention 等）。
+   */
+  buildDynamicContext(member: GroupMember, context: StrategyContext): string {
+    const parts: string[] = []
+
+    parts.push(`群聊话题：${context.topic || '自由聊天'}。`)
+    parts.push('请用简短自然的语言回复，像日常群聊一样。1-3句话即可。')
+    parts.push('如果觉得没什么好说的，可以回复"收到"、"👍"等简短回应。')
+    parts.push('不要重复别人说过的话，要有自己的观点和风格。')
+
+    if (context.mentionedAgentIds.includes(member.id)) {
+      parts.push('你被 @提及了，请务必回应。')
+    }
+
+    return parts.join('\n\n')
+  }
+
   generateThoughts(messages: GroupChatMessage[], members: GroupMember[]): ThoughtItem[] {
     const recent = messages.slice(-10)
     if (recent.length === 0) return []
@@ -119,7 +140,7 @@ export class CasualStrategy implements IChatStrategy {
     if (!lastMsg) return true
 
     const silenceDuration = Date.now() - lastMsg.timestamp
-    return silenceDuration >= 20_000
+    return silenceDuration >= 10_000
   }
 
   getDesireCalculator(): DesireCalculator {

@@ -45,7 +45,7 @@ const BUILTIN_PROFILES: PersonaFontProfile[] = [
     fallbackFamily: 'serif',
     fontCategory: 'serif',
     sizeScale: 1.05,
-    weightDefault: 'regular',
+    weightDefault: 'normal',
     letterSpacing: 'wide',
     animationStyle: { messageEnter: 'typewriter', panelTransition: 'spring', notificationStyle: 'pulse' },
     accentColor: '#4a6cf7',

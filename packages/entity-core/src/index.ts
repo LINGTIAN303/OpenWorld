@@ -6,6 +6,8 @@ export {
   isTauri,
   getStorageBackend,
   storage,
+  getProjectManager,
+  migrateIfNeeded,
   entitySchemaRegistry,
   relationSchemaRegistry,
   fieldRegistry,
@@ -42,9 +44,33 @@ export {
   getDialogApi,
   registerSettingsApi,
   getSettingsApi,
+  // Trait System V2
+  traitRegistry,
+  facetRegistry,
+  entitySchemaRegistryV2,
+  defineTrait,
+  defineFacet,
+  defineEntity,
+  compileEntitySchema,
+  // Relationship Registry V2
+  relationshipRegistry,
+  defineRelation,
+  syncToLegacyRegistry,
+  // AutoLink Engine
+  semanticHintRegistry,
+  autoLinkStrategyRegistry,
+  registerDefaultStrategies,
+  potentialLinkIndex,
+  indexPotentialLinks,
+  refreshLinksForTarget,
+  inferSemanticHintFromKey,
+  inferDirectTargetFromKey,
+  userFieldMappingStore,
 } from './core'
 export type {
   ModuleInstance,
+  ProjectSetting,
+  ProjectInfo,
   StorageBackend,
   RegisteredField,
   PluginAPIType,
@@ -64,6 +90,10 @@ export type {
   DialogApi,
   SettingsApi,
 } from './core'
+export type {
+  PotentialLink,
+  UserFieldMapping,
+} from './core/AutoLinkEngine'
 export * from './stores'
 export * from './composables'
 export { entityCoreDescriptor } from './agent-descriptor'

@@ -11,16 +11,44 @@
     :icon-fn="iconFn"
     :filter-options="filterOpts"
     :filter-field-key="filterFieldKey"
+    :filter-defs="filterDefs"
     :id-prefix="schema.idPrefix || defaultIdPrefix"
     :entity-label="schema.label"
     :additional-filter="additionalFilter"
     :detail-tabs="detailTabs"
+    :custom-tabs="customTabs"
+    :card-footer-fields="cardFooterFields"
+    :card-subtitle="cardSubtitle"
+    :sort-options="sortOptions"
+    :hide-create-button="hideCreateButton"
+    :facet-on-create="facetOnCreate"
   >
     <template #toolbar-extra>
       <slot name="toolbar-extra" />
     </template>
+    <template #list="listSlotProps">
+      <slot name="list" v-bind="listSlotProps" />
+    </template>
+    <template #card-subtitle="{ entity }">
+      <slot name="card-subtitle" :entity="entity" />
+    </template>
+    <template #detail-header="{ entity, editing }">
+      <slot name="detail-header" :entity="entity" :editing="editing" />
+    </template>
+    <template #detail-info="{ entity, editing, editForm }">
+      <slot name="detail-info" :entity="entity" :editing="editing" :edit-form="editForm" />
+    </template>
     <template #detail-extra="{ entity, editing }">
       <slot name="detail-extra" :entity="entity" :editing="editing" />
+    </template>
+    <template v-for="ct in customTabs" :key="ct.id" #[`tab-${ct.id}`]="{ entity, editing }">
+      <slot :name="`tab-${ct.id}`" :entity="entity" :editing="editing" />
+    </template>
+    <template v-for="rt in detailTabs" :key="rt.id" #[`detail-${rt.id}`]="{ entity }">
+      <slot :name="`detail-${rt.id}`" :entity="entity" />
+    </template>
+    <template #detail-relations="{ entity }">
+      <slot name="detail-relations" :entity="entity" />
     </template>
   </GenericEntityView>
 </template>
@@ -31,14 +59,28 @@ import { schemaGetEntityType } from '../../../../src/core/coreBackend'
 import type { EntityTypeSchema } from '../../../../src/core/coreBackend'
 import { entitySchemaRegistry } from '@worldsmith/entity-core'
 import GenericEntityView from './GenericEntityView.vue'
-import type { FormFieldDef, RelationTabDef } from './types'
+import type { FormFieldDef, RelationTabDef, CardFieldDef, CustomTabDef, FilterDef } from './types'
 
 const props = withDefaults(defineProps<{
   typeKey: string
   additionalFilter?: (entity: any) => boolean
   detailTabs?: RelationTabDef[]
+  customTabs?: CustomTabDef[]
+  cardFooterFields?: CardFieldDef[]
+  cardSubtitle?: string
+  filterDefs?: FilterDef[]
+  sortOptions?: { key: string; label: string }[]
+  hideCreateButton?: boolean
+  facetOnCreate?: string
 }>(), {
   detailTabs: () => [],
+  customTabs: () => [],
+  cardFooterFields: () => [],
+  cardSubtitle: '',
+  filterDefs: () => [],
+  sortOptions: () => [],
+  hideCreateButton: false,
+  facetOnCreate: '',
 })
 
 const schema = ref<EntityTypeSchema | null>(null)

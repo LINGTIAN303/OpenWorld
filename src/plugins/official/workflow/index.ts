@@ -1,64 +1,53 @@
 import type { PluginAPIType } from '@worldsmith/entity-core'
 import WorkflowView from './WorkflowView.vue'
-import { useLocalStorageMigration } from './composables/useLocalStorageMigration'
 
 export const manifest = {
   id: 'official.workflow',
-  name: '工作流',
-  version: '1.0.0',
-  description: '工作流编排与执行。创建、编辑、管理工作流，追踪执行进度。',
+  name: '创作编排',
+  version: '2.0.0',
+  description: '创作编排面板。将复杂创作目标拆解为有序步骤（Pipeline），支持 Agent 自动提议、逐步执行、用户审阅介入、模板复用。',
   author: 'WorldSmith',
-  agentSkills: ['workflow-operator'],
+  agentSkills: ['creation-orchestrator'],
   agentCapabilities: [
-    { action: 'list_workflows', description: '列出工作流' },
-    { action: 'run_workflow', description: '运行工作流', params: ['workflowId'] },
-    { action: 'get_status', description: '获取工作流状态', params: ['runId'] },
+    { action: 'pipeline_create', description: '创建创作计划', params: ['name', 'description', 'steps', 'connections', 'tags'] },
+    { action: 'pipeline_list', description: '列出创作计划' },
+    { action: 'pipeline_get', description: '获取创作计划详情', params: ['pipelineId'] },
+    { action: 'pipeline_update', description: '更新创作计划（步骤、连接、状态等）', params: ['pipelineId', 'changes'] },
+    { action: 'pipeline_delete', description: '删除创作计划', params: ['pipelineId'] },
+    { action: 'pipeline_run_step', description: '执行单个创作步骤', params: ['pipelineId', 'stepId'] },
+    { action: 'pipeline_propose', description: '根据目标自动提议创作计划', params: ['goal'] },
+    { action: 'pipeline_template_list', description: '列出可用的创作模板' },
+    { action: 'pipeline_template_apply', description: '套用创作模板生成计划', params: ['templateId'] },
+  ],
+  permissions: [
+    { name: 'storage:read', description: '读取实体数据' },
+    { name: 'entities:write', description: '创建和编辑创作计划' },
+    { name: 'relations:read', description: '查询关联关系' },
+    { name: 'relations:write', description: '创建和编辑关系' },
+    { name: 'schema:register', description: '注册实体类型和关系类型' },
+    { name: 'views:register', description: '注册视图' },
   ],
 }
 
 export function activate(api: PluginAPIType) {
-  // 一次性迁移老 localStorage 数据到后端 Sqlite 库。失败保留原数据。
-  useLocalStorageMigration()
-    .migrate()
-    .catch((e) => console.warn('[workflow] migrate failed:', e))
-
   api.registerEntityType({
-    type: 'workflow',
-    name: '工作流',
+    type: 'pipeline',
+    label: '创作计划',
     icon: 'lightning',
     fields: [
-      { key: 'name', type: 'string', label: '名称', required: true },
-      { key: 'definition', type: 'text', label: '工作流定义 (YAML/JSON)', required: true },
-      { key: 'version', type: 'number', label: '版本', default: 1 },
-      { key: 'category', type: 'string', label: '分类', default: 'custom' },
-      { key: 'coverImage', type: 'image', label: '封面图' },
-      { key: 'tags', type: 'array', label: '标签' },
-      { key: 'author', type: 'string', label: '创建者', default: 'user' },
-      { key: 'usageCount', type: 'number', label: '使用次数', default: 0 },
-    ],
-  })
-
-  api.registerEntityType({
-    type: 'workflow_run',
-    name: '工作流执行记录',
-    icon: 'manuscript',
-    fields: [
-      { key: 'workflowId', type: 'string', label: '工作流 ID', required: true },
-      { key: 'status', type: 'string', label: '状态', default: 'running' },
-      { key: 'triggeredBy', type: 'string', label: '触发者', default: 'user' },
-      { key: 'params', type: 'text', label: '参数 (JSON)' },
-      { key: 'currentNodeId', type: 'string', label: '当前节点' },
-      { key: 'nodeStates', type: 'text', label: '节点状态 (JSON)' },
-      { key: 'startedAt', type: 'number', label: '开始时间' },
-      { key: 'completedAt', type: 'number', label: '完成时间' },
-      { key: 'coverImage', type: 'image', label: '封面图' },
-      { key: 'error', type: 'text', label: '错误信息' },
+      { key: 'name', type: 'text', label: '名称', required: true },
+      { key: 'description', type: 'text', label: '描述' },
+      { key: 'steps', type: 'text', label: '步骤 (JSON)', required: true },
+      { key: 'connections', type: 'text', label: '连接 (JSON)' },
+      { key: 'status', type: 'select', label: '状态', options: ['draft', 'ready', 'running', 'paused', 'completed', 'failed'], defaultValue: 'draft' },
+      { key: 'tags', type: 'textarea', label: '标签' },
+      { key: 'currentStepId', type: 'text', label: '当前步骤' },
     ],
   })
 
   api.registerView({
     id: 'workflow',
-    label: '工作流',
+    label: '创作编排',
     icon: 'lightning',
     component: WorkflowView,
   })

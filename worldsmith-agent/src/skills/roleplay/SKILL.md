@@ -51,7 +51,7 @@ schema-context:
 
 1. 使用 `entity_get` 获取角色的完整属性（性格、背景、目标、弱点）
 2. 使用 `relation_list` 获取角色的关系网络
-3. 使用 `algo_graph_analysis` 分析角色在社交网络中的位置
+3. 使用 `algo_run(action='graph_analysis')` 分析角色在社交网络中的位置
 4. 基于属性 + 关系 + 情境，推演 3 种可能行为选择
 5. 为每种选择标注：动机来源、情感状态、对关系的影响
 
@@ -69,7 +69,7 @@ schema-context:
 ### 场景三：冲突分析
 
 1. 识别冲突双方的核心利益
-2. 使用 `algo_shortest_path` 分析关系路径
+2. 使用 `algo_run(action='shortest_path')` 分析关系路径
 3. 推演冲突的 3 个可能走向：
    - 升级路径：冲突如何激化
    - 僵持路径：双方如何对峙
@@ -96,7 +96,7 @@ schema-context:
 ## Gotchas
 
 - 推演前必须 `entity_get` 获取完整属性，不要凭空假设
-- `algo_shortest_path` 分析关系路径时，注意区分直接关系和间接关系
+- `algo_run(action='shortest_path')` 分析关系路径时，注意区分直接关系和间接关系
 - 角色成长不是单向进步，也可能倒退或扭曲
 - 对话中避免所有角色说同样风格的话——给每个角色至少一个语言特征（口癖、句式、用词偏好）
 - 推演前读 `references/roleplay-patterns.md` 获取三种推演模式的详细步骤

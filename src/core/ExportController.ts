@@ -34,7 +34,7 @@ export class ExportController {
       manifest: {
         version: PACK_VERSION,
         exportedAt: new Date().toISOString(),
-        appVersion: '0.0.0', // TODO: 从 package.json 读取
+        appVersion: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0',
       },
       serializers: {},
     }

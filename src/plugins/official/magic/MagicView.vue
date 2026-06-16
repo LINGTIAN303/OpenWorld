@@ -1,11 +1,7 @@
 <template>
   <div class="magic-view">
     <div v-if="viewMode === 'tree'" class="mv-tree">
-      <div class="mv-back-bar">
-        <button class="btn-ghost" @click="viewMode = 'list'">← 返回列表</button>
-        <span class="mv-title">技能树</span>
-      </div>
-      <SkillTreeView />
+      <SkillTreeView @back="viewMode = 'list'" />
     </div>
     <SchemaRenderer v-else type-key="magic" :additional-filter="levelFn" :detail-tabs="magicTabs">
       <template #toolbar-extra>
@@ -54,9 +50,5 @@ useAgentPluginBridge('magic', (event) => {
   color: var(--color-text-primary); font-size: var(--font-size-sm); cursor: pointer; transition: all 0.15s; white-space: nowrap;
 }
 .mv-tree-btn:hover { background: var(--color-bg-hover); border-color: var(--color-text-secondary); color: var(--color-text-primary); }
-.mv-back-bar {
-  display: flex; align-items: center; gap: 12px; padding: 8px 16px;
-  border-bottom: 1px solid var(--border, #333);
-}
-.mv-title { font-weight: var(--font-weight-semibold); font-size: var(--font-size-base); }
+
 </style>

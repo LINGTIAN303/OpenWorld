@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="knowledge-wall">
     <div class="panel-header">
       <h3 class="panel-title" :style="{ fontFamily: fontFamily }">知识墙</h3>
@@ -42,6 +42,7 @@
                 <div class="entry-header">
                   <span class="entry-scope">[{{ entry.scope }}]</span>
                   <span class="entry-path">{{ getFileName(entry.path) }}</span>
+                  <button class="entry-mount-btn" @click="mountToInput(entry, $event)" title="挂载到输入框"><WsIcon name="paperclip" size="xs" /></button>
                   <span class="entry-status"><WsIcon :name="getStatusIcon(entry)" size="xs" /></span>
                 </div>
                 <div v-if="entry.summary" class="entry-summary">{{ entry.summary.slice(0, 80) }}</div>
@@ -64,6 +65,7 @@
           <div class="card-header">
             <span class="card-scope">[{{ entry.scope }}]</span>
             <span class="card-path">{{ entry.path }}</span>
+            <button class="entry-mount-btn" @click="mountToInput(entry, $event)" title="挂载到输入框"><WsIcon name="paperclip" size="xs" /></button>
             <span class="card-status"><WsIcon :name="getStatusIcon(entry)" size="xs" /></span>
           </div>
           <div v-if="entry.summary" class="card-summary">{{ entry.summary.slice(0, 80) }}</div>
@@ -134,10 +136,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import WsIcon from '../../ui/WsIcon.vue'
-import { kbList, kbSearchKeyword, kbWrite, kbReadById } from '../../../worldsmith-agent/src/kb/kb-store'
-import type { KBEntry, KBScope } from '../../../worldsmith-agent/src/kb/kb-store'
+import { kbList, kbSearchKeyword, kbWrite, kbReadById } from '@agent/kb/kb-store'
+import type { KBEntry, KBScope } from '@agent/kb/kb-store'
 import { useActivityLog } from '../composables/useActivityLog'
 import { usePersonaFont } from '../composables/usePersonaFont'
+import { useSpaceStore } from '../stores/space-store'
 
 const emit = defineEmits<{
   add: []
@@ -147,6 +150,7 @@ const emit = defineEmits<{
 
 const { addLog } = useActivityLog()
 const { fontFamily } = usePersonaFont()
+const spaceStore = useSpaceStore()
 
 const loading = ref(true)
 const entries = ref<KBEntry[]>([])
@@ -200,6 +204,12 @@ function getStatusIcon(entry: KBEntry): string {
 function formatTime(ts: number): string {
   const d = new Date(ts)
   return `${d.getMonth() + 1}/${d.getDate()}`
+}
+
+function mountToInput(entry: KBEntry, e?: Event): void {
+  if (e) { e.stopPropagation(); e.preventDefault() }
+  const fileName = entry.path.split('/').pop() || entry.path
+  spaceStore.inputInjection = { label: fileName, ref: `@${entry.path} ` }
 }
 
 function toggleFolder(prefix: string) {
@@ -448,6 +458,33 @@ onMounted(async () => {
 
 .entry-status, .card-status {
   font-size: var(--font-size-sm);
+}
+
+.entry-mount-btn {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.kb-entry:hover .entry-mount-btn,
+.kb-card:hover .entry-mount-btn {
+  opacity: 1;
+}
+
+.entry-mount-btn:hover {
+  background: var(--color-primary-muted);
+  color: var(--color-primary);
 }
 
 .entry-summary, .card-summary {

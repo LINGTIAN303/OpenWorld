@@ -27,8 +27,8 @@
       :level="level + 1"
       :selected-keys="selectedKeys"
       :expanded-keys="expandedKeys"
-      @toggle="(...args: any[]) => $emit('toggle', ...args)"
-      @select="(...args: any[]) => $emit('select', ...args)"
+      @toggle="(key: string) => $emit('toggle', key)"
+      @select="(node: TreeNode) => $emit('select', node)"
     >
       <template #default="slotProps"><slot v-bind="slotProps" /></template>
     </WsTreeNode>
@@ -54,6 +54,10 @@ const props = withDefaults(defineProps<{
   level: 0,
   selectedKeys: () => [],
 })
+
+defineSlots<{
+  default: (props: { node: TreeNode; selected: boolean; expanded: boolean }) => any
+}>()
 
 const emit = defineEmits<{
   toggle: [key: string]

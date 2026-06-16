@@ -10,7 +10,6 @@ import type {
   Segment2D,
   WeightedGraph,
   ForceLayoutConfig,
-  NoiseConfig,
 } from './coreBackend'
 
 export interface CoreValidationError {
@@ -147,9 +146,34 @@ export interface WorldSmithCoreAPI {
   schemaRegisterView(typeKey: string, viewJson: string): void
 }
 
-let coreModule: { WorldSmithCore: new () => WorldSmithCoreAPI } | null = null
+import { ref } from 'vue'
+
+let coreModule: { WorldSmithCore: new (...args: any[]) => Record<string, any> } | null = null
 let coreLoadAttempted = false
 let coreInstance: WorldSmithCoreAPI | null = null
+
+/** WASM 可用性响应式状态，UI 层可绑定 */
+export const wasmAvailable = ref<boolean | null>(null) // null = 尚未检测
+
+/** WASM 加载失败原因，用于 UI 提示 */
+export const wasmLoadError = ref<string | null>(null)
+
+/** 依赖 WASM 的功能列表，用于 UI 展示禁用提示 */
+export const WASM_DEPENDENT_FEATURES: readonly string[] = [
+  '地形生成',
+  '约束求解',
+  'DXF 导入/导出',
+  '战术棋盘',
+  '区域地图',
+  '力导向布局',
+  '图算法 (最短路径/社群检测/PageRank)',
+  'CRDT 协同',
+  '水力侵蚀模拟',
+  '视域分析',
+] as const
+
+/** 已通知用户标记 — 避免重复弹出 toast */
+let wasmFailureNotified = false
 
 async function tryLoadCore(): Promise<WorldSmithCoreAPI | null> {
   if (coreInstance) return coreInstance
@@ -158,23 +182,63 @@ async function tryLoadCore(): Promise<WorldSmithCoreAPI | null> {
   try {
     coreModule = await import('@worldsmith/core')
     if (!coreModule?.WorldSmithCore) {
-      console.warn('[WorldSmithCore] 模块缺少 WorldSmithCore 导出')
+      const msg = 'WASM 模块缺少 WorldSmithCore 导出，可能构建不完整'
+      console.warn('[WorldSmithCore]', msg)
+      wasmAvailable.value = false
+      wasmLoadError.value = msg
+      notifyWasmFailure(msg)
       return null
     }
-    const instance = new coreModule.WorldSmithCore()
-    if (typeof instance.validateEntity !== 'function') {
-      console.warn('[WorldSmithCore] WorldSmithCore 实例缺少 validateEntity 方法，WASM 核心库可能版本不匹配')
+    // WASM wasm-pack 生成的 .d.ts 仅含基础方法，完整 API 在运行时可用
+    coreInstance = new coreModule.WorldSmithCore() as unknown as WorldSmithCoreAPI
+    if (typeof coreInstance.validateEntity !== 'function') {
+      const msg = 'WASM 核心库版本不匹配，缺少 validateEntity 方法'
+      console.warn('[WorldSmithCore]', msg)
+      coreInstance = null
+      wasmAvailable.value = false
+      wasmLoadError.value = msg
+      notifyWasmFailure(msg)
       return null
     }
-    coreInstance = instance
     console.log('[WorldSmithCore] WASM 核心库加载成功')
+    wasmAvailable.value = true
+    wasmLoadError.value = null
     const { setWasmAvailable } = await import('./coreBackend')
     setWasmAvailable(true)
     return coreInstance
-  } catch (e) {
+  } catch (e: any) {
+    const msg = e?.message || String(e)
     console.warn('[WorldSmithCore] WASM 核心库不可用:', e)
+    wasmAvailable.value = false
+    wasmLoadError.value = msg
+    notifyWasmFailure(msg)
     return null
   }
+}
+
+/** 通知用户 WASM 加载失败 — 延迟弹窗以等待 UI 就绪 */
+function notifyWasmFailure(reason: string): void {
+  if (wasmFailureNotified) return
+  wasmFailureNotified = true
+
+  // 延迟通知，确保 UI 框架已初始化
+  setTimeout(async () => {
+    try {
+      // 尝试使用 Naive UI 的 message 通知
+      const { useMessage } = await import('naive-ui')
+      // Naive UI message 需要在 setup 上下文中使用，此处降级为 window 通知
+      if (typeof window !== 'undefined' && (window as any).__worldsmith_notify_wasm_failure__) {
+        ;(window as any).__worldsmith_notify_wasm_failure__(reason)
+      }
+    } catch {
+      // UI 库未就绪，仅控制台通知
+    }
+    console.warn(
+      `[WorldSmithCore] WASM 核心库加载失败: ${reason}\n` +
+      `以下功能将不可用: ${WASM_DEPENDENT_FEATURES.join('、')}\n` +
+      `建议在桌面端(Tauri)使用以获取完整功能支持。`,
+    )
+  }, 1000)
 }
 
 export async function getCore(): Promise<WorldSmithCoreAPI | null> {
@@ -183,4 +247,14 @@ export async function getCore(): Promise<WorldSmithCoreAPI | null> {
 
 export function isCoreAvailable(): boolean {
   return coreInstance !== null
+}
+
+/**
+ * 查询 WASM 可用性 — 触发一次检测（如尚未检测）
+ * 返回 true 表示 WASM 可用，false 表示不可用，null 表示尚未完成检测
+ */
+export async function checkWasmAvailability(): Promise<boolean | null> {
+  if (wasmAvailable.value !== null) return wasmAvailable.value
+  await tryLoadCore()
+  return wasmAvailable.value
 }

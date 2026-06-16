@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useAgent } from '../../agent/composables/useAgent'
 import type { ChatMode } from '../../agent/composables/useAgent'
 import { useSettingsStore } from '../../stores/settingsStore'
@@ -136,6 +136,11 @@ const calculatedCost = computed(() => {
   )
 })
 
+watch([() => settingsStore.aiCloudModel, () => settingsStore.aiCloudProvider], async ([newModel, newProvider]) => {
+  if (newModel === currentModelId.value && newProvider === currentProvider.value) return
+  try { await onModelChange(newProvider, newModel) } catch {}
+})
+
 function onTemperatureChange(val: number) {
   temperature.value = val
   updateModel(currentProvider.value, currentModelId.value, undefined, undefined, val, maxTokens.value, contextLength.value)
@@ -151,6 +156,7 @@ function onMaxTokensChange(val: number) {
 function onPersonaChange(val: string) { personaPreset.value = val; saveAgentSettings() }
 
 async function onModelChange(provider: string, modelId: string): Promise<void> {
+  const oldModelId = currentModelId.value
   currentProvider.value = provider
   currentModelId.value = modelId
   settingsStore.aiCloudProvider = provider as any
@@ -159,14 +165,25 @@ async function onModelChange(provider: string, modelId: string): Promise<void> {
     settingsStore.aiProviderMode = 'cloud'
   }
   const info = getModelInfo(modelId)
+  const prevInfo = getModelInfo(oldModelId)
   const isCustom = ['openai-compatible', 'anthropic-compatible'].includes(provider)
   let contextWindow = isCustom ? 1048576 : 128000
   let maxOut = isCustom ? 65536 : 8192
   if (info) {
     contextWindow = info.contextLength
     maxOut = info.maxOutputTokens
-    contextLength.value = Math.min(contextLength.value, info.contextLength)
-    maxTokens.value = Math.min(maxTokens.value, info.maxOutputTokens)
+    const oldMax = prevInfo?.contextLength || 128000
+    if (contextLength.value >= oldMax) {
+      contextLength.value = info.contextLength
+    } else {
+      contextLength.value = Math.min(contextLength.value, info.contextLength)
+    }
+    const oldMaxOut = prevInfo?.maxOutputTokens || 8192
+    if (maxTokens.value >= oldMaxOut) {
+      maxTokens.value = info.maxOutputTokens
+    } else {
+      maxTokens.value = Math.min(maxTokens.value, info.maxOutputTokens)
+    }
     const maxTemp = ['anthropic', 'zhipu', 'minimax'].includes(provider) ? 100 : 200
     temperature.value = Math.min(temperature.value, maxTemp)
     const validLevels = getThinkingLevels(modelId)
@@ -195,7 +212,7 @@ async function onSearchEngineChange(engine: string): Promise<void> {
   if (searchApiKey.value) {
     await storeApiKey('search_' + oldEngine, searchApiKey.value)
   } else {
-    removeApiKey('search_' + oldEngine)
+    await removeApiKey('search_' + oldEngine)
   }
   searchEngine.value = engine
   const newKey = await loadApiKey('search_' + engine)
@@ -251,7 +268,7 @@ async function saveSearchConfig(): Promise<void> {
   if (searchApiKey.value) {
     await storeApiKey('search_' + searchEngine.value, searchApiKey.value)
   } else {
-    removeApiKey('search_' + searchEngine.value)
+    await removeApiKey('search_' + searchEngine.value)
   }
   await refreshSearchConfig()
 }

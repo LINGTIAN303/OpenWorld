@@ -1,8 +1,17 @@
 import { ref } from 'vue'
 import { storage } from '../core'
-import { db } from '../core'
+import { getProjectManager, db as legacyDb } from '../core'
 import { useEntityStore } from '../stores'
 import { useFileStore } from '../stores'
+
+/** 获取当前项目的数据库实例，未初始化时回退到全局数据库 */
+function getCurrentDb() {
+  try {
+    return getProjectManager().getCurrentProjectDb()
+  } catch {
+    return legacyDb
+  }
+}
 
 export interface StorageStats {
   totalUsageMB: number
@@ -40,8 +49,8 @@ export function useStorageStats() {
       const fileStore = useFileStore()
 
       const [entityCount, relationCount, kvAll] = await Promise.all([
-        db.entities.count(),
-        db.relations.count(),
+        getCurrentDb().entities.count(),
+        getCurrentDb().relations.count(),
         storage.kvGetAll(),
       ])
 
@@ -54,7 +63,7 @@ export function useStorageStats() {
 
       let fileContentEstimateMB = 0
       try {
-        const contents = await db.file_contents.toArray()
+        const contents = await getCurrentDb().file_contents.toArray()
         for (const c of contents) {
           const textLen = c.textContent?.length || 0
           const binLen = c.binaryData?.length || 0

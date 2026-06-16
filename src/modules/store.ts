@@ -1,40 +1,51 @@
 
-import { db } from '@worldsmith/entity-core/core'
+import { getProjectManager, db as legacyDb } from '@worldsmith/entity-core/core'
 import type { ModuleInstance } from './types'
 
-const mstore = db.modules as any
+/**
+ * 获取当前项目的 modules 表。
+ * 每次调用动态获取，确保切换项目后操作正确的数据库。
+ */
+function getModulesTable() {
+  try {
+    return getProjectManager().getCurrentProjectDb().modules
+  } catch {
+    // 项目系统未初始化时回退到旧的全局数据库
+    return legacyDb.modules
+  }
+}
 
 async function getAll(): Promise<ModuleInstance[]> {
-  return mstore.toArray()
+  return getModulesTable().toArray()
 }
 
 async function get(id: string): Promise<ModuleInstance | undefined> {
-  return mstore.get(id)
+  return getModulesTable().get(id)
 }
 
 async function getActive(): Promise<ModuleInstance[]> {
-  return mstore.where('active').equals(1).toArray()
+  return getModulesTable().where('active').equals(1).toArray()
 }
 
 async function install(instance: ModuleInstance): Promise<void> {
-  await mstore.put(instance)
+  await getModulesTable().put(instance)
 }
 
 async function uninstall(id: string): Promise<void> {
-  await mstore.delete(id)
+  await getModulesTable().delete(id)
 }
 
 async function setActive(id: string, active: boolean): Promise<void> {
-  await mstore.update(id, { active })
+  await getModulesTable().update(id, { active })
 }
 
 async function exists(id: string): Promise<boolean> {
-  const m = await mstore.get(id)
+  const m = await getModulesTable().get(id)
   return m !== undefined
 }
 
 async function clear(): Promise<void> {
-  await mstore.clear()
+  await getModulesTable().clear()
 }
 
 async function migrateFromLocalStorage() {

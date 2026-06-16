@@ -65,6 +65,9 @@ export {
   measureText,
   toBlob,
   toDataURL,
+  drawImageCover,
+  drawImageContain,
+  applyTextShadow,
 } from './FontRenderer'
 
 export {

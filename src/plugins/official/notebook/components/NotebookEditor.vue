@@ -11,25 +11,42 @@
       </select>
     </div>
     <div class="nb-editor-body">
-      <CodeCell
-        v-if="editType === 'code'"
-        :code="editContent"
-        :language="editLanguage"
-        @update="editContent = $event; emitUpdate()"
-        @run="onCodeRun"
-      />
-      <textarea
-        v-else
-        v-model="editContent"
-        class="nb-editor-textarea"
-        placeholder="开始写作..."
-        @input="emitUpdate"
-      />
+      <ErrorBoundary message="编辑器加载失败">
+        <CodeCell
+          v-if="editType === 'code'"
+          :code="editContent"
+          :language="editLanguage"
+          @update="editContent = $event; emitUpdate()"
+          @run="onCodeRun"
+          @language-change="editLanguage = $event; emitUpdate()"
+        />
+        <NotebookTipTapEditor
+          v-else
+          :note="note"
+          @contentChange="onContentChange"
+        />
+      </ErrorBoundary>
     </div>
-    <div v-if="backlinkNotes.length" class="nb-editor-backlinks">
-      <div class="nb-bl-title">反向链接 ({{ backlinkNotes.length }})</div>
-      <div v-for="bl in backlinkNotes" :key="bl.id" class="nb-bl-item" @click="$emit('navigate', bl.id)">
-        {{ bl.name }}
+    <BacklinkPanel :links="backlinkNotes" @navigate="$emit('navigate', $event)" @createLink="showLinkPicker = true" />
+    <div v-if="showLinkPicker" class="nb-link-picker-overlay" @click.self="showLinkPicker = false">
+      <div class="nb-link-picker">
+        <div class="nlp-header">
+          <span>创建链接</span>
+          <button class="nlp-close" @click="showLinkPicker = false"><WsIcon name="close" size="xs" /></button>
+        </div>
+        <input v-model="linkSearch" class="nlp-search" placeholder="搜索笔记..." />
+        <div class="nlp-list">
+          <div
+            v-for="n in linkableNotes"
+            :key="n.id"
+            class="nlp-item"
+            @click="createLink(n.id)"
+          >
+            <WsIcon :name="getNoteIcon(n)" size="xs" />
+            <span class="nlp-item-name">{{ n.name }}</span>
+          </div>
+          <div v-if="linkableNotes.length === 0" class="nlp-empty">无匹配笔记</div>
+        </div>
       </div>
     </div>
   </div>
@@ -38,19 +55,26 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import WsIcon from '../../../../ui/WsIcon.vue'
-import { useEntityStore } from '@worldsmith/entity-core'
+import { useEntityStore, useRelationStore, useBidirectional } from '@worldsmith/entity-core'
+import type { Relation } from '@worldsmith/entity-core'
 import CodeCell from './CodeCell.vue'
+import ErrorBoundary from './ErrorBoundary.vue'
+import NotebookTipTapEditor from './NotebookTipTapEditor.vue'
+import BacklinkPanel from './BacklinkPanel.vue'
 import { NOTE_TYPES } from '../notebookConfig'
+import type { NotebookEntity } from '../types'
 
 interface NotebookFolder {
   id: string
   name: string
 }
 
-const props = defineProps<{ note: any; folders: NotebookFolder[] }>()
+const props = defineProps<{ note: NotebookEntity; folders: NotebookFolder[] }>()
 const emit = defineEmits<{ update: [data: { id: string; changes: Record<string, unknown> }]; navigate: [id: string] }>()
 
 const entityStore = useEntityStore()
+const relationStore = useRelationStore()
+const { createBidirectional } = useBidirectional()
 
 const editName = ref(props.note.name || '')
 const editContent = ref(String(props.note.properties?.content || ''))
@@ -68,9 +92,17 @@ watch(() => props.note, (n) => {
 })
 
 const backlinkNotes = computed(() => {
-  const ids: string[] = props.note.properties?.backlinks || []
-  return entityStore.entities.filter((e: any) => ids.includes(e.id))
+  const rels = relationStore.relations.filter(
+    (r: Relation) => r.type === 'note_link' && r.targetId === props.note.id
+  )
+  const sourceIds = rels.map((r: Relation) => r.sourceId)
+  return entityStore.entities.filter((e) => sourceIds.includes(e.id))
 })
+
+function onContentChange(html: string): void {
+  editContent.value = html
+  emitUpdate()
+}
 
 function emitUpdate(): void {
   emit('update', {
@@ -88,21 +120,57 @@ function emitUpdate(): void {
   })
 }
 
-function onCodeRun(): void {
+const showLinkPicker = ref(false)
+const linkSearch = ref('')
+
+const linkableNotes = computed(() => {
+  const all = entityStore.entities.filter((e): e is NotebookEntity => e.type === 'notebook' && e.id !== props.note.id)
+  if (!linkSearch.value) return all.slice(0, 50)
+  const q = linkSearch.value.toLowerCase()
+  return all.filter(n => n.name.toLowerCase().includes(q)).slice(0, 50)
+})
+
+function getNoteIcon(note: NotebookEntity): string {
+  const noteType = note.properties?.noteType || 'markdown'
+  return NOTE_TYPES.find(t => t.value === noteType)?.icon || 'edit'
+}
+
+async function createLink(targetId: string): Promise<void> {
+  await createBidirectional({ type: 'note_link', sourceId: props.note.id, targetId })
+  showLinkPicker.value = false
+  linkSearch.value = ''
+}
+
+function onCodeRun(output: string): void {
+  entityStore.update(props.note.id, {
+    properties: {
+      ...props.note.properties,
+      codeOutput: output,
+      content: editContent.value,
+    },
+  })
 }
 </script>
 
 <style scoped>
 .nb-editor { display: flex; flex-direction: column; height: 100%; }
-.nb-editor-header { display: flex; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--color-border-subtle); align-items: center; background: var(--color-bg-surface); }
+.nb-editor-header { display: flex; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--color-border-subtle); align-items: center; background: var(--color-bg-surface); font-family: var(--font-family-editor-ui); }
 .nb-editor-title { flex: 1; background: transparent; border: none; color: var(--color-text-primary); font-size: var(--font-size-xl); font-weight: var(--font-weight-semibold); outline: none; }
 .nb-editor-folder { padding: 4px 8px; border-radius: 4px; border: 1px solid var(--color-border); background: var(--color-bg-base); color: var(--color-text-secondary); font-size: var(--font-size-sm); outline: none; max-width: 140px; }
 .nb-editor-type { padding: 4px 8px; border-radius: 4px; border: 1px solid var(--color-border); background: var(--color-bg-base); color: var(--color-text-secondary); font-size: var(--font-size-sm); outline: none; }
 .nb-editor-folder option, .nb-editor-type option { background: var(--color-bg-surface); color: var(--color-text-primary); }
-.nb-editor-body { flex: 1; padding: 16px; overflow: auto; }
-.nb-editor-textarea { width: 100%; height: 100%; background: transparent; border: none; color: var(--color-text-primary); font-size: var(--font-size-base); line-height: 1.7; resize: none; outline: none; font-family: inherit; }
-.nb-editor-backlinks { border-top: 1px solid var(--color-border-subtle); padding: 8px 16px; }
-.nb-bl-title { font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); color: var(--color-text-tertiary); text-transform: uppercase; margin-bottom: 4px; }
-.nb-bl-item { font-size: var(--font-size-sm); color: var(--color-primary); cursor: pointer; padding: 2px 0; }
-.nb-bl-item:hover { text-decoration: underline; }
+.nb-editor-body { flex: 1; overflow: hidden; }
+
+.nb-link-picker-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+.nb-link-picker { background: var(--color-bg-surface); border-radius: 8px; width: 360px; max-height: 400px; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+.nlp-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); border-bottom: 1px solid var(--color-border-subtle); }
+.nlp-close { padding: 2px 6px; border: none; background: transparent; color: var(--color-text-tertiary); cursor: pointer; border-radius: 4px; }
+.nlp-close:hover { background: var(--color-bg-hover); }
+.nlp-search { margin: 8px 12px; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--color-border); background: var(--color-bg-base); color: var(--color-text-primary); font-size: var(--font-size-sm); outline: none; }
+.nlp-search:focus { border-color: var(--color-primary); }
+.nlp-list { flex: 1; overflow-y: auto; padding: 4px 8px; }
+.nlp-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 4px; cursor: pointer; font-size: var(--font-size-sm); color: var(--color-text-primary); }
+.nlp-item:hover { background: var(--color-bg-hover); }
+.nlp-item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nlp-empty { padding: 16px; text-align: center; font-size: var(--font-size-xs); color: var(--color-text-tertiary); }
 </style>

@@ -1,11 +1,7 @@
 <template>
   <div class="culture-view">
     <div v-if="viewMode === 'calendar'" class="cv-calendar">
-      <div class="cv-back-bar">
-        <button class="btn-ghost" @click="viewMode = 'list'">← 返回列表</button>
-        <span class="cv-title">节日历环</span>
-      </div>
-      <FestivalCalendarView />
+      <FestivalCalendarView @back="viewMode = 'list'" />
     </div>
     <SchemaRenderer v-else type-key="culture" :detail-tabs="cultureTabs">
       <template #toolbar-extra>
@@ -43,9 +39,5 @@ const cultureTabs: RelationTabDef[] = [
   color: var(--color-text-primary); font-size: var(--font-size-sm); cursor: pointer; transition: all 0.15s; white-space: nowrap;
 }
 .cv-cal-btn:hover { background: var(--color-bg-hover); border-color: var(--color-text-secondary); color: var(--color-text-primary); }
-.cv-back-bar {
-  display: flex; align-items: center; gap: 12px; padding: 8px 16px;
-  border-bottom: 1px solid var(--border, #333);
-}
-.cv-title { font-weight: var(--font-weight-semibold); font-size: var(--font-size-base); }
+
 </style>

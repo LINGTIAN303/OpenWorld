@@ -33,10 +33,12 @@ function startResize(e: MouseEvent) {
   if (!container) return
   const isHorizontal = direction.value === 'horizontal'
 
-  function onMove(ev: MouseEvent) {
+    if (!container) return
+    function onMove(ev: MouseEvent) {
     const containerSize = isHorizontal ? container.clientWidth : container.clientHeight
+    const containerRect = container.getBoundingClientRect()
     const offset = ev.clientX !== undefined
-      ? (isHorizontal ? ev.clientX : ev.clientY) - container.getBoundingClientRect()[isHorizontal ? 'left' : 'top']
+      ? (isHorizontal ? ev.clientX : ev.clientY) - containerRect[isHorizontal ? 'left' : 'top']
       : 0
     splitRatio.value = Math.max(10, Math.min(90, (offset / containerSize) * 100))
   }

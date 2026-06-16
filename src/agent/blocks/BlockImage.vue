@@ -16,7 +16,7 @@
       <span class="block-arrow">{{ expanded ? '▾ 点击收起' : '▸ 点击展开' }}</span>
     </div>
     <Transition name="block-expand">
-      <div v-if="expanded" class="block-content">
+      <div v-if="expanded" ref="contentRef" class="block-content">
         <A2UIResolvedImage :src="block.src" :alt="block.alt || ''" img-class="block-img" @click="onImageClick" />
         <span v-if="block.caption" class="img-caption">{{ block.caption }}</span>
       </div>
@@ -35,7 +35,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { ImageBlock } from '@agent/index'
-import { getImage, downloadBlob, srcToBlob, blobToDataUrl } from '@agent/stores/image-persistence'
+import { getImage, downloadBlob, srcToBlob } from '@agent/stores/image-persistence'
 import A2UIResolvedImage from '../a2ui/A2UIResolvedImage.vue'
 import WsIcon from '../../ui/WsIcon.vue'
 
@@ -49,6 +49,13 @@ const menuVisible = ref(false)
 const menuX = ref(0)
 /** 菜单 Y 坐标 */
 const menuY = ref(0)
+/** 图片 DOM 引用 */
+const contentRef = ref<HTMLElement>()
+
+/** 获取已渲染的 <img> 元素 */
+function getImgEl(): HTMLImageElement | null {
+  return contentRef.value?.querySelector('img.block-img') || null
+}
 
 /** 右键菜单打开，自动在下次点击时关闭 */
 function onContextMenu(e: MouseEvent): void {
@@ -71,36 +78,128 @@ function buildFilename(): string {
   return `${sanitized}.png`
 }
 
+/** 从 Canvas 异步获取 Blob */
+function canvasToBlob(img: HTMLImageElement): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    try {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.naturalWidth || img.width
+      canvas.height = img.naturalHeight || img.height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { resolve(null); return }
+      ctx.drawImage(img, 0, 0)
+      canvas.toBlob((blob) => resolve(blob), 'image/png')
+    } catch {
+      // Canvas tainted 或其他错误
+      resolve(null)
+    }
+  })
+}
+
+/** 用 crossOrigin="anonymous" 重新加载远程图片，成功后可通过 Canvas 提取 */
+function loadCrossOriginImage(src: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => resolve(img)
+    img.onerror = () => resolve(null)
+    img.src = src
+  })
+}
+
 /** 导出保存图片到本地
- *  优先从 IndexedDB 获取原始 Blob（保持最高质量），
- *  IndexedDB 未命中时降级为从 src 重新 fetch 下载
+ *  优先级：
+ *  1. IndexedDB 原始 Blob（最高质量）
+ *  2. 从已渲染的 <img> 元素通过 Canvas 提取（Blob URL 同源时有效）
+ *  3. 用 crossOrigin="anonymous" 重新加载远程图片 + Canvas 提取
+ *  4. fetch→blob（仅同源或 CORS 允许时有效）
+ *  5. data URL 直接下载
+ *  6. 最终降级：新窗口打开
  */
 async function exportImage(): Promise<void> {
   menuVisible.value = false
+  const filename = buildFilename()
+
   try {
+    // 1. 优先从 IndexedDB 获取原始 Blob
     const persisted = await getImage(props.block.id)
-    if (persisted) {
-      downloadBlob(persisted.blob, buildFilename())
+    if (persisted?.blob) {
+      downloadBlob(persisted.blob, filename)
       return
     }
-    const blob = await srcToBlob(props.block.src)
-    downloadBlob(blob, buildFilename())
-  } catch {
+
+    // 2. 从已渲染的 <img> 元素通过 Canvas 提取（Blob URL 同源时有效）
+    const imgEl = getImgEl()
+    if (imgEl && imgEl.complete && imgEl.naturalWidth > 0) {
+      const blob = await canvasToBlob(imgEl)
+      if (blob) {
+        downloadBlob(blob, filename)
+        return
+      }
+    }
+
+    // 3. 远程 URL：用 crossOrigin="anonymous" 重新加载 + Canvas 提取
+    const src = props.block.src
+    if (src && !src.startsWith('data:') && !src.startsWith('blob:')) {
+      const crossImg = await loadCrossOriginImage(src)
+      if (crossImg) {
+        const blob = await canvasToBlob(crossImg)
+        if (blob) {
+          downloadBlob(blob, filename)
+          return
+        }
+      }
+    }
+
+    // 4. data URL 可直接下载
+    if (src.startsWith('data:')) {
+      const a = document.createElement('a')
+      a.href = src
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      return
+    }
+
+    // 5. 尝试 fetch→blob（同源或 CORS 允许时有效）
     try {
-      const blob = await srcToBlob(props.block.src)
-      downloadBlob(blob, buildFilename())
-    } catch {}
+      const blob = await srcToBlob(src)
+      downloadBlob(blob, filename)
+      return
+    } catch {
+      // fetch 失败，继续降级
+    }
+
+    // 6. 最终降级：新窗口打开
+    window.open(src, '_blank')
+  } catch {
+    try { window.open(props.block.src, '_blank') } catch {}
   }
 }
 
 /** 复制图片到剪贴板
- *  优先从 IndexedDB 获取原始 Blob，降级为从 src 重新 fetch
+ *  优先从 IndexedDB 获取，降级为 Canvas 提取，再降级为 fetch
  */
 async function copyImage(): Promise<void> {
   menuVisible.value = false
   try {
     const persisted = await getImage(props.block.id)
-    const blob = persisted?.blob || await srcToBlob(props.block.src)
+    if (persisted?.blob) {
+      await navigator.clipboard.write([new ClipboardItem({ [persisted.blob.type]: persisted.blob })])
+      return
+    }
+    // 从 Canvas 提取
+    const imgEl = getImgEl()
+    if (imgEl && imgEl.complete && imgEl.naturalWidth > 0) {
+      const blob = await canvasToBlob(imgEl)
+      if (blob) {
+        await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })])
+        return
+      }
+    }
+    // fetch 降级
+    const blob = await srcToBlob(props.block.src)
     await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })])
   } catch {}
 }

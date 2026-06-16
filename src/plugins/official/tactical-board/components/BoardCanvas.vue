@@ -4,9 +4,9 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
-import { useBoardRenderer } from '../composables/useBoardRenderer'
+import { useBoardRenderer, type AnimationProvider } from '../composables/useBoardRenderer'
 import { useBoardInteraction } from '../composables/useBoardInteraction'
-import type { BoardCamera, UnitRenderData, HighlightCell, AwarenessCell } from '../composables/boardDraw'
+import type { BoardCamera, UnitRenderData, HighlightCell, AwarenessCell, AnimOverride } from '../composables/boardDraw'
 
 const props = defineProps<{
   gridType: 'square' | 'hex'
@@ -18,6 +18,7 @@ const props = defineProps<{
   selectedCell: { x: number; y: number } | null
   awarenessCells: AwarenessCell[]
   awarenessMode: 'none' | 'influence' | 'threat' | 'supply'
+  animationProvider?: AnimationProvider
 }>()
 
 const emit = defineEmits<{
@@ -43,7 +44,7 @@ const renderData = computed(() => ({
   awarenessMode: props.awarenessMode,
 }))
 
-const renderer = useBoardRenderer(containerRef, renderData)
+const renderer = useBoardRenderer(containerRef, renderData, props.animationProvider)
 
 const interaction = useBoardInteraction(
   renderer.canvas,
@@ -61,7 +62,7 @@ interaction.setCallbacks({
     emit('cellRightClick', x, y, evt)
   },
   onCellHover(x, y) {
-    if (x < 0 || y < 0) {
+    if (x < 0 || y === null || y < 0) {
       hoveredCell.value = null
       emit('cellHover', null, null)
     } else {

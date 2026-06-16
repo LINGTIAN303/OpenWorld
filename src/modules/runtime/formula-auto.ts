@@ -47,51 +47,70 @@ function getFormulasForType(entityType: string): Record<string, string> {
  * 注册 formula 自动重算
  * 在 app 启动时调用
  */
+let formulaUnsubscribers: (() => void)[] = []
+
 export function registerFormulaAutoRecalc(): void {
+  // 清理旧注册（如有）
+  unregisterFormulaAutoRecalc()
+
   // 监听所有字段变更
-  eventBus.on('field:change', async (event: FieldChangeEvent) => {
-    const formulas = getFormulasForType(event.entityType)
-    if (Object.keys(formulas).length === 0) return
+  formulaUnsubscribers.push(
+    eventBus.on('field:change', async (event: FieldChangeEvent) => {
+      const formulas = getFormulasForType(event.entityType)
+      if (Object.keys(formulas).length === 0) return
 
-    // 找出哪些 formula 依赖被变更的字段
-    const recalcFields: string[] = []
-    for (const [fieldKey, formulaExpr] of Object.entries(formulas)) {
-      const refs = extractFieldRefs(formulaExpr)
-      if (refs.includes(event.field)) {
-        recalcFields.push(fieldKey)
+      // 找出哪些 formula 依赖被变更的字段
+      const recalcFields: string[] = []
+      for (const [fieldKey, formulaExpr] of Object.entries(formulas)) {
+        const refs = extractFieldRefs(formulaExpr)
+        if (refs.includes(event.field)) {
+          recalcFields.push(fieldKey)
+        }
       }
-    }
-    if (recalcFields.length === 0) return
+      if (recalcFields.length === 0) return
 
-    // 获取当前实体数据，计算新值
-    try {
-      const entityStore = useEntityStore()
-      const entity = await entityStore.getById(event.entityId)
-      if (!entity) return
+      // 获取当前实体数据，计算新值
+      try {
+        const entityStore = useEntityStore()
+        const entity = await entityStore.getById(event.entityId)
+        if (!entity) return
 
-      const allEntities = entityStore.entities.filter(e => e.type === event.entityType)
-      const allFieldValues = allEntities.map(e => e.properties ?? {})
+        const allEntities = entityStore.entities.filter(e => e.type === event.entityType)
+        const allFieldValues = allEntities.map(e => e.properties ?? {})
 
-      const propUpdates: Record<string, unknown> = {}
-      for (const fieldKey of recalcFields) {
-        const formulaExpr = formulas[fieldKey]
-        const result = evaluateFormula(formulaExpr, entity.properties ?? {}, allFieldValues)
-        propUpdates[fieldKey] = result
+        const propUpdates: Record<string, unknown> = {}
+        for (const fieldKey of recalcFields) {
+          const formulaExpr = formulas[fieldKey]
+          const result = evaluateFormula(formulaExpr, entity.properties ?? {}, allFieldValues)
+          propUpdates[fieldKey] = result
+        }
+
+        // 更新实体 formula 字段（不触发额外事件循环）
+        if (Object.keys(propUpdates).length > 0) {
+          await entityStore.update(event.entityId, { properties: { ...entity.properties, ...propUpdates } })
+        }
+      } catch (e) {
+        console.warn('[FormulaAuto] 计算失败:', e)
       }
-
-      // 更新实体 formula 字段（不触发额外事件循环）
-      if (Object.keys(propUpdates).length > 0) {
-        await entityStore.update(event.entityId, { properties: { ...entity.properties, ...propUpdates } })
-      }
-    } catch (e) {
-      console.warn('[FormulaAuto] \u8ba1\u7b97\u5931\u8d25:', e)
-    }
-  })
+    })
+  )
 
   // 清除缓存以便 Schema 变更后重建
-  eventBus.on('entity:update', () => {
-    formulaCache = null
-  })
+  formulaUnsubscribers.push(
+    eventBus.on('entity:update', () => {
+      formulaCache = null
+    })
+  )
+}
+
+/**
+ * 取消注册 formula 自动重算
+ */
+export function unregisterFormulaAutoRecalc(): void {
+  for (const unsub of formulaUnsubscribers) {
+    try { unsub() } catch { /* 忽略 */ }
+  }
+  formulaUnsubscribers = []
 }
 
 /**

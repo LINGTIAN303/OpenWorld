@@ -1,13 +1,9 @@
 <template>
   <div class="weapon-view">
     <div v-if="viewMode === 'lineage'" class="wv-lineage">
-      <div class="wv-back-bar">
-        <button class="btn-ghost" @click="viewMode = 'list'">← 返回列表</button>
-        <span class="wv-title">传承谱系</span>
-      </div>
-      <WeaponLineageView />
+      <WeaponLineageView @back="viewMode = 'list'" />
     </div>
-    <SchemaRenderer v-else type-key="weapon" :detail-tabs="weaponTabs">
+    <SchemaRenderer v-else type-key="item" :additional-filter="isWeaponItem" :detail-tabs="weaponTabs" facet-on-create="weapon">
       <template #toolbar-extra>
         <button class="wv-lin-btn" @click="viewMode = 'lineage'" title="传承谱系视图">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -30,6 +26,12 @@ import { SchemaRenderer, type RelationTabDef } from '@worldsmith/ui-kit'
 import WeaponLineageView from './WeaponLineageView.vue'
 
 const viewMode = ref<'list' | 'lineage'>('list')
+
+/** 过滤出包含 weapon facet 的 item 实体 */
+function isWeaponItem(entity: any): boolean {
+  return entity?.facets?.weapon != null || entity?.properties?.itemType === '武器'
+}
+
 const weaponTabs: RelationTabDef[] = [
   { id: 'wielded_by', label: '持有者', icon: 'user', relationType: 'wielded_by', reverseDirection: true },
   { id: 'related_weapon', label: '关联武器', icon: 'link', relationType: 'related_weapon' },
@@ -39,14 +41,7 @@ const weaponTabs: RelationTabDef[] = [
 
 <style scoped>
 .weapon-view { height: 100%; }
-.wv-back-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border, #333);
-}
-.wv-title { font-weight: var(--font-weight-semibold); font-size: var(--font-size-base); }
+
 .wv-lin-btn {
   display: inline-flex;
   align-items: center;

@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 
 use crate::error::CoreError;
-use crate::retrofit::intent::{RetrofitIntent, StyleTarget};
+use crate::retrofit::intent::RetrofitIntent;
+#[cfg(feature = "sqlite")]
+use crate::retrofit::intent::StyleTarget;
+#[cfg(feature = "sqlite")]
 use crate::storage::StorageBackend;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,10 +47,12 @@ impl IntentExecutor for NoOpExecutor {
   }
 }
 
+#[cfg(feature = "sqlite")]
 pub struct StorageExecutor<'a> {
   storage: &'a dyn StorageBackend,
 }
 
+#[cfg(feature = "sqlite")]
 impl<'a> StorageExecutor<'a> {
   #[must_use]
   pub const fn new(storage: &'a dyn StorageBackend) -> Self {
@@ -88,6 +93,7 @@ impl IntentExecutor for OwnedSqliteExecutor {
   }
 }
 
+#[cfg(feature = "sqlite")]
 impl IntentExecutor for StorageExecutor<'_> {
   #[allow(clippy::too_many_lines)]
   #[allow(clippy::or_fun_call)]
@@ -747,7 +753,7 @@ impl IntentConflictDetector {
   }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "sqlite"))]
 mod tests {
   use super::*;
   use crate::retrofit::intent::{

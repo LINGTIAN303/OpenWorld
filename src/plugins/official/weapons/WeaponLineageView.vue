@@ -197,7 +197,7 @@ onMounted(async () => {
     },
     onNodeDoubleClick: (node) => {
       window.dispatchEvent(new CustomEvent('ws-navigate', {
-        detail: { type: 'entity', entityId: node.id, entityType: 'weapon' },
+        detail: { type: 'entity', entityId: node.id, entityType: 'item' },
       }))
     },
     onBackgroundClick: () => {

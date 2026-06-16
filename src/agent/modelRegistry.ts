@@ -1,4 +1,6 @@
-import { DEFAULT_CLOUD_CONFIGS } from '@agent/index'
+﻿import { DEFAULT_CLOUD_CONFIGS } from '@agent/index'
+import { getProviderLabelMap, getProviderManifest, detectVisionSupport } from '@agent/providers/provider-registry'
+import { getCachedModels, getModelsWithBackgroundRefresh, type FetchedModelEntry } from '@agent/providers/model-fetcher'
 
 export interface ModelInfo {
   id: string
@@ -62,6 +64,23 @@ export const MODEL_REGISTRY: ModelInfo[] = [
   { id: 'kimi-k2.5', name: 'Kimi K2.5', provider: 'kimi', contextLength: 262144, maxOutputTokens: 32000, supportsThinking: true, supportsVision: true, thinkingModes: ['low', 'medium', 'high'], inputPricePerMillion: 4, outputPricePerMillion: 21, cacheReadPricePerMillion: 0.7, cacheWritePricePerMillion: 4, currency: 'CNY' },
   { id: 'kimi-k2.6', name: 'Kimi K2.6', provider: 'kimi', contextLength: 262144, maxOutputTokens: 96000, supportsThinking: true, supportsVision: false, thinkingModes: ['low', 'medium', 'high'], inputPricePerMillion: 6.5, outputPricePerMillion: 27, cacheReadPricePerMillion: 1.1, cacheWritePricePerMillion: 6.5, currency: 'CNY' },
   { id: 'moonshot-v1-128k', name: 'Moonshot V1', provider: 'kimi', contextLength: 131072, maxOutputTokens: 8192, supportsThinking: false, supportsVision: false, inputPricePerMillion: 10, outputPricePerMillion: 30, cacheReadPricePerMillion: 2, cacheWritePricePerMillion: 10, currency: 'CNY' },
+  { id: 'agnes-2.0-flash', name: 'Agnes 2.0 Flash', provider: 'agnes', contextLength: 1048576, maxOutputTokens: 65536, supportsThinking: false, supportsVision: false, inputPricePerMillion: 0, outputPricePerMillion: 0, cacheReadPricePerMillion: 0, cacheWritePricePerMillion: 0, currency: 'USD' },
+  { id: 'agnes-1.5-flash', name: 'Agnes 1.5 Flash', provider: 'agnes', contextLength: 524288, maxOutputTokens: 32768, supportsThinking: false, supportsVision: false, inputPricePerMillion: 0, outputPricePerMillion: 0, cacheReadPricePerMillion: 0, cacheWritePricePerMillion: 0, currency: 'USD' },
+  { id: 'sensenova-6.7-flash-lite', name: 'SenseNova 6.7 Flash-Lite', provider: 'sensenova', contextLength: 256000, maxOutputTokens: 64000, supportsThinking: false, supportsVision: true, inputPricePerMillion: 0, outputPricePerMillion: 0, cacheReadPricePerMillion: 0, cacheWritePricePerMillion: 0, currency: 'CNY' },
+  // ── 字节豆包 (火山方舟) ──
+  { id: 'doubao-1.5-pro-256k', name: 'Doubao 1.5 Pro 256K', provider: 'doubao', contextLength: 262144, maxOutputTokens: 65536, supportsThinking: true, supportsVision: false, inputPricePerMillion: 3.2, outputPricePerMillion: 16, cacheReadPricePerMillion: 0, cacheWritePricePerMillion: 0, currency: 'CNY' },
+  { id: 'doubao-1.5-lite-32k', name: 'Doubao 1.5 Lite 32K', provider: 'doubao', contextLength: 32768, maxOutputTokens: 8192, supportsThinking: false, supportsVision: false, inputPricePerMillion: 0, outputPricePerMillion: 0, cacheReadPricePerMillion: 0, cacheWritePricePerMillion: 0, currency: 'CNY' },
+  { id: 'doubao-seed-2.0-lite', name: 'Doubao Seed 2.0 Lite', provider: 'doubao', contextLength: 262144, maxOutputTokens: 65536, supportsThinking: true, supportsVision: true, inputPricePerMillion: 0, outputPricePerMillion: 0, cacheReadPricePerMillion: 0, cacheWritePricePerMillion: 0, currency: 'CNY' },
+  // ── xAI Grok ──
+  { id: 'grok-4', name: 'Grok 4', provider: 'xai', contextLength: 262144, maxOutputTokens: 32768, supportsThinking: true, supportsVision: true, inputPricePerMillion: 3, outputPricePerMillion: 15, cacheReadPricePerMillion: 0, cacheWritePricePerMillion: 0, currency: 'USD' },
+  { id: 'grok-3', name: 'Grok 3', provider: 'xai', contextLength: 131072, maxOutputTokens: 16384, supportsThinking: false, supportsVision: true, inputPricePerMillion: 3, outputPricePerMillion: 15, cacheReadPricePerMillion: 0, cacheWritePricePerMillion: 0, currency: 'USD' },
+  { id: 'grok-3-mini', name: 'Grok 3 Mini', provider: 'xai', contextLength: 131072, maxOutputTokens: 16384, supportsThinking: true, supportsVision: false, inputPricePerMillion: 0.3, outputPricePerMillion: 0.5, cacheReadPricePerMillion: 0, cacheWritePricePerMillion: 0, currency: 'USD' },
+  // ── Mistral AI ──
+  { id: 'mistral-large-latest', name: 'Mistral Large', provider: 'mistral', contextLength: 131072, maxOutputTokens: 16384, supportsThinking: false, supportsVision: false, inputPricePerMillion: 2, outputPricePerMillion: 6, cacheReadPricePerMillion: 0.5, cacheWritePricePerMillion: 2, currency: 'USD' },
+  { id: 'mistral-medium-latest', name: 'Mistral Medium', provider: 'mistral', contextLength: 131072, maxOutputTokens: 16384, supportsThinking: false, supportsVision: false, inputPricePerMillion: 0.4, outputPricePerMillion: 2, cacheReadPricePerMillion: 0.1, cacheWritePricePerMillion: 0.4, currency: 'USD' },
+  { id: 'mistral-small-latest', name: 'Mistral Small', provider: 'mistral', contextLength: 131072, maxOutputTokens: 16384, supportsThinking: false, supportsVision: false, inputPricePerMillion: 0.2, outputPricePerMillion: 0.6, cacheReadPricePerMillion: 0.05, cacheWritePricePerMillion: 0.2, currency: 'USD' },
+  { id: 'codestral-latest', name: 'Codestral', provider: 'mistral', contextLength: 262144, maxOutputTokens: 65536, supportsThinking: false, supportsVision: false, inputPricePerMillion: 0.3, outputPricePerMillion: 0.9, cacheReadPricePerMillion: 0.075, cacheWritePricePerMillion: 0.3, currency: 'USD' },
+  { id: 'pixtral-large-latest', name: 'Pixtral Large', provider: 'mistral', contextLength: 131072, maxOutputTokens: 16384, supportsThinking: false, supportsVision: true, inputPricePerMillion: 2, outputPricePerMillion: 6, cacheReadPricePerMillion: 0.5, cacheWritePricePerMillion: 2, currency: 'USD' },
 ]
 
 export function getModelInfo(modelId: string): ModelInfo | undefined {
@@ -78,7 +97,47 @@ export function getVisionModels(): ModelInfo[] {
 }
 
 export function getModelsByProvider(provider: string): { id: string; name: string }[] {
-  return MODEL_REGISTRY.filter(m => m.provider === provider).map(m => ({ id: m.id, name: m.name }))
+  // 预设模型
+  const presetModels = MODEL_REGISTRY.filter(m => m.provider === provider).map(m => ({ id: m.id, name: m.name }))
+
+  // 动态拉取的模型（缓存优先，后台刷新）
+  const cached = getCachedModels(provider)
+  if (!cached || cached.length === 0) return presetModels
+
+  // 合并：预设 + 动态（去重）
+  const presetIds = new Set(presetModels.map(m => m.id))
+  const dynamicModels = cached
+    .filter(fm => !presetIds.has(fm.id))
+    .map(fm => ({ id: fm.id, name: fm.id }))
+
+  return [...presetModels, ...dynamicModels]
+}
+
+/** 异步获取合并模型列表（含后台刷新回调） */
+export function getModelsByProviderAsync(
+  provider: string,
+  onRefreshed?: (models: { id: string; name: string }[]) => void,
+): { id: string; name: string }[] {
+  const presetModels = MODEL_REGISTRY.filter(m => m.provider === provider).map(m => ({ id: m.id, name: m.name }))
+
+  const cached = getModelsWithBackgroundRefresh(provider, undefined, (fetched) => {
+    if (onRefreshed) {
+      const presetIds = new Set(presetModels.map(m => m.id))
+      const dynamicModels = fetched
+        .filter(fm => !presetIds.has(fm.id))
+        .map(fm => ({ id: fm.id, name: fm.id }))
+      onRefreshed([...presetModels, ...dynamicModels])
+    }
+  })
+
+  if (!cached || cached.length === 0) return presetModels
+
+  const presetIds = new Set(presetModels.map(m => m.id))
+  const dynamicModels = cached
+    .filter(fm => !presetIds.has(fm.id))
+    .map(fm => ({ id: fm.id, name: fm.id }))
+
+  return [...presetModels, ...dynamicModels]
 }
 
 export function getDefaultModelId(provider: string): string {
@@ -94,10 +153,7 @@ export function getModelPresets(): { group: string; models: { id: string; name: 
     if (!groups[m.provider]) groups[m.provider] = []
     groups[m.provider].push({ id: m.id, name: m.name, provider: m.provider })
   }
-  const providerLabels: Record<string, string> = {
-    anthropic: 'Anthropic', openai: 'OpenAI', google: 'Google', deepseek: 'DeepSeek', groq: 'Groq',
-    zhipu: '智谱 GLM', qwen: '通义千问', minimax: 'MiniMax', kimi: 'Kimi',
-  }
+  const providerLabels: Record<string, string> = { ...getProviderLabelMap(), openrouter: 'OpenRouter' }
   return Object.entries(groups).map(([provider, models]) => ({
     group: providerLabels[provider] || provider,
     models,

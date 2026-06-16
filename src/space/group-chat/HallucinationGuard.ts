@@ -59,15 +59,17 @@ export async function crossValidateClaim(
       let responseText = ''
       const unsub = agent.subscribe((event: AgentEvent) => {
         if (event.type === 'message_update' && event.content) {
-          responseText = event.content
+          responseText += event.content
         }
       })
-      await agent.prompt(validationPrompt, { chatMode: 'normal' })
+      await agent.prompt(validationPrompt, { chatMode: 'group-chat' })
       unsub()
       if (responseText.includes('一致')) {
         confirmations++
       }
-    } catch {}
+    } catch (err) {
+      console.warn('[HallucinationGuard] 交叉验证 Agent 调用失败', err)
+    }
   }
 
   return {

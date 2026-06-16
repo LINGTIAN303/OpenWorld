@@ -1,6 +1,6 @@
 import type { EntityLike } from '../tools/types'
 import { generateEmbedding, generateEmbeddings, getEmbeddingConfig } from './service'
-import { putVectors, deleteVector, getCollection, searchSimilar, getCollectionSize, SearchResult } from './vector-store'
+import { putVectorsV2, deleteVectorV2, getCollectionV2, searchSimilarV2, getCollectionSizeV2, type VectorRecordV2, type SearchResultV2 } from './vector-store-v2'
 
 const ENTITY_COLLECTION = 'entities'
 const MEMORY_COLLECTION = 'memory'
@@ -35,7 +35,7 @@ export async function indexEntity(entity: EntityLike): Promise<void> {
   try {
     const text = entityToText(entity)
     const vector = await generateEmbedding(text)
-    await putVectors([{
+    await putVectorsV2([{
       id: `entity_${entity.id}`,
       collection: ENTITY_COLLECTION,
       vector,
@@ -46,7 +46,7 @@ export async function indexEntity(entity: EntityLike): Promise<void> {
         updatedAt: entity.updatedAt,
       },
       updatedAt: Date.now(),
-    }])
+    }] as VectorRecordV2[])
   } catch (err) {
     console.warn('[EmbeddingIndex] indexEntity failed:', err)
   }
@@ -57,7 +57,7 @@ export async function indexEntities(entities: EntityLike[]): Promise<void> {
   try {
     const texts = entities.map(e => entityToText(e))
     const vectors = await generateEmbeddings(texts)
-    const records = entities.map((e, i) => ({
+    const records: VectorRecordV2[] = entities.map((e, i) => ({
       id: `entity_${e.id}`,
       collection: ENTITY_COLLECTION,
       vector: vectors[i],
@@ -70,7 +70,7 @@ export async function indexEntities(entities: EntityLike[]): Promise<void> {
       updatedAt: Date.now(),
     }))
     for (let b = 0; b < records.length; b += BATCH_SIZE) {
-      await putVectors(records.slice(b, b + BATCH_SIZE))
+      await putVectorsV2(records.slice(b, b + BATCH_SIZE))
     }
   } catch (err) {
     console.warn('[EmbeddingIndex] indexEntities failed:', err)
@@ -80,7 +80,7 @@ export async function indexEntities(entities: EntityLike[]): Promise<void> {
 export async function removeEntityIndex(entityId: string): Promise<void> {
   if (!isEmbeddingReady()) return
   try {
-    await deleteVector(`entity_${entityId}`)
+    await deleteVectorV2(`entity_${entityId}`)
   } catch (err) {
     console.warn('[EmbeddingIndex] removeEntityIndex failed:', err)
   }
@@ -91,7 +91,7 @@ export async function indexMemoryEntry(key: string, value: string, tags: string[
   try {
     const text = memoryToText(key, value, tags)
     const vector = await generateEmbedding(text)
-    await putVectors([{
+    await putVectorsV2([{
       id: `memory_${key}`,
       collection: MEMORY_COLLECTION,
       vector,
@@ -101,7 +101,7 @@ export async function indexMemoryEntry(key: string, value: string, tags: string[
         updatedAt: Date.now(),
       },
       updatedAt: Date.now(),
-    }])
+    }] as VectorRecordV2[])
   } catch (err) {
     console.warn('[EmbeddingIndex] indexMemoryEntry failed:', err)
   }
@@ -109,7 +109,7 @@ export async function indexMemoryEntry(key: string, value: string, tags: string[
 
 export async function removeMemoryIndex(key: string): Promise<void> {
   try {
-    await deleteVector(`memory_${key}`)
+    await deleteVectorV2(`memory_${key}`)
   } catch (err) {
     console.warn('[EmbeddingIndex] removeMemoryIndex failed:', err)
   }
@@ -122,7 +122,7 @@ export async function syncEntityIndex(
 
   try {
     const entities = await getAllEntities()
-    const existingVectors = await getCollection(ENTITY_COLLECTION)
+    const existingVectors = await getCollectionV2(ENTITY_COLLECTION)
     const existingMap = new Map<string, { updatedAt: string | number }>()
     for (const v of existingVectors) {
       const entityId = v.metadata?.entityId || v.id.replace('entity_', '')
@@ -146,7 +146,7 @@ export async function syncEntityIndex(
     for (const v of existingVectors) {
       const entityId = v.metadata?.entityId || v.id.replace('entity_', '')
       if (!entityIds.has(entityId)) {
-        await deleteVector(v.id)
+        await deleteVectorV2(v.id)
         removed++
       }
     }
@@ -189,7 +189,7 @@ export async function semanticSearch(
 
     for (const col of collections) {
       const collectionName = col === 'entity' ? ENTITY_COLLECTION : MEMORY_COLLECTION
-      const results = await searchSimilar(queryVector, collectionName, topK, minScore)
+      const results = await searchSimilarV2(queryVector, collectionName, topK, minScore)
       for (const r of results) {
         allResults.push({
           id: r.metadata.entityId || r.metadata.key || r.id,
@@ -212,11 +212,11 @@ export async function semanticSearchEntities(
   query: string,
   topK: number = 10,
   minScore: number = 0.3,
-): Promise<SearchResult[]> {
+): Promise<SearchResultV2[]> {
   if (!isEmbeddingReady() || !query.trim()) return []
   try {
     const queryVector = await generateEmbedding(query)
-    return searchSimilar(queryVector, ENTITY_COLLECTION, topK, minScore)
+    return searchSimilarV2(queryVector, ENTITY_COLLECTION, topK, minScore)
   } catch (err) {
     console.warn('[EmbeddingIndex] semanticSearchEntities failed:', err)
     return []
@@ -227,11 +227,11 @@ export async function semanticSearchMemory(
   query: string,
   topK: number = 5,
   minScore: number = 0.3,
-): Promise<SearchResult[]> {
+): Promise<SearchResultV2[]> {
   if (!isEmbeddingReady() || !query.trim()) return []
   try {
     const queryVector = await generateEmbedding(query)
-    return searchSimilar(queryVector, MEMORY_COLLECTION, topK, minScore)
+    return searchSimilarV2(queryVector, MEMORY_COLLECTION, topK, minScore)
   } catch (err) {
     console.warn('[EmbeddingIndex] semanticSearchMemory failed:', err)
     return []
@@ -241,8 +241,8 @@ export async function semanticSearchMemory(
 export async function getEmbeddingStats(): Promise<{ entities: number; memory: number }> {
   try {
     const [entities, memory] = await Promise.all([
-      getCollectionSize(ENTITY_COLLECTION),
-      getCollectionSize(MEMORY_COLLECTION),
+      getCollectionSizeV2(ENTITY_COLLECTION),
+      getCollectionSizeV2(MEMORY_COLLECTION),
     ])
     return { entities, memory }
   } catch {

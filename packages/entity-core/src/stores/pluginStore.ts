@@ -23,6 +23,16 @@ export const usePluginStore = defineStore('plugin', () => {
     return views.value.find((v) => v.id === id)
   }
 
+  /** 清空所有已注册的视图（项目切换时使用） */
+  function clearViews(): void {
+    views.value = []
+  }
+
+  /** 清空所有已注册的插件（项目切换时使用） */
+  function clearPlugins(): void {
+    plugins.value = []
+  }
+
   return {
     plugins,
     views,
@@ -30,5 +40,7 @@ export const usePluginStore = defineStore('plugin', () => {
     registerView,
     registerPlugin,
     getView,
+    clearViews,
+    clearPlugins,
   }
 })

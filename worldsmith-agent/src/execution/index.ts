@@ -3,7 +3,7 @@ import { TauriExecutionAdapter } from './tauri-adapter'
 import { WebSocketExecutionAdapter } from './ws-adapter'
 
 export function isTauri(): boolean {
-  return typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
+  return typeof window !== 'undefined' && (!!(window as any).__TAURI_INTERNALS__ || !!(window as any).__TAURI__)
 }
 
 export function getWsUrl(): string {

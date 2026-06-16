@@ -1,5 +1,5 @@
 import type { ToolDefinition } from '../bridge-types'
-import type { Platform, SkillCapabilityBinding } from './capability-types'
+import type { Platform } from './capability-types'
 import { InternalChainRegistry } from './internal-registry'
 import { findSkillById, resolveToolNames } from '../skills/registry'
 import { resolvePluginToolNames } from '../skills/plugin-bridge'

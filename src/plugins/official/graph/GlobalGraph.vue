@@ -27,6 +27,16 @@
       @search="onPathSearch"
     />
 
+    <n-alert
+      v-if="algorithms.backendUsed.value === 'js-fallback'"
+      type="info"
+      :show-icon="true"
+      closable
+      class="wasm-fallback-notice"
+    >
+      WASM 图算法不可用，当前使用 JS 降级实现（无权 Dijkstra），路径结果可能不是最短路径。建议在桌面端使用以获得加权最短路径。
+    </n-alert>
+
     <NodeDetailPanel
       :visible="!!selectedNode"
       :node="selectedNode"
@@ -62,6 +72,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+import { NAlert } from 'naive-ui'
 import Graph from 'graphology'
 import { useEntityStore, useRelationStore, entitySchemaRegistry } from '@worldsmith/entity-core'
 import { useGraphData, type GraphNode, useTypeMapping, useGraphFilter, useGraphAlgorithms } from '@worldsmith/ui-kit'

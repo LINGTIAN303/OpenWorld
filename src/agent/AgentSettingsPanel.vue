@@ -12,21 +12,138 @@
       </div>
       <div class="settings-body">
         <div class="settings-sub-panels">
-          <button class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'model' ? '' : 'model'"><WsIcon name="settings" size="xs" /> 模型</button>
-          <button class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'provider' ? '' : 'provider'"><WsIcon name="link" size="xs" /> 供应商</button>
-          <button class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'safety' ? '' : 'safety'"><WsIcon name="shield" size="xs" /> 安全</button>
-          <button class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'usage' ? '' : 'usage'"><WsIcon name="dashboard" size="xs" /> 用量</button>
-          <button class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'search' ? '' : 'search'"><WsIcon name="globe" size="xs" /> 搜索</button>
-          <button class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'vision' ? '' : 'vision'"><WsIcon name="eye" size="xs" /> 视觉</button>
-          <button class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'imagegen' ? '' : 'imagegen'"><WsIcon name="image" size="xs" /> 绘图</button>
-          <button class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'skills' ? '' : 'skills'"><WsIcon name="star" size="xs" /> Skills</button>
-          <button class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'mcp' ? '' : 'mcp'"><WsIcon name="link" size="xs" /> MCP</button>
-          <button class="sub-panel-btn" :class="{ 'mode-tauri': isTauriMode, 'mode-web': !isTauriMode }" @click="settingsSubPanel = settingsSubPanel === 'terminal' ? '' : 'terminal'"><WsIcon name="keyboard" size="xs" /> 终端 <span class="mode-badge">{{ isTauriMode ? '桌面' : 'Web' }}</span></button>
-          <button v-if="!embedded" class="sub-panel-btn" @click="emit('reset-position')"><WsIcon name="outline" size="xs" /> 恢复位置</button>
+          <template v-if="embedded">
+            <button class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'model' ? '' : 'model'"><WsIcon name="settings" size="xs" /> 核心</button>
+            <button class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'safety' ? '' : 'safety'"><WsIcon name="shield" size="xs" /> 安全</button>
+            <button class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'search' ? '' : 'search'"><WsIcon name="globe" size="xs" /> 搜索</button>
+            <button class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'vision' ? '' : 'vision'"><WsIcon name="eye" size="xs" /> 多模态</button>
+            <button class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'skills' ? '' : 'skills'"><WsIcon name="star" size="xs" /> Skills</button>
+            <button class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'mcp' ? '' : 'mcp'"><WsIcon name="link" size="xs" /> MCP</button>
+            <button class="sub-panel-btn" :class="{ 'mode-tauri': isTauriMode, 'mode-web': !isTauriMode }" @click="settingsSubPanel = settingsSubPanel === 'terminal' ? '' : 'terminal'"><WsIcon name="keyboard" size="xs" /> 终端 <span class="mode-badge">{{ isTauriMode ? '桌面' : 'Web' }}</span></button>
+          </template>
+          <template v-else>
+            <button class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'model' ? '' : 'model'"><WsIcon name="settings" size="xs" /> 模型</button>
+            <button class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'provider' ? '' : 'provider'"><WsIcon name="link" size="xs" /> 供应商</button>
+            <button class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'safety' ? '' : 'safety'"><WsIcon name="shield" size="xs" /> 安全</button>
+            <button v-if="!embedded" class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'usage' ? '' : 'usage'"><WsIcon name="dashboard" size="xs" /> 用量</button>
+            <button class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'search' ? '' : 'search'"><WsIcon name="globe" size="xs" /> 搜索</button>
+            <button class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'vision' ? '' : 'vision'"><WsIcon name="eye" size="xs" /> 多模态</button>
+            <button class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'skills' ? '' : 'skills'"><WsIcon name="star" size="xs" /> Skills</button>
+            <button class="sub-panel-btn" @click="settingsSubPanel = settingsSubPanel === 'mcp' ? '' : 'mcp'"><WsIcon name="link" size="xs" /> MCP</button>
+            <button class="sub-panel-btn" :class="{ 'mode-tauri': isTauriMode, 'mode-web': !isTauriMode }" @click="settingsSubPanel = settingsSubPanel === 'terminal' ? '' : 'terminal'"><WsIcon name="keyboard" size="xs" /> 终端 <span class="mode-badge">{{ isTauriMode ? '桌面' : 'Web' }}</span></button>
+            <button v-if="!embedded" class="sub-panel-btn" @click="emit('reset-position')"><WsIcon name="outline" size="xs" /> 恢复位置</button>
+          </template>
         </div>
         <Transition name="ws-slide-up" mode="out-in">
           <div v-if="settingsSubPanel === 'model'" key="model" class="sub-panel">
-            <div class="settings-section">
+            <template v-if="embedded">
+              <div class="settings-row">
+                <span class="sp-row-label">供应商模式</span>
+                <select v-model="settingsStore.aiProviderMode" class="settings-select" aria-label="供应商模式">
+                  <option value="cloud">云端 API</option>
+                  <option value="local">本地模型</option>
+                  <option value="custom">自定义</option>
+                </select>
+              </div>
+              <template v-if="settingsStore.aiProviderMode === 'cloud'">
+                <div class="settings-row">
+                  <span class="sp-row-label">供应商</span>
+                  <div class="provider-list">
+                    <button v-for="p in cloudProviderOptions" :key="p.value"
+                      class="provider-list-item" :class="{ active: settingsStore.aiCloudProvider === p.value }"
+                      @click="onCloudProviderChange({ target: { value: p.value } } as any)"
+                      :title="p.label"
+                    >
+                      <img :src="p.iconUrl" class="provider-list-icon" alt="" />
+                      <span class="provider-list-label">{{ p.label }}</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="settings-row">
+                  <span class="sp-row-label">模型</span>
+                  <template v-if="currentProviderModels.length > 0">
+                    <select :value="settingsStore.aiCloudModel" @change="onCloudModelChange" class="settings-select">
+                      <option v-for="m in currentProviderModels" :key="m.id" :value="m.id">{{ m.name }}{{ getModelInfo(m.id)?.supportsVision ? ' (视觉)' : '' }}</option>
+                    </select>
+                  </template>
+                  <template v-else>
+                    <input type="text" class="settings-input" v-model="settingsStore.aiCloudModel" placeholder="模型 ID" />
+                  </template>
+                </div>
+                <div class="settings-row">
+                  <span class="sp-row-label">API Key</span>
+                  <input type="password" class="settings-input" v-model="cloudApiKey" placeholder="sk-..." />
+                </div>
+              </template>
+              <template v-if="settingsStore.aiProviderMode === 'local'">
+                <div class="settings-row">
+                  <span class="sp-row-label">端点 URL</span>
+                  <input type="text" class="settings-input" v-model="settingsStore.aiLocalEndpoint" placeholder="http://localhost:11434" />
+                </div>
+                <div class="settings-row">
+                  <span class="sp-row-label">API 类型</span>
+                  <select v-model="settingsStore.aiLocalType" class="settings-select" aria-label="API 类型">
+                    <option value="ollama">Ollama</option>
+                    <option value="lm-studio">LM Studio</option>
+                    <option value="vllm">vLLM</option>
+                    <option value="llama-cpp">llama.cpp</option>
+                  </select>
+                </div>
+                <div class="settings-row">
+                  <span class="sp-row-label">模型 ID</span>
+                  <input type="text" class="settings-input" v-model="settingsStore.aiLocalModel" placeholder="llama3" />
+                </div>
+              </template>
+              <template v-if="settingsStore.aiProviderMode === 'custom'">
+                <div v-if="settingsStore.customProviders.length > 0" class="settings-section">
+                  <div class="sp-section-label">已配置的自定义供应商</div>
+                  <div
+                    v-for="cp in settingsStore.customProviders"
+                    :key="cp.id"
+                    class="cp-item"
+                    :class="{ active: isCustomProviderActive(cp) }"
+                    @click="onSelectCustomProvider(cp)"
+                  >
+                    <span class="cp-name">{{ cp.name || cp.baseUrl }}</span>
+                    <span class="cp-model">{{ cp.modelId }}</span>
+                    <button class="cp-delete" @click.stop="onDeleteCustomProvider(cp.id)" title="删除"><WsIcon name="delete" size="xs" /></button>
+                  </div>
+                </div>
+                <div class="settings-row">
+                  <span class="sp-row-label">Base URL</span>
+                  <input type="text" class="settings-input" v-model="settingsStore.aiCustomBaseUrl" placeholder="https://api.example.com/v1" />
+                </div>
+                <div class="settings-row">
+                  <span class="sp-row-label">API 类型</span>
+                  <select v-model="settingsStore.aiCustomType" class="settings-select" aria-label="API 类型">
+                    <option value="openai-compatible">OpenAI 兼容</option>
+                    <option value="anthropic-compatible">Anthropic 兼容</option>
+                  </select>
+                </div>
+                <div class="settings-row">
+                  <span class="sp-row-label">模型 ID</span>
+                  <div class="cp-model-field">
+                    <select v-if="fetchedModels.length > 0" v-model="settingsStore.aiCustomModel" class="settings-select">
+                      <option value="" disabled>选择模型</option>
+                      <option v-for="m in fetchedModels" :key="m" :value="m">{{ m }}</option>
+                    </select>
+                    <input v-else type="text" class="settings-input" v-model="settingsStore.aiCustomModel" placeholder="模型 ID" />
+                    <button class="cp-fetch-btn" @click="onFetchModels" :disabled="!canFetchModels || fetchingModels" :title="fetchError || '拉取模型列表'">
+                      <WsIcon :name="fetchingModels ? 'loading' : 'refresh'" size="xs" />
+                    </button>
+                  </div>
+                </div>
+                <div v-if="fetchError" class="cp-fetch-error">{{ fetchError }}</div>
+                <div class="settings-row">
+                  <span class="sp-row-label">API Key</span>
+                  <input type="password" class="settings-input" v-model="customApiKey" placeholder="sk-..." />
+                </div>
+                <button class="cp-save-btn" @click="onSaveCustomProvider" :disabled="!settingsStore.aiCustomBaseUrl">保存当前配置</button>
+              </template>
+              <div class="settings-hint">供应商配置影响 AI 助手的后端连接，切换后下次对话生效</div>
+              <div style="border-top:1px solid var(--agent-border);margin:8px 0"></div>
+            </template>
+            <div v-if="!embedded" class="settings-section">
               <div class="settings-label">模型切换</div>
               <template v-if="settingsStore.aiProviderMode === 'cloud'">
                 <div class="settings-row">
@@ -87,7 +204,7 @@
                 </select>
               </div>
             </div>
-            <div class="settings-section">
+            <div v-if="!embedded" class="settings-section">
               <div class="settings-label">回答模式</div>
               <div class="chat-mode-grid">
                 <button
@@ -110,7 +227,7 @@
               <div v-else class="settings-hint">每次发送消息时使用的回答模式，与顶栏下拉框一致</div>
             </div>
           </div>
-          <div v-else-if="settingsSubPanel === 'provider'" key="provider" class="sub-panel">
+          <div v-else-if="!embedded && settingsSubPanel === 'provider'" key="provider" class="sub-panel">
             <div class="settings-row">
               <span class="sp-row-label">供应商模式</span>
               <select v-model="settingsStore.aiProviderMode" class="settings-select" aria-label="供应商模式">
@@ -122,18 +239,16 @@
             <template v-if="settingsStore.aiProviderMode === 'cloud'">
               <div class="settings-row">
                 <span class="sp-row-label">供应商</span>
-                <select :value="settingsStore.aiCloudProvider" @change="onCloudProviderChange" class="settings-select">
-                  <option value="anthropic">Anthropic</option>
-                  <option value="openai">OpenAI</option>
-                  <option value="google">Google</option>
-                  <option value="deepseek">DeepSeek</option>
-                  <option value="groq">Groq</option>
-                  <option value="openrouter">OpenRouter</option>
-                  <option value="zhipu">智谱 GLM</option>
-                  <option value="qwen">通义千问</option>
-                  <option value="minimax">MiniMax</option>
-                  <option value="kimi">Kimi</option>
-                </select>
+                <div class="provider-list">
+                  <button v-for="p in cloudProviderOptions" :key="p.value"
+                    class="provider-list-item" :class="{ active: settingsStore.aiCloudProvider === p.value }"
+                    @click="onCloudProviderChange({ target: { value: p.value } } as any)"
+                    :title="p.label"
+                  >
+                    <img :src="p.iconUrl" class="provider-list-icon" alt="" />
+                    <span class="provider-list-label">{{ p.label }}</span>
+                  </button>
+                </div>
               </div>
               <div class="settings-row">
                 <span class="sp-row-label">模型</span>
@@ -327,11 +442,10 @@
               <div class="settings-hint" v-if="!currentModelSupportsVision">当前主模型不支持视觉，发送图片时 Agent 将通过 vision_analyze 工具调用视觉模型分析</div>
               <div class="settings-hint" v-else>当前主模型已支持视觉，可直接识图；也可通过 vision_analyze 工具获取更详细的分析</div>
             </div>
-          </div>
-          <div v-else-if="settingsSubPanel === 'imagegen'" key="imagegen" class="sub-panel">
+            <div style="border-top:1px solid var(--agent-border);margin:8px 0"></div>
             <div class="settings-section">
               <div class="settings-label">图像生成</div>
-              <div class="settings-hint">配置 AI 图像生成模型，Agent 可通过 image_generate 工具生成图片</div>
+              <div class="settings-hint">Agent 可通过 image_generate 工具生成图片</div>
               <div class="settings-row">
                 <span class="settings-key">供应商</span>
                 <select :value="imageGenProvider" @change="onImageGenProviderChange" class="settings-select">
@@ -351,15 +465,41 @@
                 </template>
               </div>
               <div class="settings-row" v-if="imageGenProvider === 'custom'">
-                <span class="settings-key">Base URL</span>
-                <input type="text" class="settings-input" v-model="imageGenBaseUrl" placeholder="https://api.example.com/v1" />
+                <span class="settings-key">供应商</span>
+                <select :value="imageGenCustomProviderId" @change="onImageGenCustomProviderChange" class="settings-select">
+                  <option value="">选择自定义供应商</option>
+                  <option v-for="cp in settingsStore.customProviders" :key="cp.id" :value="cp.id">{{ cp.name || cp.baseUrl }}</option>
+                </select>
               </div>
-              <div class="settings-row" v-if="imageGenProvider">
-                <span class="settings-key">API Key</span>
-                <input type="password" class="settings-input" v-model="imageGenApiKey" :placeholder="imageGenApiKeyHint" />
-              </div>
-              <div class="settings-hint" v-if="imageGenProvider">已配置 {{ imageGenProvider === 'custom' ? '自定义' : imageGenProviders.find(p => p.value === imageGenProvider)?.label }} 图像生成</div>
+              <div class="settings-hint" v-if="imageGenProvider">API Key 自动复用上方已配置的密钥</div>
+              <div class="settings-hint" v-if="imageGenProvider">已配置 {{ imageGenProviders.find(p => p.value === (imageGenProvider === 'custom' ? `custom:${imageGenCustomProviderId}` : imageGenProvider))?.label || imageGenProvider }} 图像生成</div>
               <div class="settings-hint" v-else>未配置图像生成，image_generate 工具将不可用</div>
+            </div>
+            <div style="border-top:1px solid var(--agent-border);margin:8px 0"></div>
+            <div class="settings-section">
+              <div class="settings-label">视频生成</div>
+              <div class="settings-hint">Agent 可通过 video_generate 工具生成视频（异步模式）</div>
+              <div class="settings-row">
+                <span class="settings-key">供应商</span>
+                <select :value="videoGenProvider" @change="onVideoGenProviderChange" class="settings-select">
+                  <option value="">未配置</option>
+                  <option v-for="p in videoGenProviders" :key="p.value" :value="p.value">{{ p.label }}</option>
+                </select>
+              </div>
+              <div class="settings-row">
+                <span class="settings-key">模型 ID</span>
+                <template v-if="videoGenModelOptions.length > 0">
+                  <select :value="videoGenModel" @change="onVideoGenModelChange" class="settings-select">
+                    <option v-for="m in videoGenModelOptions" :key="m.value" :value="m.value">{{ m.label }}</option>
+                  </select>
+                </template>
+                <template v-else>
+                  <input type="text" class="settings-input" v-model="videoGenModel" placeholder="如 agnes-video-v2.0" />
+                </template>
+              </div>
+              <div class="settings-hint" v-if="videoGenProvider">API Key 自动复用上方已配置的密钥</div>
+              <div class="settings-hint" v-if="videoGenProvider">已配置 {{ videoGenProviders.find(p => p.value === videoGenProvider)?.label }} 视频生成</div>
+              <div class="settings-hint" v-else>未配置视频生成，video_generate 工具将不可用</div>
             </div>
           </div>
           <div v-else-if="settingsSubPanel === 'skills'" key="skills" class="sub-panel">
@@ -485,10 +625,12 @@ import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import WsIcon from '../ui/WsIcon.vue'
 import { usePanelDrag } from './composables/usePanelDrag'
 import { useSettingsStore } from '../stores/settingsStore'
-import { loadApiKey, storeApiKey } from '@agent/index'
+import { loadApiKey, storeApiKey, removeApiKey } from '@agent/index'
 import type { MCPConnectionConfig } from '@agent/index'
 import { getModelsByProvider, getDefaultModelId, getModelInfo, modelSupportsVision, getVisionModels } from './modelRegistry'
-import { isTauri as detectTauri, getWsUrl, resetExecutionAdapter, createExecutionAdapter } from '../../worldsmith-agent/src/execution'
+import { isTauri as detectTauri, getWsUrl, resetExecutionAdapter, createExecutionAdapter } from '@agent/execution'
+import { getProviderIconUrl } from '../assets/providerIcons'
+import { getAllProviderManifests, getProviderLabelMap } from '@agent/providers/provider-registry'
 
 const settingsStore = useSettingsStore()
 
@@ -562,12 +704,20 @@ onMounted(async () => {
   skipCustomKeyEmit = false
 })
 
-watch(cloudApiKey, (v) => {
-  storeApiKey(settingsStore.aiCloudProvider, v)
+watch(cloudApiKey, async (v) => {
+  if (v) {
+    await storeApiKey(settingsStore.aiCloudProvider, v)
+  } else {
+    await removeApiKey(settingsStore.aiCloudProvider)
+  }
   emit('api-key-change', settingsStore.aiCloudProvider, v)
 })
-watch(customApiKey, (v) => {
-  storeApiKey(customKeyStoreId.value, v)
+watch(customApiKey, async (v) => {
+  if (v) {
+    await storeApiKey(customKeyStoreId.value, v)
+  } else {
+    await removeApiKey(customKeyStoreId.value)
+  }
   if (!skipCustomKeyEmit) {
     emit('api-key-change', 'custom', v)
   }
@@ -759,6 +909,14 @@ const settingsSubPanel = ref('')
 
 const currentProviderModels = computed(() => getModelsByProvider(settingsStore.aiCloudProvider))
 
+const cloudProviderOptions = computed(() =>
+  getAllProviderManifests().map(m => ({
+    value: m.id,
+    label: m.label,
+    iconUrl: getProviderIconUrl(m.id),
+  }))
+)
+
 function onCloudProviderChange(e: Event): void {
   const provider = (e.target as HTMLSelectElement).value
   settingsStore.aiCloudProvider = provider
@@ -783,10 +941,7 @@ const visionProviders = computed(() => {
   return Array.from(providers)
 })
 
-const visionProviderLabels: Record<string, string> = {
-  anthropic: 'Anthropic', openai: 'OpenAI', google: 'Google', deepseek: 'DeepSeek',
-  zhipu: '智谱 GLM', qwen: '通义千问', minimax: 'MiniMax', kimi: 'Kimi', groq: 'Groq',
-}
+const visionProviderLabels: Record<string, string> = getProviderLabelMap()
 
 const visionSubAgentModels = computed(() => {
   const provider = settingsStore.visionSubAgentProvider
@@ -824,23 +979,30 @@ function onVisionModelChange(e: Event): void {
 const imageGenProvider = ref(localStorage.getItem('worldsmith_image_gen_provider') || '')
 const imageGenModel = ref(localStorage.getItem('worldsmith_image_gen_model') || '')
 const imageGenBaseUrl = ref(localStorage.getItem('worldsmith_image_gen_base_url') || '')
-const imageGenApiKey = ref(localStorage.getItem('worldsmith_image_gen_api_key') || '')
+const imageGenCustomProviderId = ref('')
+
+// 初始化：如果 provider 是 custom，尝试从 baseUrl 匹配自定义供应商 ID
+if (imageGenProvider.value === 'custom' && imageGenBaseUrl.value) {
+  const matched = settingsStore.customProviders.find(cp => cp.baseUrl === imageGenBaseUrl.value)
+  if (matched) imageGenCustomProviderId.value = matched.id
+}
 
 watch(imageGenProvider, v => localStorage.setItem('worldsmith_image_gen_provider', v))
 watch(imageGenModel, v => localStorage.setItem('worldsmith_image_gen_model', v))
 watch(imageGenBaseUrl, v => localStorage.setItem('worldsmith_image_gen_base_url', v))
-watch(imageGenApiKey, v => localStorage.setItem('worldsmith_image_gen_api_key', v))
 
-const imageGenApiKeyHint = computed(() => {
-  if (imageGenApiKey.value) return '••••••••'
-  return '留空则复用主聊天 API Key'
+const imageGenProviders = computed(() => {
+  const builtIn = [
+    { value: 'openai', label: 'OpenAI (DALL-E)' },
+    { value: 'openrouter', label: 'OpenRouter' },
+    { value: 'agnes', label: 'Agnes AI' },
+  ]
+  const custom = settingsStore.customProviders.map(cp => ({
+    value: `custom:${cp.id}`,
+    label: `自定义: ${cp.name || cp.baseUrl}`,
+  }))
+  return [...builtIn, ...custom]
 })
-
-const imageGenProviders = [
-  { value: 'openai', label: 'OpenAI (DALL-E)' },
-  { value: 'openrouter', label: 'OpenRouter' },
-  { value: 'custom', label: '自定义供应商' },
-]
 
 const imageGenModelOptions = computed(() => {
   const provider = imageGenProvider.value
@@ -858,19 +1020,48 @@ const imageGenModelOptions = computed(() => {
       })
       .map(m => ({ value: m.id, label: m.name }))
   }
+  if (provider === 'agnes') {
+    return [
+      { value: 'agnes-image-2.1-flash', label: 'Agnes Image 2.1 Flash' },
+      { value: 'agnes-image-2.0-flash', label: 'Agnes Image 2.0 Flash' },
+    ]
+  }
   return []
 })
 
 function onImageGenProviderChange(e: Event): void {
-  const provider = (e.target as HTMLSelectElement).value
-  imageGenProvider.value = provider
-  if (provider === 'openai') {
-    imageGenModel.value = 'dall-e-3'
-  } else if (provider === 'openrouter') {
-    const models = imageGenModelOptions.value
-    imageGenModel.value = models.length > 0 ? models[0].value : ''
+  const value = (e.target as HTMLSelectElement).value
+  if (value.startsWith('custom:')) {
+    imageGenProvider.value = 'custom'
+    const cpId = value.slice(7)
+    imageGenCustomProviderId.value = cpId
+    const cp = settingsStore.customProviders.find(p => p.id === cpId)
+    if (cp) {
+      imageGenBaseUrl.value = cp.baseUrl
+      imageGenModel.value = cp.modelId
+    }
   } else {
-    imageGenModel.value = ''
+    imageGenProvider.value = value
+    imageGenCustomProviderId.value = ''
+    imageGenBaseUrl.value = ''
+    if (value === 'openai') {
+      imageGenModel.value = 'dall-e-3'
+    } else if (value === 'openrouter') {
+      const models = imageGenModelOptions.value
+      imageGenModel.value = models.length > 0 ? models[0].value : ''
+    } else {
+      imageGenModel.value = ''
+    }
+  }
+}
+
+function onImageGenCustomProviderChange(e: Event): void {
+  const cpId = (e.target as HTMLSelectElement).value
+  imageGenCustomProviderId.value = cpId
+  const cp = settingsStore.customProviders.find(p => p.id === cpId)
+  if (cp) {
+    imageGenBaseUrl.value = cp.baseUrl
+    imageGenModel.value = cp.modelId
   }
 }
 
@@ -878,10 +1069,87 @@ function onImageGenModelChange(e: Event): void {
   imageGenModel.value = (e.target as HTMLSelectElement).value
 }
 
+// ── 视频生成配置 ──
+const videoGenProvider = ref(localStorage.getItem('worldsmith_video_gen_provider') || '')
+const videoGenModel = ref(localStorage.getItem('worldsmith_video_gen_model') || '')
+
+watch(videoGenProvider, v => localStorage.setItem('worldsmith_video_gen_provider', v))
+watch(videoGenModel, v => localStorage.setItem('worldsmith_video_gen_model', v))
+
+const videoGenProviders = [
+  { value: 'agnes', label: 'Agnes AI' },
+  { value: 'minimax', label: 'MiniMax (海螺)' },
+  { value: 'zhipu', label: '智谱 (CogVideoX)' },
+  { value: 'qwen', label: '阿里 (Wan)' },
+  { value: 'bytedance', label: '字节 (Seedance)' },
+  { value: 'kling', label: '快手 (可灵)' },
+]
+
+const videoGenModelOptions = computed(() => {
+  const provider = videoGenProvider.value
+  if (provider === 'agnes') {
+    return [
+      { value: 'agnes-video-v2.0', label: 'Agnes Video V2.0' },
+    ]
+  }
+  if (provider === 'minimax') {
+    return [
+      { value: 'MiniMax-Hailuo-02', label: 'Hailuo 02' },
+      { value: 'T2V-01-Director', label: 'T2V-01 导演版' },
+      { value: 'I2V-01-Director', label: 'I2V-01 导演版' },
+      { value: 'T2V-01', label: 'T2V-01' },
+      { value: 'I2V-01', label: 'I2V-01' },
+    ]
+  }
+  if (provider === 'zhipu') {
+    return [
+      { value: 'cogvideox-2', label: 'CogVideoX-2' },
+      { value: 'cogvideox', label: 'CogVideoX' },
+    ]
+  }
+  if (provider === 'qwen') {
+    return [
+      { value: 'wan2.7-t2v-2026-04-25', label: 'Wan2.7 文生视频' },
+      { value: 'wan2.7-i2v', label: 'Wan2.7 图生视频' },
+      { value: 'wan2.2-i2v-flash', label: 'Wan2.2 Flash' },
+    ]
+  }
+  if (provider === 'bytedance') {
+    return [
+      { value: 'doubao-seedance-2.0', label: 'Seedance 2.0' },
+    ]
+  }
+  if (provider === 'kling') {
+    return [
+      { value: 'kling-v3', label: 'Kling V3' },
+      { value: 'kling-v2.6', label: 'Kling V2.6' },
+    ]
+  }
+  return []
+})
+
+function onVideoGenProviderChange(e: Event): void {
+  const provider = (e.target as HTMLSelectElement).value
+  videoGenProvider.value = provider
+  const defaults: Record<string, string> = {
+    agnes: 'agnes-video-v2.0',
+    minimax: 'MiniMax-Hailuo-02',
+    zhipu: 'cogvideox-2',
+    qwen: 'wan2.7-t2v-2026-04-25',
+    bytedance: 'doubao-seedance-2.0',
+    kling: 'kling-v3',
+  }
+  videoGenModel.value = defaults[provider] || ''
+}
+
+function onVideoGenModelChange(e: Event): void {
+  videoGenModel.value = (e.target as HTMLSelectElement).value
+}
+
 const mcpAdding = ref(false)
 const mcpForm = ref({
   name: '',
-  transport: 'streamable-http' as const,
+  transport: 'streamable-http' as 'streamable-http' | 'stdio',
   url: '',
   command: '',
   argsStr: '',
@@ -955,10 +1223,7 @@ function formatTokens(n: number): string {
 }
 
 const currentProviderLabel = computed(() => {
-  const labels: Record<string, string> = {
-    anthropic: 'Anthropic', openai: 'OpenAI', google: 'Google', deepseek: 'DeepSeek', groq: 'Groq',
-    openrouter: 'OpenRouter', zhipu: '智谱 GLM', qwen: '通义千问', minimax: 'MiniMax', kimi: 'Kimi',
-  }
+  const labels = getProviderLabelMap()
   return labels[settingsStore.aiCloudProvider] || settingsStore.aiCloudProvider
 })
 
@@ -1005,10 +1270,10 @@ function onSearchApiKeyChange(e: Event): void {
   position: fixed;
   width: 280px;
   max-height: 80vh;
-  background: var(--agent-bg, rgba(26, 26, 46, 0.92));
-  backdrop-filter: blur(var(--agent-blur, 16px));
-  border: 1px solid var(--agent-border, rgba(58, 58, 106, 0.4));
-  border-radius: var(--agent-radius, 14px);
+  background: var(--agent-bg);
+  backdrop-filter: blur(var(--agent-blur));
+  border: 1px solid var(--agent-border);
+  border-radius: var(--agent-radius);
   box-shadow: var(--shadow-lg, 0 8px 32px rgba(0, 0, 0, 0.5));
   z-index: 10001;
   overflow: hidden;
@@ -1031,7 +1296,7 @@ function onSearchApiKeyChange(e: Event): void {
   justify-content: space-between;
   align-items: center;
   padding: 10px 14px;
-  border-bottom: 1px solid var(--agent-border, rgba(58, 58, 106, 0.3));
+  border-bottom: 1px solid var(--agent-border);
   cursor: grab;
   user-select: none;
 }
@@ -1040,14 +1305,14 @@ function onSearchApiKeyChange(e: Event): void {
 
 .menu-title {
   font-size: var(--font-size-sm);
-  color: var(--agent-text, #e0e0e0);
-  font-family: var(--agent-font, sans-serif);
+  color: var(--agent-text);
+  font-family: var(--agent-font);
 }
 
 .menu-close-btn {
   background: none;
   border: none;
-  color: var(--agent-text-secondary, #888);
+  color: var(--agent-text-secondary);
   cursor: pointer;
   font-size: var(--font-size-base);
 }
@@ -1058,9 +1323,9 @@ function onSearchApiKeyChange(e: Event): void {
 
 .settings-label {
   font-size: var(--font-size-sm);
-  color: var(--agent-text-secondary, #aaa);
+  color: var(--agent-text-secondary);
   margin-bottom: 6px;
-  font-family: var(--agent-font, sans-serif);
+  font-family: var(--agent-font);
 }
 
 .settings-row {
@@ -1071,17 +1336,17 @@ function onSearchApiKeyChange(e: Event): void {
 
 .settings-row-label {
   font-size: var(--font-size-sm);
-  color: var(--agent-text, #e0e0e0);
+  color: var(--agent-text);
   white-space: nowrap;
-  font-family: var(--agent-font, sans-serif);
+  font-family: var(--agent-font);
 }
 
 .sp-row-label {
   font-size: var(--font-size-xs);
-  color: var(--agent-text-secondary, #aaa);
+  color: var(--agent-text-secondary);
   min-width: 52px;
   flex-shrink: 0;
-  font-family: var(--agent-font, sans-serif);
+  font-family: var(--agent-font);
 }
 
 .settings-toggle {
@@ -1103,7 +1368,7 @@ function onSearchApiKeyChange(e: Event): void {
 .settings-toggle-slider {
   position: absolute;
   inset: 0;
-  background: var(--agent-border-color, #444);
+  background: var(--agent-border-color);
   border-radius: 18px;
   transition: background 0.2s;
 }
@@ -1121,7 +1386,7 @@ function onSearchApiKeyChange(e: Event): void {
 }
 
 .settings-toggle input:checked + .settings-toggle-slider {
-  background: var(--agent-primary, #6c5ce7);
+  background: var(--agent-primary);
 }
 
 .settings-toggle input:checked + .settings-toggle-slider::before {
@@ -1130,78 +1395,78 @@ function onSearchApiKeyChange(e: Event): void {
 
 .settings-slider {
   flex: 1;
-  accent-color: var(--agent-primary, #6c5ce7);
+  accent-color: var(--agent-primary);
   height: 4px;
 }
 
 .settings-value {
   font-size: var(--font-size-sm);
-  color: var(--agent-text-secondary, #aaa);
+  color: var(--agent-text-secondary);
   min-width: 48px;
   text-align: right;
-  font-family: var(--agent-font, sans-serif);
+  font-family: var(--agent-font);
 }
 
 .settings-select {
   flex: 1;
   padding: 4px 8px;
-  border: 1px solid var(--agent-border-color, #444);
+  border: 1px solid var(--agent-border-color);
   border-radius: 6px;
-  background: var(--agent-input-bg, rgba(255,255,255,0.04));
-  color: var(--agent-text, #e0e0e0);
+  background: var(--agent-input-bg);
+  color: var(--agent-text);
   font-size: var(--font-size-sm);
-  font-family: var(--agent-font, sans-serif);
+  font-family: var(--agent-font);
   outline: none;
   cursor: pointer;
 }
 
-.settings-select:focus { border-color: var(--agent-primary, #6c5ce7) }
+.settings-select:focus { border-color: var(--agent-primary) }
 
 .settings-input {
   flex: 1;
   padding: 4px 8px;
-  border: 1px solid var(--agent-border-color, #444);
+  border: 1px solid var(--agent-border-color);
   border-radius: 6px;
-  background: var(--agent-input-bg, rgba(255,255,255,0.04));
-  color: var(--agent-text, #e0e0e0);
+  background: var(--agent-input-bg);
+  color: var(--agent-text);
   font-size: var(--font-size-sm);
-  font-family: var(--agent-font, sans-serif);
+  font-family: var(--agent-font);
   outline: none;
 }
 
-.settings-input:focus { border-color: var(--agent-primary, #6c5ce7) }
-.settings-input::placeholder { color: var(--agent-text-tertiary, #666) }
+.settings-input:focus { border-color: var(--agent-primary) }
+.settings-input::placeholder { color: var(--agent-text-tertiary) }
 
 .settings-sub-panels {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
   padding: 6px 0;
-  border-top: 1px solid var(--agent-border, rgba(58, 58, 106, 0.2));
+  border-top: 1px solid var(--agent-border);
   margin-top: 4px;
 }
 
 .sub-panel-btn {
   padding: 4px 10px;
-  border: 1px solid var(--agent-border, rgba(58, 58, 106, 0.3));
+  border: 1px solid var(--agent-border);
   border-radius: 6px;
-  background: var(--agent-hover-bg, rgba(255,255,255,0.04));
-  color: var(--agent-text-secondary, #aaa);
+  background: var(--agent-hover-bg);
+  color: var(--agent-text-secondary);
   font-size: var(--font-size-xs);
   cursor: pointer;
   transition: all 0.15s;
-  font-family: var(--agent-font, sans-serif);
+  font-family: var(--agent-font);
 }
 
 .sub-panel-btn:hover {
-  background: var(--agent-accent-bg, rgba(108, 92, 231, 0.15));
-  color: var(--agent-primary, #6c5ce7);
-  border-color: var(--agent-primary, #6c5ce7);
+  background: var(--agent-accent-bg);
+  color: var(--agent-primary);
+  border-color: var(--agent-primary);
 }
 
 .sub-panel {
   padding: 8px 0;
-  border-top: 1px solid var(--agent-border, rgba(58, 58, 106, 0.15));
+  border-top: 1px solid var(--agent-border);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1229,9 +1494,9 @@ function onSearchApiKeyChange(e: Event): void {
 
 .settings-hint {
   font-size: var(--font-size-xs);
-  color: var(--agent-text-tertiary, #666);
+  color: var(--agent-text-tertiary);
   margin-top: 4px;
-  font-family: var(--agent-font, sans-serif);
+  font-family: var(--agent-font);
 }
 
 .skills-list {
@@ -1246,7 +1511,7 @@ function onSearchApiKeyChange(e: Event): void {
   gap: 8px;
   padding: 6px 8px;
   border-radius: 8px;
-  background: var(--agent-hover-bg, rgba(255,255,255,0.03));
+  background: var(--agent-hover-bg);
   border: 1px solid transparent;
   transition: border-color 0.15s, opacity 0.15s;
 }
@@ -1256,7 +1521,7 @@ function onSearchApiKeyChange(e: Event): void {
 }
 
 .skill-item:hover {
-  border-color: var(--agent-border, rgba(58, 58, 106, 0.3));
+  border-color: var(--agent-border);
 }
 
 .skill-icon {
@@ -1275,17 +1540,17 @@ function onSearchApiKeyChange(e: Event): void {
 .skill-name {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
-  color: var(--agent-text, #e0e0e0);
-  font-family: var(--agent-font, sans-serif);
+  color: var(--agent-text);
+  font-family: var(--agent-font);
 }
 
 .skill-desc {
   font-size: var(--font-size-xs);
-  color: var(--agent-text-tertiary, #666);
+  color: var(--agent-text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--agent-font, sans-serif);
+  font-family: var(--agent-font);
 }
 
 .skill-toggle {
@@ -1303,25 +1568,25 @@ function onSearchApiKeyChange(e: Event): void {
 }
 
 .mcp-list { display: flex; flex-direction: column; gap: 6px; }
-.mcp-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: var(--agent-hover-bg, rgba(255,255,255,0.03)); border: 1px solid transparent; transition: border-color 0.15s, opacity 0.15s; }
+.mcp-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: var(--agent-hover-bg); border: 1px solid transparent; transition: border-color 0.15s, opacity 0.15s; }
 .mcp-item.disabled { opacity: 0.5; }
-.mcp-item:hover { border-color: var(--agent-border, rgba(58, 58, 106, 0.3)); }
+.mcp-item:hover { border-color: var(--agent-border); }
 .mcp-status { font-size: var(--font-size-xs); flex-shrink: 0; }
 .mcp-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.mcp-name { font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); color: var(--agent-text, #e0e0e0); font-family: var(--agent-font, sans-serif); }
-.mcp-desc { font-size: var(--font-size-xs); color: var(--agent-text-tertiary, #666); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--agent-font, sans-serif); }
-.mcp-add-form { display: flex; flex-direction: column; gap: 6px; padding: 6px 0; border-top: 1px solid var(--agent-border, rgba(58, 58, 106, 0.15)); }
+.mcp-name { font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); color: var(--agent-text); font-family: var(--agent-font); }
+.mcp-desc { font-size: var(--font-size-xs); color: var(--agent-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--agent-font); }
+.mcp-add-form { display: flex; flex-direction: column; gap: 6px; padding: 6px 0; border-top: 1px solid var(--agent-border); }
 .mcp-add-actions { display: flex; gap: 6px; justify-content: flex-end; }
 .mcp-delete-btn { background: none; border: none; cursor: pointer; font-size: var(--font-size-xs); padding: 2px 4px; opacity: 0.4; transition: opacity 0.15s; }
 .mcp-delete-btn:hover { opacity: 1; }
-.mcp-presets { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--agent-border, rgba(58, 58, 106, 0.15)); }
-.mcp-presets-title { font-size: var(--font-size-xs); color: var(--agent-text-tertiary, #666); margin-bottom: 6px; font-family: var(--agent-font, sans-serif); }
+.mcp-presets { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--agent-border); }
+.mcp-presets-title { font-size: var(--font-size-xs); color: var(--agent-text-tertiary); margin-bottom: 6px; font-family: var(--agent-font); }
 .mcp-presets-grid { display: flex; flex-wrap: wrap; gap: 4px; }
-.preset-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--agent-border, rgba(58, 58, 106, 0.2)); background: var(--agent-hover-bg, rgba(255,255,255,0.03)); cursor: pointer; transition: all 0.15s; min-width: 90px; }
-.preset-btn:hover:not(:disabled) { border-color: var(--agent-accent, #6c5ce7); background: rgba(108, 92, 231, 0.08); }
+.preset-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--agent-border); background: var(--agent-hover-bg); cursor: pointer; transition: all 0.15s; min-width: 90px; }
+.preset-btn:hover:not(:disabled) { border-color: var(--agent-accent); background: color-mix(in srgb, var(--agent-primary) 8%, transparent); }
 .preset-btn.added { opacity: 0.4; cursor: default; }
-.preset-name { font-size: var(--font-size-xs); font-weight: var(--font-weight-medium); color: var(--agent-text, #e0e0e0); font-family: var(--agent-font, sans-serif); }
-.preset-desc { font-size: var(--text-micro-font-size); color: var(--agent-text-tertiary, #666); font-family: var(--agent-font, sans-serif); }
+.preset-name { font-size: var(--font-size-xs); font-weight: var(--font-weight-medium); color: var(--agent-text); font-family: var(--agent-font); }
+.preset-desc { font-size: var(--text-micro-font-size); color: var(--agent-text-tertiary); font-family: var(--agent-font); }
 
 .chat-mode-grid {
   display: grid;
@@ -1335,24 +1600,24 @@ function onSearchApiKeyChange(e: Event): void {
   gap: 10px;
   padding: 8px 10px;
   border-radius: 8px;
-  border: 1px solid var(--agent-border, rgba(58, 58, 106, 0.2));
-  background: var(--agent-hover-bg, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--agent-border);
+  background: var(--agent-hover-bg);
   cursor: pointer;
   transition: all 0.15s ease;
   text-align: left;
-  font-family: var(--agent-font, sans-serif);
-  color: var(--agent-text, #e0e0e0);
+  font-family: var(--agent-font);
+  color: var(--agent-text);
 }
 
 .chat-mode-card:hover:not(.active) {
-  border-color: var(--agent-accent, #6c5ce7);
-  background: rgba(108, 92, 231, 0.08);
+  border-color: var(--agent-accent);
+  background: color-mix(in srgb, var(--agent-primary) 8%, transparent);
 }
 
 .chat-mode-card.active {
-  border-color: var(--agent-accent, #6c5ce7);
-  background: rgba(108, 92, 231, 0.15);
-  box-shadow: 0 0 0 1px var(--agent-accent, #6c5ce7) inset;
+  border-color: var(--agent-accent);
+  background: color-mix(in srgb, var(--agent-primary) 15%, transparent);
+  box-shadow: 0 0 0 1px var(--agent-accent) inset;
 }
 
 .chat-mode-card.locked {
@@ -1361,8 +1626,8 @@ function onSearchApiKeyChange(e: Event): void {
 }
 
 .chat-mode-card.locked:hover:not(.active) {
-  border-color: var(--agent-border, rgba(58, 58, 106, 0.2));
-  background: var(--agent-hover-bg, rgba(255, 255, 255, 0.03));
+  border-color: var(--agent-border);
+  background: var(--agent-hover-bg);
 }
 
 .chat-mode-icon {
@@ -1381,16 +1646,16 @@ function onSearchApiKeyChange(e: Event): void {
 .chat-mode-label {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
-  color: var(--agent-text, #e0e0e0);
+  color: var(--agent-text);
 }
 
 .chat-mode-card.active .chat-mode-label {
-  color: var(--agent-accent, #6c5ce7);
+  color: var(--agent-accent);
 }
 
 .chat-mode-desc {
   font-size: var(--font-size-xs);
-  color: var(--agent-text-tertiary, #888);
+  color: var(--agent-text-tertiary);
   line-height: 1.3;
 }
 
@@ -1406,39 +1671,39 @@ function onSearchApiKeyChange(e: Event): void {
   align-items: center;
   padding: 6px 4px;
   border-radius: 8px;
-  background: var(--agent-hover-bg, rgba(255,255,255,0.03));
-  border: 1px solid var(--agent-border, rgba(58, 58, 106, 0.2));
+  background: var(--agent-hover-bg);
+  border: 1px solid var(--agent-border);
 }
 
 .usage-value {
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
-  color: var(--agent-primary, #6c5ce7);
-  font-family: var(--agent-font-mono, monospace);
+  color: var(--agent-primary);
+  font-family: var(--agent-font-mono);
 }
 
 .usage-label {
   font-size: var(--font-size-xs);
-  color: var(--agent-text-tertiary, #666);
-  font-family: var(--agent-font, sans-serif);
+  color: var(--agent-text-tertiary);
+  font-family: var(--agent-font);
   margin-top: 2px;
 }
 
 .usage-saved .usage-value {
-  color: var(--agent-success, #00b894);
+  color: var(--agent-success, #22c55e);
 }
 
 .usage-section-title {
   font-size: var(--font-size-xs);
-  color: var(--agent-text-tertiary, #666);
+  color: var(--agent-text-tertiary);
   margin-top: 8px;
   margin-bottom: 4px;
   padding-bottom: 2px;
-  border-bottom: 1px solid var(--agent-border, rgba(58, 58, 106, 0.15));
+  border-bottom: 1px solid var(--agent-border);
 }
 
 .usage-cache-hit .usage-value {
-  color: var(--agent-success, #00b894);
+  color: var(--agent-success, #22c55e);
 }
 
 
@@ -1474,7 +1739,7 @@ function onSearchApiKeyChange(e: Event): void {
   border-radius: 8px;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
-  font-family: var(--agent-font, sans-serif);
+  font-family: var(--agent-font);
 }
 
 .mode-indicator.mode-tauri {
@@ -1497,27 +1762,27 @@ function onSearchApiKeyChange(e: Event): void {
 .settings-btn {
   flex: 1;
   padding: 8px 14px;
-  border: 1px solid var(--agent-border, rgba(58, 58, 106, 0.3));
+  border: 1px solid var(--agent-border);
   border-radius: 8px;
-  background: var(--agent-hover-bg, rgba(255,255,255,0.04));
-  color: var(--agent-text, #e0e0e0);
+  background: var(--agent-hover-bg);
+  color: var(--agent-text);
   font-size: var(--font-size-sm);
-  font-family: var(--agent-font, sans-serif);
+  font-family: var(--agent-font);
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .settings-btn:hover {
-  background: var(--agent-accent-bg, rgba(108, 92, 231, 0.15));
-  color: var(--agent-primary, #6c5ce7);
-  border-color: var(--agent-primary, #6c5ce7);
+  background: var(--agent-accent-bg);
+  color: var(--agent-primary);
+  border-color: var(--agent-primary);
 }
 
 .sp-section-label {
   font-size: var(--font-size-xs);
-  color: var(--agent-text-tertiary, #666);
+  color: var(--agent-text-tertiary);
   margin-bottom: 4px;
-  font-family: var(--agent-font, sans-serif);
+  font-family: var(--agent-font);
 }
 
 .cp-item {
@@ -1529,15 +1794,15 @@ function onSearchApiKeyChange(e: Event): void {
   cursor: pointer;
   transition: background 0.1s;
   font-size: var(--font-size-sm);
-  color: var(--agent-text, #e0e0e0);
+  color: var(--agent-text);
 }
 
 .cp-item:hover {
-  background: var(--agent-hover-bg, rgba(255,255,255,0.06));
+  background: var(--agent-hover-bg);
 }
 
 .cp-item.active {
-  background: var(--agent-accent-bg, rgba(108, 92, 231, 0.15));
+  background: var(--agent-accent-bg);
 }
 
 .cp-name {
@@ -1545,12 +1810,12 @@ function onSearchApiKeyChange(e: Event): void {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--agent-font, sans-serif);
+  font-family: var(--agent-font);
 }
 
 .cp-model {
   font-size: var(--font-size-xs);
-  color: var(--agent-text-tertiary, #666);
+  color: var(--agent-text-tertiary);
   flex-shrink: 0;
   max-width: 100px;
   overflow: hidden;
@@ -1561,7 +1826,7 @@ function onSearchApiKeyChange(e: Event): void {
 .cp-delete {
   background: none;
   border: none;
-  color: var(--agent-text-tertiary, #666);
+  color: var(--agent-text-tertiary);
   cursor: pointer;
   font-size: var(--font-size-sm);
   opacity: 0;
@@ -1581,18 +1846,18 @@ function onSearchApiKeyChange(e: Event): void {
   width: 100%;
   padding: 6px;
   margin-top: 4px;
-  border: 1px dashed var(--agent-border-color, #444);
+  border: 1px dashed var(--agent-border-color);
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--agent-text, #e0e0e0);
+  color: var(--agent-text);
   cursor: pointer;
   font-size: var(--font-size-xs);
   transition: border-color 0.15s;
 }
 
 .cp-save-btn:hover:not(:disabled) {
-  border-color: var(--agent-primary, #6c5ce7);
-  color: var(--agent-primary, #6c5ce7);
+  border-color: var(--agent-primary);
+  color: var(--agent-primary);
 }
 
 .cp-save-btn:disabled {
@@ -1615,9 +1880,9 @@ function onSearchApiKeyChange(e: Event): void {
 
 .cp-fetch-btn {
   background: none;
-  border: 1px solid var(--agent-border-color, #444);
+  border: 1px solid var(--agent-border-color);
   border-radius: var(--radius-sm);
-  color: var(--agent-text, #e0e0e0);
+  color: var(--agent-text);
   cursor: pointer;
   padding: 4px 6px;
   display: flex;
@@ -1628,8 +1893,8 @@ function onSearchApiKeyChange(e: Event): void {
 }
 
 .cp-fetch-btn:hover:not(:disabled) {
-  border-color: var(--agent-primary, #6c5ce7);
-  color: var(--agent-primary, #6c5ce7);
+  border-color: var(--agent-primary);
+  color: var(--agent-primary);
 }
 
 .cp-fetch-btn:disabled {
@@ -1641,5 +1906,51 @@ function onSearchApiKeyChange(e: Event): void {
   font-size: var(--font-size-xs);
   color: var(--danger, #e74c3c);
   padding: 2px 0 0 0;
+}
+
+.provider-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+}
+
+.provider-list-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid var(--agent-border);
+  border-radius: 6px;
+  background: var(--agent-hover-bg);
+  color: var(--agent-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: var(--font-size-2xs, 11px);
+  white-space: nowrap;
+}
+
+.provider-list-item:hover {
+  border-color: var(--agent-primary);
+  color: var(--agent-primary);
+  background: var(--agent-accent-bg);
+}
+
+.provider-list-item.active {
+  border-color: var(--agent-primary);
+  background: var(--agent-accent-bg);
+  color: var(--agent-primary);
+  box-shadow: 0 0 0 1px var(--agent-primary) inset;
+}
+
+.provider-list-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.provider-list-label {
+  line-height: 1;
 }
 </style>

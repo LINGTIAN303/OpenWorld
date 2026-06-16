@@ -2,17 +2,17 @@ import { getModelInfo } from '../../agent/modelRegistry'
 
 const FALLBACK_CHAINS: Record<string, string[]> = {
   anthropic: [
-    'claude-opus-4-7', 'claude-sonnet-4-6', 'claude-sonnet-4-20250514',
+    'claude-opus-4-8', 'claude-opus-4-7', 'claude-sonnet-4-6', 'claude-sonnet-4-20250514',
     'claude-haiku-4-5-20251001', 'claude-3-5-haiku-20241022',
   ],
   openai: [
-    'gpt-5.5', 'gpt-5.4', 'gpt-5', 'gpt-4o', 'gpt-4o-mini',
+    'gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5', 'gpt-4o', 'gpt-4o-mini',
   ],
   google: [
     'gemini-3.5-flash', 'gemini-3.1-pro-preview', 'gemini-2.5-pro-preview-05-06', 'gemini-2.5-flash',
   ],
   deepseek: [
-    'deepseek-reasoner', 'deepseek-chat', 'deepseek-v4-pro', 'deepseek-v4-flash',
+    'deepseek-v4-pro', 'deepseek-v4-flash', 'deepseek-reasoner', 'deepseek-chat',
   ],
   groq: [
     'openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'meta-llama/llama-4-scout-17b-16e-instruct',
@@ -24,10 +24,13 @@ const FALLBACK_CHAINS: Record<string, string[]> = {
     'qwen3.7-max', 'qwen3.6-plus', 'qwen3.6-flash',
   ],
   minimax: [
-    'MiniMax-M2.7', 'MiniMax-M2.5', 'minimax-vl-01',
+    'MiniMax-M3', 'MiniMax-M2.7', 'MiniMax-M2.5', 'minimax-vl-01',
   ],
   kimi: [
     'kimi-k2.6', 'kimi-k2.5', 'moonshot-v1-128k',
+  ],
+  agnes: [
+    'agnes-2.0-flash', 'agnes-1.5-flash',
   ],
 }
 

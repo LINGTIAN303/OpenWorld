@@ -6,7 +6,7 @@
       `ws-node-chip--${size}`,
       { 'ws-node-chip--selected': selected, 'ws-node-chip--disabled': disabled },
     ]"
-    :title="meta?.description_zh ?? label"
+    :title="label"
   >
     <span v-if="showIcon" class="ws-node-chip__icon" aria-hidden="true">{{ iconGlyph }}</span>
     <span class="ws-node-chip__label">{{ label }}</span>
@@ -15,7 +15,6 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { builtinNodeMetadata } from '@/plugins/official/workflow/node-metadata'
 
 type ChipGroup = 'trigger' | 'execute' | 'ai' | 'control' | 'data' | 'end' | 'neutral'
 
@@ -36,19 +35,38 @@ const TYPE_TO_GROUP: Record<string, ChipGroup> = {
   end: 'end',
 }
 
-const ICON_FALLBACK: Record<string, string> = {
-  play: '▶',
-  close: '■',
-  pin: '◆',
-  'chevron-down': '⤵',
-  'chevron-right': '⤵',
-  lightning: '⚡',
-  star: '★',
-  settings: '⚙',
-  character: '☻',
-  keyboard: '⌨',
-  refresh: '↻',
-  manuscript: '☰',
+const TYPE_LABELS: Record<string, string> = {
+  start: '开始',
+  end: '结束',
+  pivot: '枢纽',
+  skill: '技能',
+  tool: '工具',
+  sub_agent: '子Agent',
+  agent_decision: 'Agent决策',
+  condition: '条件',
+  skip: '跳过',
+  loop: '循环',
+  iterate: '迭代',
+  parallel: '并行',
+  code: '代码',
+  sub_workflow: '子工作流',
+}
+
+const TYPE_ICONS: Record<string, string> = {
+  start: '▶',
+  end: '■',
+  pivot: '◆',
+  skill: '⚡',
+  tool: '⚙',
+  sub_agent: '☻',
+  agent_decision: '⚡',
+  condition: '⤵',
+  skip: '↻',
+  loop: '↻',
+  iterate: '↻',
+  parallel: '☰',
+  code: '⌨',
+  sub_workflow: '☰',
 }
 
 const props = withDefaults(defineProps<{
@@ -66,16 +84,15 @@ const props = withDefaults(defineProps<{
   disabled: false,
 })
 
-const meta = computed(() => builtinNodeMetadata.find(m => m.type === props.type))
+const meta = computed(() => null)
 
 const group = computed<ChipGroup>(() => TYPE_TO_GROUP[props.type] ?? 'neutral')
 
 const iconGlyph = computed(() => {
-  if (!meta.value) return '·'
-  return ICON_FALLBACK[meta.value.icon] ?? meta.value.icon.slice(0, 2)
+  return TYPE_ICONS[props.type] ?? '·'
 })
 
-const label = computed(() => props.label ?? meta.value?.label_zh ?? props.type)
+const label = computed(() => props.label ?? TYPE_LABELS[props.type] ?? props.type)
 </script>
 
 <style scoped>

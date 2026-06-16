@@ -1,19 +1,19 @@
 <template>
-  <SimpleEntityView
+  <GenericEntityView
     entityType="conflict"
-    label="冲突"
-    idPrefix="cft"
-    icon="combat"
-    :fields="fields"
-    :filterDefs="filterDefs"
+    :form-fields="fields"
+    :filter-defs="filterDefs"
     cardSubtitle="conflictType"
-    :cardFooterFields="cardFooterFields"
-    :detailTabs="detailTabs"
+    :card-footer-fields="cardFooterFields"
+    :detail-tabs="detailTabs"
+    entity-label="冲突"
+    id-prefix="cft"
+    :icon-fn="() => 'combat'"
   />
 </template>
 
 <script setup lang="ts">
-import { SimpleEntityView, type FormFieldDef, type FilterDef, type CardFieldDef, type RelationTabDef } from '@worldsmith/plugin-sdk'
+import { GenericEntityView, type FormFieldDef, type FilterDef, type CardFieldDef, type RelationTabDef } from '@worldsmith/plugin-sdk'
 
 const fields: FormFieldDef[] = [
   { key: 'name', label: '名称', type: 'text', required: true, placeholder: '冲突名称' },

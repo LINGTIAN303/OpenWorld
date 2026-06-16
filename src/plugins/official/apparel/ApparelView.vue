@@ -1,19 +1,26 @@
 <template>
-  <SimpleEntityView
-    entityType="apparel"
-    label="服饰"
-    idPrefix="apr"
-    icon="apparel"
-    :fields="fields"
-    :filterDefs="filterDefs"
+  <GenericEntityView
+    entityType="item"
+    :form-fields="fields"
+    :filter-defs="filterDefs"
     cardSubtitle="material"
-    :cardFooterFields="cardFooterFields"
-    :detailTabs="detailTabs"
+    :card-footer-fields="cardFooterFields"
+    :detail-tabs="detailTabs"
+    :additional-filter="isApparelItem"
+    entity-label="服饰"
+    id-prefix="apr"
+    :icon-fn="() => 'apparel'"
+    facet-on-create="apparel"
   />
 </template>
 
 <script setup lang="ts">
-import { SimpleEntityView, type FormFieldDef, type FilterDef, type CardFieldDef, type RelationTabDef } from '@worldsmith/plugin-sdk'
+import { GenericEntityView, type FormFieldDef, type FilterDef, type CardFieldDef, type RelationTabDef } from '@worldsmith/plugin-sdk'
+
+/** 过滤出包含 apparel facet 的 item 实体 */
+function isApparelItem(entity: any): boolean {
+  return entity?.facets?.apparel != null || entity?.properties?.itemType === '防具'
+}
 
 const fields: FormFieldDef[] = [
   { key: 'name', label: '名称', type: 'text', required: true },

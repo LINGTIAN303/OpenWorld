@@ -250,7 +250,7 @@ const startServerTool: ToolDefinition = {
 
 const launchTerminalTool: ToolDefinition = {
   name: 'launch_terminal',
-  description: '启动一个终端会话并执行命令。自动识别当前运行模式：Tauri 桌面模式使用本地 PTY，Web 应用模式通过 WebSocket 连接远程 PTY。返回命令执行结果。',
+  description: '启动一个终端会话并执行命令。自动识别当前运行模式：Tauri 桌面模式使用本地 PTY，Web 应用模式通过 WebSocket 连接远程 PTY。支持指定 Shell 类型和注入环境变量。返回命令执行结果。',
   parameters: {
     command: {
       type: 'string',
@@ -260,6 +260,14 @@ const launchTerminalTool: ToolDefinition = {
     cwd: {
       type: 'string',
       description: '工作目录（可选，默认项目根目录）',
+    },
+    shell: {
+      type: 'string',
+      description: 'Shell 类型路径（可选，默认自动选择。可传入 detect_shells 返回的 path 值，如 "powershell.exe"、"/bin/bash"、"cmd.exe"）',
+    },
+    env: {
+      type: 'object',
+      description: '环境变量（可选，如 {"NODE_ENV": "development"}）',
     },
     mode_hint: {
       type: 'string',
@@ -295,9 +303,10 @@ const launchTerminalTool: ToolDefinition = {
 
     const command = String(args.command)
     const cwd = args.cwd ? String(args.cwd) : undefined
+    const env = args.env as Record<string, string> | undefined
 
     try {
-      const result = await adapter.executeCommand(command, { cwd, timeout: 30000 })
+      const result = await adapter.executeCommand(command, { cwd, timeout: 30000, env })
       return JSON.stringify({
         ok: true,
         mode: actualMode,
@@ -334,6 +343,10 @@ const launchTerminalScriptTool: ToolDefinition = {
       type: 'string',
       description: '脚本解释器（可选，默认根据脚本内容自动推断，如 bash、sh、python3 等）',
     },
+    env: {
+      type: 'object',
+      description: '环境变量（可选，如 {"NODE_ENV": "development"}）',
+    },
     mode_hint: {
       type: 'string',
       description: '模式提示，用于确认你了解当前模式。可选值：tauri（桌面模式）、web（Web模式）。调用 detect_terminal_mode 获取当前模式后填入此参数，避免模式混淆。',
@@ -369,6 +382,7 @@ const launchTerminalScriptTool: ToolDefinition = {
     const script = String(args.script)
     const cwd = args.cwd ? String(args.cwd) : undefined
     const interpreter = args.interpreter ? String(args.interpreter) : undefined
+    const env = args.env as Record<string, string> | undefined
 
     const isWindows = navigator.userAgent.includes('Windows') || navigator.platform.startsWith('Win')
     let command: string
@@ -383,7 +397,7 @@ const launchTerminalScriptTool: ToolDefinition = {
     }
 
     try {
-      const result = await adapter.executeCommand(command, { cwd, timeout: 60000 })
+      const result = await adapter.executeCommand(command, { cwd, timeout: 60000, env })
       return JSON.stringify({
         ok: true,
         mode: actualMode,

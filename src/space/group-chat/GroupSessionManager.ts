@@ -36,7 +36,8 @@ function getDb(): GroupChatDB {
 export async function listGroupSessions(): Promise<GroupSession[]> {
   try {
     return await getDb().sessions.orderBy('updatedAt').reverse().toArray()
-  } catch {
+  } catch (err) {
+    console.warn('[GroupSessionManager] listGroupSessions 失败', err)
     return []
   }
 }
@@ -44,7 +45,8 @@ export async function listGroupSessions(): Promise<GroupSession[]> {
 export async function getGroupSession(id: string): Promise<GroupSession | undefined> {
   try {
     return await getDb().sessions.get(id)
-  } catch {
+  } catch (err) {
+    console.warn('[GroupSessionManager] getGroupSession 失败', err)
     return undefined
   }
 }
@@ -61,7 +63,9 @@ export async function saveGroupSession(session: GroupSession): Promise<void> {
 export async function deleteGroupSession(id: string): Promise<void> {
   try {
     await getDb().sessions.delete(id)
-  } catch {}
+  } catch (err) {
+    console.warn('[GroupSessionManager] deleteGroupSession 失败', err)
+  }
 }
 
 export async function createGroupSession(
@@ -107,6 +111,13 @@ export async function unpinGroupSession(id: string): Promise<void> {
   const session = await getGroupSession(id)
   if (session) {
     await saveGroupSession({ ...JSON.parse(JSON.stringify(session)), pinned: false })
+  }
+}
+
+export async function renameGroupSession(id: string, name: string): Promise<void> {
+  const session = await getGroupSession(id)
+  if (session) {
+    await saveGroupSession({ ...JSON.parse(JSON.stringify(session)), name })
   }
 }
 

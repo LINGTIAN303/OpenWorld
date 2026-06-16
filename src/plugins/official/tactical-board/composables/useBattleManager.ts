@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
-import type { TacticalEngineAPI, WasmBattleUnit, WasmCombatResult } from './useTacticalEngine'
+import type { TacticalEngineAPI, WasmBattleUnit, WasmCombatResult, GameEvent } from './useTacticalEngine'
 import type { UnitRenderData, HighlightCell } from './boardDraw'
+import type { useBoardAnimation } from './useBoardAnimation'
 
 export type BattlePhase = 'deployment' | 'battle' | 'victory'
 export type ActionType = 'move' | 'attack' | 'skill' | 'wait'
@@ -23,6 +24,7 @@ export function useBattleManager(
   engine: { value: TacticalEngineAPI | null },
   units: { value: UnitRenderData[] },
   refreshUnits: () => void,
+  anim?: ReturnType<typeof useBoardAnimation>,
 ) {
   const phase = ref<BattlePhase>('deployment')
   const currentTurn = ref(1)
@@ -31,6 +33,14 @@ export function useBattleManager(
   const actionState = ref<ActionState | null>(null)
   const battleLog = ref<BattleLogEntry[]>([])
   const victoryTeam = ref('')
+
+  // Direct event-based stats tracking (no regex parsing)
+  const combatStats = ref({
+    totalAttacks: 0,
+    totalDamage: 0,
+    totalCriticals: 0,
+    unitsKilled: 0,
+  })
 
   const currentUnit = computed<WasmBattleUnit | null>(() => {
     if (phase.value !== 'battle') return null
@@ -71,13 +81,32 @@ export function useBattleManager(
     }
   }
 
+  function drainEngineEvents() {
+    if (!engine.value?.drain_events) return
+    try {
+      const events = engine.value.drain_events() as GameEvent[]
+      for (const evt of events) {
+        if (evt.kind === 'attack' || evt.kind === 'unit_killed') {
+          combatStats.value.totalAttacks++
+          if (evt.data) {
+            combatStats.value.totalDamage += evt.data.damage || 0
+            if (evt.data.critical) combatStats.value.totalCriticals++
+            if (evt.data.defender_dead) combatStats.value.unitsKilled++
+          }
+        }
+      }
+    } catch {}
+  }
+
   function startBattle() {
     if (!engine.value) return
     engine.value.start_battle()
+    drainEngineEvents()
     phase.value = 'battle'
     currentTurn.value = 1
     victoryTeam.value = ''
     actionState.value = null
+    combatStats.value = { totalAttacks: 0, totalDamage: 0, totalCriticals: 0, unitsKilled: 0 }
     addLog('战斗开始！', 'system')
     buildActionQueue()
   }
@@ -121,14 +150,20 @@ export function useBattleManager(
     actionState.value = null
   }
 
-  function executeAction(targetX: number, targetY: number): boolean {
+  async function executeAction(targetX: number, targetY: number): Promise<boolean> {
     if (!actionState.value || !engine.value) return false
     const { type, sourceX, sourceY } = actionState.value
 
     if (type === 'move') {
+      const unit = currentUnit.value
       try {
+        // Trigger move animation before executing
+        if (anim && unit) {
+          anim.pushMove(unit.id, sourceX, sourceY, targetX, targetY, 300)
+          await anim.waitForAnimations()
+        }
         engine.value.move_unit(sourceX, sourceY, targetX, targetY)
-        const unit = currentUnit.value
+        drainEngineEvents()
         addLog(`${unit?.name || '单位'} 移动到 (${targetX}, ${targetY})`, 'move')
         refreshUnits()
         actionState.value = null
@@ -141,14 +176,42 @@ export function useBattleManager(
     }
 
     if (type === 'attack') {
+      const unit = currentUnit.value
       try {
+        // Trigger attack animation
+        if (anim && unit) {
+          anim.pushAttackFlash(unit.id, 200)
+        }
+
         const result = engine.value.execute_attack(sourceX, sourceY, targetX, targetY) as WasmCombatResult
+        drainEngineEvents()
+
+        // Trigger hit animation on defender
+        if (anim) {
+          const defenderUnit = units.value.find(u => u.x === targetX && u.y === targetY)
+          if (defenderUnit) {
+            if (result.defender_dead) {
+              anim.pushHitShake(defenderUnit.id, 200)
+              anim.pushDeath(defenderUnit.id, targetX, targetY, 400)
+            } else {
+              anim.pushHitShake(defenderUnit.id, 300)
+            }
+          }
+          anim.pushDamageNumber(targetX, targetY, result.damage, result.critical)
+        }
+
         const critText = result.critical ? ' 暴击！' : ''
         const deadText = result.defender_dead ? ` ${result.defender_id} 被击败！` : ''
         addLog(
           `${result.attacker_id} 攻击 ${result.defender_id}，造成 ${result.damage} 伤害${critText}${deadText}`,
           'attack',
         )
+
+        // Wait for animations to finish
+        if (anim) {
+          await anim.waitForAnimations()
+        }
+
         refreshUnits()
         actionState.value = null
         checkVictory()
@@ -173,6 +236,7 @@ export function useBattleManager(
       const target = allUnits.find(u => u.id === unit.id)
       if (target) {
         engine.value.move_unit(target.x, target.y, target.x, target.y)
+        drainEngineEvents()
       }
     } catch {}
     addLog(`${unit.name} 待机`, 'system')
@@ -180,26 +244,24 @@ export function useBattleManager(
     advanceToNextUnit()
   }
 
+  // Fixed: iterative instead of recursive to prevent stack overflow
   function advanceToNextUnit() {
     currentUnitIndex.value++
-    if (currentUnitIndex.value >= actionQueue.value.length) {
-      endTurn()
-      return
+    while (currentUnitIndex.value < actionQueue.value.length) {
+      const next = actionQueue.value[currentUnitIndex.value]
+      if (next && next.hp > 0 && !next.acted) {
+        return
+      }
+      currentUnitIndex.value++
     }
-    const next = actionQueue.value[currentUnitIndex.value]
-    if (!next || next.hp <= 0) {
-      advanceToNextUnit()
-      return
-    }
-    if (next.acted) {
-      advanceToNextUnit()
-      return
-    }
+    // All units acted, end turn
+    endTurn()
   }
 
   function endTurn() {
     if (!engine.value) return
     engine.value.next_turn()
+    drainEngineEvents()
     currentTurn.value = engine.value.get_turn()
     addLog(`--- 回合 ${currentTurn.value} ---`, 'system')
     refreshUnits()
@@ -227,6 +289,7 @@ export function useBattleManager(
     actionState.value = null
     battleLog.value = []
     victoryTeam.value = ''
+    combatStats.value = { totalAttacks: 0, totalDamage: 0, totalCriticals: 0, unitsKilled: 0 }
   }
 
   function isCurrentUnit(x: number, y: number): boolean {
@@ -243,6 +306,7 @@ export function useBattleManager(
     actionState,
     battleLog,
     victoryTeam,
+    combatStats,
     startBattle,
     beginMoveAction,
     beginAttackAction,
@@ -253,5 +317,6 @@ export function useBattleManager(
     resetBattle,
     isCurrentUnit,
     addLog,
+    drainEngineEvents,
   }
 }

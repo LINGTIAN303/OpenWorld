@@ -14,7 +14,7 @@
 
 <script setup lang="ts">
 import { ref, watch, onUnmounted } from 'vue'
-import { useFileStore } from '@worldsmith/entity-core'
+import { useFileStore, useImageResolver, onFilePersisted } from '@worldsmith/entity-core'
 
 const props = defineProps<{
   src: string | undefined | null
@@ -32,7 +32,11 @@ const resolvedSrc = ref<string | null>(null)
 const loading = ref(false)
 
 let currentBlobUrl: string | null = null
-let resolveVersion = 0
+
+// 共享解析循环：onFilePersisted 事件 + 退避重试，覆盖 useFileStore 与 appendBlock 之间的写库时差
+const resolver = useImageResolver({
+  subscribe: (l) => onFilePersisted(l),
+})
 
 function revokeCurrent() {
   if (currentBlobUrl) {
@@ -65,11 +69,50 @@ function parseFileRef(raw: string): { type: 'fileId'; fileId: string } | { type:
   return { type: 'fileId', fileId: rest }
 }
 
+/** 解析 file: 引用为 { mimeType, binaryData }，不创建 blob URL。
+ *  返回中间结果而非 blob URL，是为了避免 stale 路径泄漏 blob（外层在版本检查后才会建 URL）。
+ *  返回 null 表示 IDB 中暂无记录，调用方应进入重试或放弃。
+ *  v 为当前 resolver 版本号，stale 时返回 null。
+ */
+async function tryResolveFileRef(
+  ref: { type: 'fileId'; fileId: string } | { type: 'path'; path: string },
+  v: number
+): Promise<{ mimeType: string; binaryData: string } | null> {
+  let fileId: string | undefined
+
+  if (ref.type === 'fileId') {
+    fileId = ref.fileId
+  } else {
+    const fileRecord = await fileStore.getByPath(ref.path)
+    if (v !== resolver.getVersion()) return null
+    if (fileRecord) {
+      fileId = fileRecord.id
+    } else {
+      const segments = ref.path.split('/')
+      const maybeId = segments[segments.length - 1]?.replace(/\.[^.]+$/, '')
+      if (maybeId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(maybeId)) {
+        fileId = maybeId
+      }
+    }
+  }
+
+  if (!fileId) return null
+
+  const content = await fileStore.getContent(fileId)
+  if (v !== resolver.getVersion()) return null
+  if (!content?.binaryData) return null
+
+  // getById 之后不再做 version check：即使 stale，binaryData 不会泄露为 blob URL
+  const fileRecord = await fileStore.getById(fileId)
+  const mimeType = fileRecord?.mimeType || 'image/png'
+  return { mimeType, binaryData: content.binaryData }
+}
+
 async function resolve() {
-  const version = ++resolveVersion
   const raw = props.src
 
   if (!raw) {
+    resolver.cancel()
     revokeCurrent()
     resolvedSrc.value = null
     loading.value = false
@@ -79,69 +122,55 @@ async function resolve() {
   const ref = parseFileRef(raw)
 
   if (!ref) {
+    // 非 file: 引用（http(s) / data:），直接使用
+    resolver.cancel()
     revokeCurrent()
     resolvedSrc.value = raw
     loading.value = false
     return
   }
 
+  // file: 引用 → 异步 IDB 解析，事件优先 + 退避兜底
   loading.value = true
   resolvedSrc.value = null
 
-  try {
-    let fileId: string | undefined
-
-    if (ref.type === 'fileId') {
-      fileId = ref.fileId
-    } else {
-      const fileRecord = await fileStore.getByPath(ref.path)
-      if (version !== resolveVersion) return
-      if (fileRecord) {
-        fileId = fileRecord.id
-      } else {
-        const segments = ref.path.split('/')
-        const maybeId = segments[segments.length - 1]?.replace(/\.[^.]+$/, '')
-        if (maybeId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(maybeId)) {
-          fileId = maybeId
-        }
+  // 记录本轮 run 的版本起点，用于事后判断本轮是否正常完成（未被后续 run/cancel 抢占）
+  const vStart = resolver.getVersion()
+  await resolver.run(async (v) => {
+    if (v !== resolver.getVersion()) return false
+    try {
+      const data = await tryResolveFileRef(ref, v)
+      if (v !== resolver.getVersion()) return false
+      if (data) {
+        revokeCurrent()
+        const blob = base64ToBlob(data.binaryData, data.mimeType)
+        currentBlobUrl = URL.createObjectURL(blob)
+        resolvedSrc.value = currentBlobUrl
+        loading.value = false
+        return true
       }
+      // 解析结果为 null（IDB 中暂无），进入下一轮重试
+      return false
+    } catch {
+      if (v !== resolver.getVersion()) return false
+      return false
     }
+  })
 
-    if (!fileId) {
-      if (version !== resolveVersion) return
-      resolvedSrc.value = null
-      loading.value = false
-      return
-    }
-
-    const content = await fileStore.getContent(fileId)
-    if (version !== resolveVersion) return
-
-    if (!content?.binaryData) {
-      resolvedSrc.value = null
-      loading.value = false
-      return
-    }
-
-    revokeCurrent()
-    const fileRecord = await fileStore.getById(fileId)
-    const mimeType = fileRecord?.mimeType || 'image/png'
-    const blob = base64ToBlob(content.binaryData, mimeType)
-    currentBlobUrl = URL.createObjectURL(blob)
-    resolvedSrc.value = currentBlobUrl
-  } catch {
-    if (version !== resolveVersion) return
+  // 本轮正常完成（非 stale）：成功路径已在 attempt 内清 loading；
+  // 全部退避失败的兜底由此处补齐。stale 时让新轮次接管状态。
+  if (resolver.getVersion() === vStart + 1) {
+    loading.value = false
     resolvedSrc.value = null
-  } finally {
-    if (version === resolveVersion) {
-      loading.value = false
-    }
   }
 }
 
 watch(() => props.src, resolve, { immediate: true })
 
-onUnmounted(revokeCurrent)
+onUnmounted(() => {
+  resolver.cancel()
+  revokeCurrent()
+})
 </script>
 
 <style scoped>

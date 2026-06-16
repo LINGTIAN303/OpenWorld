@@ -10,9 +10,42 @@
  * 存储路径让 Agent 知道图片的"目录位置"，便于跨会话查找
  */
 
+import { smartFetch } from '../utils/smart-fetch'
+import { isTauri } from '../execution'
+
 const DB_NAME = 'worldsmith_images'
 const DB_VERSION = 2
 const STORE_NAME = 'images'
+
+/** 图片持久化事件载荷——id 与 path 总是同步产出，便于订阅方精确重试 */
+export interface ImagePersistedEvent {
+  id: string
+  path: string
+}
+
+type ImagePersistedListener = (event: ImagePersistedEvent) => void
+const imagePersistedListeners = new Set<ImagePersistedListener>()
+
+/**
+ * 订阅"图片已写入 IndexedDB"事件。
+ * 在 persistImage 的 IDB 事务 oncomplete 之后异步触发，订阅方在事件回调内读 IDB
+ * 一定能拿到新记录。
+ * 返回取消订阅的函数；不传 listener 时无副作用。
+ */
+export function onImagePersisted(listener: ImagePersistedListener): () => void {
+  imagePersistedListeners.add(listener)
+  return () => { imagePersistedListeners.delete(listener) }
+}
+
+function emitImagePersisted(event: ImagePersistedEvent): void {
+  for (const listener of imagePersistedListeners) {
+    try {
+      listener(event)
+    } catch (e) {
+      console.warn('[image-persistence] onImagePersisted listener error:', e)
+    }
+  }
+}
 
 /** 持久化存储的图片记录 */
 export interface PersistedImage {
@@ -75,8 +108,26 @@ export async function persistImage(image: PersistedImage): Promise<void> {
     const tx = db.transaction(STORE_NAME, 'readwrite')
     const store = tx.objectStore(STORE_NAME)
     store.put(image)
-    tx.oncomplete = () => { db.close(); resolve() }
+    tx.oncomplete = () => {
+      db.close()
+      // 在事务 oncomplete 之后触发，订阅方此时读 IDB 一定可见
+      emitImagePersisted({ id: image.id, path: image.path })
+      resolve()
+    }
     tx.onerror = () => { db.close(); reject(tx.error) }
+  })
+}
+
+/** 根据虚拟路径精确查找图片记录 */
+export async function getByPath(path: string): Promise<PersistedImage | undefined> {
+  const db = await openDB()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly')
+    const store = tx.objectStore(STORE_NAME)
+    const index = store.index('path')
+    const req = index.get(path)
+    req.onsuccess = () => { db.close(); resolve(req.result ?? undefined) }
+    req.onerror = () => { db.close(); reject(req.error) }
   })
 }
 
@@ -177,8 +228,41 @@ export async function getImageCount(): Promise<number> {
 /**
  * 将图片 URL 或 Data URL 下载并转换为 Blob 对象
  * 用于异步持久化：先展示图片，再后台获取 blob 存储
+ *
+ * 跨域 https URL 自动改走 Vite dev server 的 /api/custom-proxy（同源请求），
+ * 由 dev server 服务端 fetch 目标地址，绕过浏览器 CORS 限制。
+ * 同源 URL 与 Data URI 保持原 fetch 行为。
  */
-export function srcToBlob(src: string): Promise<Blob> {
+export async function srcToBlob(src: string): Promise<Blob> {
+  // Data URI：浏览器原生支持，无需代理
+  if (src.startsWith('data:')) {
+    return fetch(src).then(r => r.blob())
+  }
+
+  // Tauri 模式：使用 smartFetch 直接请求（绕过 CORS）
+  if (isTauri() && /^https?:\/\//i.test(src)) {
+    const resp = await smartFetch(src, { timeout: 30 })
+    if (!resp.ok) throw new Error(`fetch ${resp.status}`)
+    const text = await resp.text()
+    return new Blob([text])
+  }
+
+  // Web 模式：跨域 URL 走 custom-proxy
+  if (typeof window !== 'undefined' && /^https:\/\//i.test(src)) {
+    try {
+      const u = new URL(src)
+      if (u.hostname && u.hostname !== window.location.hostname) {
+        const proxied = `/api/custom-proxy${u.pathname}${u.search}`
+        return fetch(proxied, { headers: { 'X-Target-Base-Url': `${u.protocol}//${u.host}` } })
+          .then(r => {
+            if (!r.ok) throw new Error(`proxy ${r.status}`)
+            return r.blob()
+          })
+      }
+    } catch {
+      // URL 解析失败则走原 fetch 兜底
+    }
+  }
   return fetch(src).then(r => r.blob())
 }
 
@@ -194,7 +278,7 @@ export function downloadBlob(blob: Blob, filename: string): void {
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  setTimeout(() => URL.revokeObjectURL(url), 100)
 }
 
 /**

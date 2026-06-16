@@ -1,5 +1,7 @@
 import { ref, readonly } from 'vue'
 import type { AgentEvent } from '@agent/index'
+import { usePlanStore } from './usePlanStore'
+import { useGenerationProgress } from './useGenerationProgress'
 
 export interface ToolCallView {
   id: string
@@ -54,15 +56,45 @@ export function useAgentEvents() {
           }]
         }
         break
-      case 'tool_execution_update':
+      case 'tool_execution_update': {
         const updateIdx = toolCalls.value.findIndex(tc => tc.id === event.toolCallId)
         if (updateIdx !== -1) {
           const updated = [...toolCalls.value]
           updated[updateIdx] = { ...updated[updateIdx], progress: event.progress }
           toolCalls.value = updated
+
+          // Handle generation progress for image_generate / video_generate
+          const tc = updated[updateIdx]
+          if (tc.name === 'image_generate' || tc.name === 'video_generate') {
+            const genProgress = useGenerationProgress()
+            const progress = event.progress
+            const status = event.status
+            const taskId = tc.id
+            const taskType = tc.name === 'image_generate' ? 'image' as const : 'video' as const
+
+            if (progress === 0 && (status === 'generating' || status === 'pending')) {
+              genProgress.startTask({
+                id: taskId,
+                type: taskType,
+                label: taskType === 'image' ? '图片生成' : '视频生成',
+                status: 'generating',
+                progress: 0,
+                prompt: (tc.args.prompt as string) || '',
+                model: (tc.args.model as string) || (taskType === 'image' ? 'DALL-E' : 'Video'),
+                provider: (tc.args.provider as string) || '',
+              })
+            } else if (progress === 100 && status === 'completed') {
+              genProgress.completeTask(taskId)
+            } else if (progress === -1 && status === 'failed') {
+              genProgress.failTask(taskId, 'Generation failed')
+            } else {
+              genProgress.updateProgress(taskId, progress, status)
+            }
+          }
         }
         break
-      case 'tool_execution_end':
+      }
+      case 'tool_execution_end': {
         const endIdx = toolCalls.value.findIndex(tc => tc.id === event.toolCallId)
         if (endIdx !== -1) {
           const updated = [...toolCalls.value]
@@ -74,8 +106,31 @@ export function useAgentEvents() {
             progress: 100,
           }
           toolCalls.value = updated
+
+          // Handle plan tool results
+          const tc = updated[endIdx]
+          if (event.success && event.result) {
+            if (tc.name === 'plan_create') {
+              try {
+                const planData = JSON.parse(event.result)
+                if (Array.isArray(planData.items)) {
+                  usePlanStore().createPlan(planData.items)
+                } else if (Array.isArray(planData)) {
+                  usePlanStore().createPlan(planData)
+                }
+              } catch { /* ignore parse errors */ }
+            } else if (tc.name === 'plan_update') {
+              try {
+                const updateData = JSON.parse(event.result)
+                if (updateData.item_id && updateData.status) {
+                  usePlanStore().updateItem(updateData.item_id, updateData.status)
+                }
+              } catch { /* ignore parse errors */ }
+            }
+          }
         }
         break
+      }
     }
   }
 

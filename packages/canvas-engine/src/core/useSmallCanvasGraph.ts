@@ -89,6 +89,7 @@ export function useSmallCanvasGraph(
   let clickTimer: ReturnType<typeof setTimeout> | null = null
   let lastClickTime = 0
   let lastClickNodeId: string | null = null
+  let _dirty = true
 
   const dpr = window.devicePixelRatio || 1
 
@@ -119,6 +120,7 @@ export function useSmallCanvasGraph(
     const rect = containerRef.value.getBoundingClientRect()
     canvas.width = rect.width * dpr
     canvas.height = rect.height * dpr
+    _dirty = true
   }
 
   function setData(n: SGNode[], e: SGEdge[], layout: 'force' | 'tree' | 'radial' = 'force'): void {
@@ -176,6 +178,7 @@ export function useSmallCanvasGraph(
     simulation.alpha(1).restart()
 
     simulation.on('tick', () => {
+      _dirty = true
       nodes.value = simNodes.map(sn => ({
         ...sn,
         x: sn.x,
@@ -356,14 +359,18 @@ export function useSmallCanvasGraph(
 
   function startRenderLoop(): void {
     function loop() {
-      render()
+      if (_dirty) {
+        render()
+        _dirty = false
+      }
       animId = requestAnimationFrame(loop)
     }
     loop()
   }
 
   function onMouseDown(e: MouseEvent): void {
-    const rect = canvas!.getBoundingClientRect()
+    if (!canvas) return
+    const rect = canvas.getBoundingClientRect()
     const sx = e.clientX - rect.left
     const sy = e.clientY - rect.top
     const { x: wx, y: wy } = screenToWorld(sx, sy)
@@ -378,7 +385,8 @@ export function useSmallCanvasGraph(
     if (hit) {
       isDragging = true
       dragNodeId = hit.id
-      canvas!.style.cursor = 'grabbing'
+      if (!canvas) return
+      canvas.style.cursor = 'grabbing'
 
       const now = Date.now()
       if (now - lastClickTime < 350 && lastClickNodeId === hit.id) {
@@ -398,12 +406,13 @@ export function useSmallCanvasGraph(
       isPanning = true
       lastMouseX = e.clientX
       lastMouseY = e.clientY
-      canvas!.style.cursor = 'grabbing'
+      if (canvas) canvas.style.cursor = 'grabbing'
     }
   }
 
   function onMouseMove(e: MouseEvent): void {
-    const rect = canvas!.getBoundingClientRect()
+    if (!canvas) return
+    const rect = canvas.getBoundingClientRect()
     const sx = e.clientX - rect.left
     const sy = e.clientY - rect.top
     const { x: wx, y: wy } = screenToWorld(sx, sy)
@@ -413,6 +422,7 @@ export function useSmallCanvasGraph(
       if (node) {
         node.x = wx
         node.y = wy
+        _dirty = true
         callbacks.onNodeDrag?.(node, wx, wy)
       }
       return
@@ -423,6 +433,7 @@ export function useSmallCanvasGraph(
       const dy = e.clientY - lastMouseY
       camera.x -= dx / camera.k
       camera.y -= dy / camera.k
+      _dirty = true
       lastMouseX = e.clientX
       lastMouseY = e.clientY
       return
@@ -432,9 +443,10 @@ export function useSmallCanvasGraph(
     const prevHovered = hoveredNodeId.value
     hoveredNodeId.value = hit?.id ?? null
     if (prevHovered !== hoveredNodeId.value) {
+      _dirty = true
       callbacks.onNodeHover?.(hit ?? null)
     }
-    canvas!.style.cursor = hit ? 'pointer' : 'grab'
+    if (canvas) canvas.style.cursor = hit ? 'pointer' : 'grab'
   }
 
   function onMouseUp(): void {
@@ -445,12 +457,13 @@ export function useSmallCanvasGraph(
     isDragging = false
     dragNodeId = null
     isPanning = false
-    canvas!.style.cursor = 'grab'
+    if (canvas) canvas.style.cursor = 'grab'
   }
 
   function onWheel(e: WheelEvent): void {
     e.preventDefault()
-    const rect = canvas!.getBoundingClientRect()
+    if (!canvas) return
+    const rect = canvas.getBoundingClientRect()
     const sx = e.clientX - rect.left
     const sy = e.clientY - rect.top
     const { x: wx, y: wy } = screenToWorld(sx, sy)
@@ -458,6 +471,7 @@ export function useSmallCanvasGraph(
     camera.k = Math.max(0.2, Math.min(5, camera.k * factor))
     camera.x = wx - sx / camera.k
     camera.y = wy - sy / camera.k
+    _dirty = true
   }
 
   function onContextMenu(e: Event): void {

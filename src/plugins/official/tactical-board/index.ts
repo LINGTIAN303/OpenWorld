@@ -14,6 +14,12 @@ export const manifest = {
     { action: 'get_battle_state', description: '获取战场状态' },
     { action: 'simulate_turn', description: '模拟战斗回合', params: ['actions'] },
   ],
+  permissions: [
+    { name: 'storage:read', description: '读取实体数据' },
+    { name: 'entities:write', description: '创建和编辑战术棋盘' },
+    { name: 'schema:register', description: '注册实体类型和关系类型' },
+    { name: 'views:register', description: '注册视图' },
+  ],
 }
 
 export function activate(api: PluginAPIType) {

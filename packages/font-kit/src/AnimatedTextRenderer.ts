@@ -1,5 +1,8 @@
 import {
   renderText,
+  drawImageCover,
+  drawImageContain,
+  applyTextShadow,
   type TextRenderOptions,
 } from './FontRenderer'
 
@@ -34,7 +37,8 @@ export interface AnimatedTextResult {
   effect: TextAnimationEffect
 }
 
-function applyEffect(
+/** 每帧清空并绘制背景 + 文字效果 */
+function drawFrame(
   ctx: CanvasRenderingContext2D,
   effect: TextAnimationEffect,
   progress: number,
@@ -53,9 +57,13 @@ function applyEffect(
     left: paddingInput.left ?? 16,
   }
 
+  // 每帧先清空，再画背景（避免帧间残影累积）
   ctx.clearRect(0, 0, w, h)
-
-  if (opts.backgroundColor) {
+  if (opts.backgroundImage) {
+    const pos = opts.backgroundPosition ?? 'cover'
+    if (pos === 'contain') drawImageContain(ctx, opts.backgroundImage, w, h)
+    else drawImageCover(ctx, opts.backgroundImage, w, h)
+  } else if (opts.backgroundColor) {
     ctx.fillStyle = opts.backgroundColor
     ctx.fillRect(0, 0, w, h)
   }
@@ -66,6 +74,8 @@ function applyEffect(
 
   ctx.font = `${fontWeight} ${fontSize}px ${family}`
   ctx.textBaseline = 'top'
+
+  const cleanupShadow = applyTextShadow(ctx, opts.textShadow)
 
   const lines = text.split('\n')
   const lineH = fontSize * (typeof opts.lineHeight === 'number' ? opts.lineHeight : 1.5)
@@ -144,6 +154,8 @@ function applyEffect(
       break
     }
   }
+
+  cleanupShadow()
 }
 
 export function renderAnimatedText(opts: AnimatedTextOptions): AnimatedTextResult {
@@ -168,9 +180,7 @@ export function renderAnimatedText(opts: AnimatedTextOptions): AnimatedTextResul
   const frames: AnimatedTextFrame[] = []
   for (let i = 0; i < totalFrames; i++) {
     const progress = totalFrames > 1 ? i / (totalFrames - 1) : 1
-    ctx.save()
-    applyEffect(ctx, opts.effect, progress, opts.text, fullOpts, cssW, cssH)
-    ctx.restore()
+    drawFrame(ctx, opts.effect, progress, opts.text, fullOpts, cssW, cssH)
     frames.push({
       imageData: ctx.getImageData(0, 0, canvas.width, canvas.height),
       delay,

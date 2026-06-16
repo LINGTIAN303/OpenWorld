@@ -13,33 +13,33 @@
 
 ### 创建笔记
 1. 确认笔记类型（日志/研究/诊断/代码）
-2. 使用 `notebook_create_note` 创建
+2. 使用 `notebook(action='create_note')` 创建
 3. 可选：指定文件夹、标签
 
 ### 建立链接
-1. 使用 `notebook_create_backlink` 在两个笔记间建立双向链接
+1. 使用 `notebook(action='create_backlink')` 在两个笔记间建立双向链接
 2. 链接会自动渲染为可点击引用
 
 ### 搜索笔记
-- `notebook_list_notes` — 按文件夹/关键词列出笔记
+- `notebook(action='list_notes')` — 按文件夹/关键词列出笔记
 
 ### 代码执行
-- `notebook_execute_code` — 在代码单元格中执行片段
+- `notebook(action='execute_code')` — 在代码单元格中执行片段
 - 支持JavaScript和Python（取决于环境）
 
 ### 导出
-- `notebook_export_note` — 导出单个笔记
+- `notebook(action='export_note')` — 导出单个笔记
 
 ## 工具绑定
 
 | 工具 | 用途 |
 |------|------|
-| `notebook_create_note` | 创建笔记 |
-| `notebook_update_note` | 更新笔记内容/标签 |
-| `notebook_list_notes` | 列出/搜索笔记 |
-| `notebook_execute_code` | 执行代码单元格 |
-| `notebook_create_backlink` | 创建双向链接 |
-| `notebook_export_note` | 导出笔记 |
+| `notebook(action='create_note')` | 创建笔记 |
+| `notebook(action='update_note')` | 更新笔记内容/标签 |
+| `notebook(action='list_notes')` | 列出/搜索笔记 |
+| `notebook(action='execute_code')` | 执行代码单元格 |
+| `notebook(action='create_backlink')` | 创建双向链接 |
+| `notebook(action='export_note')` | 导出笔记 |
 | `entity_get` / `content_search` | 查找关联实体 |
 | `file_write` | 批量导出 |
 

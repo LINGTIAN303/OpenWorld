@@ -34,6 +34,8 @@ function formatBlockSummary(block: import('../bridge-types').MessageBlock): stri
       return `[图片${block.caption ? ': ' + block.caption : ''}]`
     case 'accordion':
       return `[折叠区: ${block.title || '详情'} ${block.sections.length}段]`
+    default:
+      return `[${(block as any).type || '未知'}]`
   }
 }
 

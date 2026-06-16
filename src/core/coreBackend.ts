@@ -4,6 +4,7 @@ import type {
   CoreDiagnosticSummary,
   CoreMigrationResult,
 } from './worldsmithCore'
+import { callViaWorker, isHeavyMethod } from './wasmWorkerPool'
 
 type BackendType = 'tauri' | 'wasm' | 'none'
 
@@ -21,7 +22,7 @@ let detectedBackend: BackendType | null = null
 function detectBackend(): BackendType {
   if (detectedBackend) return detectedBackend
   try {
-    if (typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__) {
+    if (typeof window !== 'undefined' && ((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__)) {
       detectedBackend = 'tauri'
       return 'tauri'
     }
@@ -89,7 +90,99 @@ async function backendCall<T>(
   }
   const core = await getCoreCached()
   if (core && typeof core[wasmMethod] === 'function') {
+    // 重计算方法走 Worker
+    if (isHeavyMethod(wasmMethod)) {
+      try {
+        const workerResult = await callViaWorker(wasmMethod, wasmArgs, () => {
+          return (core[wasmMethod] as Function)(...wasmArgs)
+        })
+        return workerResult as T
+      } catch {
+        // Worker 失败 → 降级主线程
+        return (core[wasmMethod] as Function)(...wasmArgs)
+      }
+    }
     return (core[wasmMethod] as Function)(...wasmArgs)
+  }
+  // 无可用后端时记录降级
+  if (!_algoDegradedNotified && fallback !== null) {
+    _algoDegradedNotified = true
+    console.warn(
+      `[coreBackend] "${tauriCmd}" / "${wasmMethod}" 无可用后端，返回降级结果。`,
+    )
+  }
+  return fallback
+}
+
+/**
+ * Tauri-only 调用辅助 — 无 WASM 回退的场景（如空间索引）
+ */
+async function tauriCall<T>(cmd: string, args: Record<string, unknown> = {}, fallback?: T): Promise<T> {
+  const backend = detectBackend()
+  if (backend === 'tauri') {
+    const invoke = await getTauriInvoke()
+    return invoke(cmd, args) as Promise<T>
+  }
+  return fallback as T
+}
+
+/** 算法降级通知计数器 — 避免频繁弹出相同通知 */
+let _algoDegradedNotified = false
+
+/**
+ * 算法调用辅助 — Tauri/WASM 双后端 + JSON 序列化参数
+ *
+ * WASM 路径下，对重计算方法自动走 Worker 池，避免阻塞主线程；
+ * 轻量方法仍在主线程同步调用，减少通信开销。
+ */
+async function algoCall<T>(
+  tauriCmd: string,
+  tauriArgs: Record<string, unknown>,
+  wasmFn: (core: NonNullable<Awaited<ReturnType<typeof getCoreCached>>>) => any,
+  fallback: T,
+  parseJson = false,
+  wasmMethodName?: string,
+  wasmMethodArgs?: unknown[],
+): Promise<T> {
+  const backend = detectBackend()
+  if (backend === 'tauri') {
+    const invoke = await getTauriInvoke()
+    const result = await invoke(tauriCmd, tauriArgs)
+    return (parseJson ? JSON.parse(result as string) : result) as T
+  }
+  const core = await getCoreCached()
+  if (core) {
+    // 重计算方法走 Worker 池
+    if (wasmMethodName && wasmMethodArgs && isHeavyMethod(wasmMethodName)) {
+      try {
+        const workerResult = await callViaWorker(wasmMethodName, wasmMethodArgs, () => {
+          return wasmCall(() => {
+            const r = wasmFn(core)
+            return parseJson ? JSON.parse(r) : r
+          }, fallback)
+        })
+        return (parseJson ? JSON.parse(workerResult as string) : workerResult) as T
+      } catch {
+        // Worker 失败 → 降级主线程
+        return wasmCall(() => {
+          const r = wasmFn(core)
+          return parseJson ? JSON.parse(r) : r
+        }, fallback)
+      }
+    }
+    // 轻量方法直接主线程调用
+    return wasmCall(() => {
+      const r = wasmFn(core)
+      return parseJson ? JSON.parse(r) : r
+    }, fallback)
+  }
+  // WASM/Tauri 均不可用 — 返回降级值并通知
+  if (!_algoDegradedNotified) {
+    _algoDegradedNotified = true
+    console.warn(
+      `[coreBackend] 算法 "${tauriCmd}" 无可用后端，返回降级结果。` +
+      `WASM 和 Tauri 均不可用，部分功能受限。`,
+    )
   }
   return fallback
 }
@@ -845,91 +938,43 @@ export async function retrofitPatchApply(
 // ── 空间索引 API ──
 
 export async function spatialInsertRect(item: SpatialItem): Promise<void> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_spatial_insert_rect', { itemJson: JSON.stringify(item) }) as Promise<void>
-  }
-  // WASM path: spatial index not available in WASM
+  return tauriCall('cmd_spatial_insert_rect', { itemJson: JSON.stringify(item) })
 }
 
 export async function spatialInsertPoint(item: PointItem): Promise<void> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_spatial_insert_point', { itemJson: JSON.stringify(item) }) as Promise<void>
-  }
+  return tauriCall('cmd_spatial_insert_point', { itemJson: JSON.stringify(item) })
 }
 
 export async function spatialQueryRange(min: [number, number], max: [number, number]): Promise<SpatialItem[]> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_spatial_query_range', { minJson: JSON.stringify(min), maxJson: JSON.stringify(max) }) as Promise<SpatialItem[]>
-  }
-  return []
+  return tauriCall('cmd_spatial_query_range', { minJson: JSON.stringify(min), maxJson: JSON.stringify(max) }, [] as SpatialItem[])
 }
 
 export async function spatialQueryAtPoint(point: [number, number]): Promise<SpatialItem[]> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_spatial_query_at_point', { pointJson: JSON.stringify(point) }) as Promise<SpatialItem[]>
-  }
-  return []
+  return tauriCall('cmd_spatial_query_at_point', { pointJson: JSON.stringify(point) }, [] as SpatialItem[])
 }
 
 export async function spatialNearestPoint(query: [number, number]): Promise<PointItem | null> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_spatial_nearest_point', { queryJson: JSON.stringify(query) }) as Promise<PointItem | null>
-  }
-  return null
+  return tauriCall('cmd_spatial_nearest_point', { queryJson: JSON.stringify(query) }, null)
 }
 
 export async function spatialKNearest(query: [number, number], k: number): Promise<PointItem[]> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_spatial_k_nearest', { queryJson: JSON.stringify(query), k }) as Promise<PointItem[]>
-  }
-  return []
+  return tauriCall('cmd_spatial_k_nearest', { queryJson: JSON.stringify(query), k }, [] as PointItem[])
 }
 
 export async function spatialQueryByCategory(category: string): Promise<SpatialItem[]> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_spatial_query_by_category', { category }) as Promise<SpatialItem[]>
-  }
-  return []
+  return tauriCall('cmd_spatial_query_by_category', { category }, [] as SpatialItem[])
 }
 
 export async function spatialRemoveRect(item: SpatialItem): Promise<boolean> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_spatial_remove_rect', { itemJson: JSON.stringify(item) }) as Promise<boolean>
-  }
-  return false
+  return tauriCall('cmd_spatial_remove_rect', { itemJson: JSON.stringify(item) }, false)
 }
 
 export async function spatialClear(): Promise<void> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_spatial_clear') as Promise<void>
-  }
+  return tauriCall('cmd_spatial_clear')
 }
 
 export async function spatialCounts(): Promise<{ rectCount: number; pointCount: number }> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_spatial_counts') as Promise<{ rectCount: number; pointCount: number }>
-  }
-  return { rectCount: 0, pointCount: 0 }
+  return tauriCall('cmd_spatial_counts', {}, { rectCount: 0, pointCount: 0 })
 }
 
 // ── 几何算法 API ──
@@ -1007,522 +1052,247 @@ export async function algoObbIntersects(a: { center: Point2D; halfExtents: [numb
 // ── 图算法 API ──
 
 export async function algoDijkstraPath(graph: WeightedGraph, source: string, target: string): Promise<PathResult> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_dijkstra_path', { graphJson: JSON.stringify(graph), source, target }) as Promise<PathResult>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoDijkstraPath(graph, source, target)), { path: [], totalCost: 0, found: false })
+  return algoCall(
+    'cmd_algo_dijkstra_path',
+    { graphJson: JSON.stringify(graph), source, target },
+    c => c.algoDijkstraPath(graph, source, target),
+    { path: [], totalCost: 0, found: false },
+    true,
+    'algoDijkstraPath', [graph, source, target],
+  )
 }
 
 export async function algoAstar(graph: WeightedGraph, source: string, target: string, heuristic: Record<string, number>): Promise<PathResult> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_astar', { graphJson: JSON.stringify(graph), source, target, heuristicJson: JSON.stringify(heuristic) }) as Promise<PathResult>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoAstar(graph, source, target, heuristic)), { path: [], totalCost: 0, found: false })
+  return algoCall(
+    'cmd_algo_astar',
+    { graphJson: JSON.stringify(graph), source, target, heuristicJson: JSON.stringify(heuristic) },
+    c => c.algoAstar(graph, source, target, heuristic),
+    { path: [], totalCost: 0, found: false },
+    true,
+    'algoAstar', [graph, source, target, heuristic],
+  )
 }
 
 export async function algoTopologicalSort(graph: WeightedGraph): Promise<TopologicalSortResult> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_topological_sort', { graphJson: JSON.stringify(graph) }) as Promise<TopologicalSortResult>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoTopologicalSort(graph)), { order: [], hasCycle: false, cycleNodes: [] })
+  return algoCall(
+    'cmd_algo_topological_sort',
+    { graphJson: JSON.stringify(graph) },
+    c => c.algoTopologicalSort(graph),
+    { order: [], hasCycle: false, cycleNodes: [] },
+    true,
+    'algoTopologicalSort', [graph],
+  )
 }
 
 export async function algoConnectedComponents(graph: WeightedGraph): Promise<ConnectedComponentsResult> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_connected_components', { graphJson: JSON.stringify(graph) }) as Promise<ConnectedComponentsResult>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoConnectedComponents(graph)), { components: [], count: 0, largestSize: 0 })
+  return algoCall(
+    'cmd_algo_connected_components',
+    { graphJson: JSON.stringify(graph) },
+    c => c.algoConnectedComponents(graph),
+    { components: [], count: 0, largestSize: 0 },
+    true,
+    'algoConnectedComponents', [graph],
+  )
 }
 
 export async function algoTarjanScc(graph: WeightedGraph): Promise<StronglyConnectedResult> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_tarjan_scc', { graphJson: JSON.stringify(graph) }) as Promise<StronglyConnectedResult>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoTarjanScc(graph)), { components: [], count: 0, hasCycles: false })
+  return algoCall(
+    'cmd_algo_tarjan_scc',
+    { graphJson: JSON.stringify(graph) },
+    c => c.algoTarjanScc(graph),
+    { components: [], count: 0, hasCycles: false },
+    true,
+    'algoTarjanScc', [graph],
+  )
 }
 
 export async function algoForceLayout(graph: WeightedGraph, config?: ForceLayoutConfig): Promise<ForceLayoutResult> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_force_layout', { graphJson: JSON.stringify(graph), configJson: config ? JSON.stringify(config) : null }) as Promise<ForceLayoutResult>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoForceLayout(graph, config)), { nodes: [], iterations: 0, converged: false, totalEnergy: 0 })
+  return algoCall(
+    'cmd_algo_force_layout',
+    { graphJson: JSON.stringify(graph), configJson: config ? JSON.stringify(config) : null },
+    c => c.algoForceLayout(graph, config),
+    { nodes: [], iterations: 0, converged: false, totalEnergy: 0 },
+    true,
+    'algoForceLayout', [graph, config],
+  )
 }
 
 export async function algoCrdtLwwNew(value: string, nodeId: string): Promise<LWWRegister> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    const json = await invoke('cmd_algo_crdt_lww_new', { value, nodeId }) as string
-    return JSON.parse(json)
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoCrdtLwwNew(value, nodeId)), { value: '', timestamp: 0, nodeId: '' } as LWWRegister)
+  return algoCall('cmd_algo_crdt_lww_new', { value, nodeId }, c => c.algoCrdtLwwNew(value, nodeId), { value: '', timestamp: 0, nodeId: '' } as LWWRegister, true)
 }
 
 export async function algoCrdtLwwSet(registerJson: string, value: string, timestamp: number): Promise<LWWRegister> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    const json = await invoke('cmd_algo_crdt_lww_set', { registerJson, value, timestamp }) as string
-    return JSON.parse(json)
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoCrdtLwwSet(registerJson, value, timestamp)), { value: '', timestamp: 0, nodeId: '' } as LWWRegister)
+  return algoCall('cmd_algo_crdt_lww_set', { registerJson, value, timestamp }, c => c.algoCrdtLwwSet(registerJson, value, timestamp), { value: '', timestamp: 0, nodeId: '' } as LWWRegister, true)
 }
 
 export async function algoCrdtLwwMerge(registerJson: string, otherJson: string): Promise<LWWRegister> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    const json = await invoke('cmd_algo_crdt_lww_merge', { registerJson, otherJson }) as string
-    return JSON.parse(json)
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoCrdtLwwMerge(registerJson, otherJson)), { value: '', timestamp: 0, nodeId: '' } as LWWRegister)
+  return algoCall('cmd_algo_crdt_lww_merge', { registerJson, otherJson }, c => c.algoCrdtLwwMerge(registerJson, otherJson), { value: '', timestamp: 0, nodeId: '' } as LWWRegister, true)
 }
 
 export async function algoCrdtOrsetNew(nodeId: string): Promise<ORSet> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    const json = await invoke('cmd_algo_crdt_orset_new', { nodeId }) as string
-    return JSON.parse(json)
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoCrdtOrsetNew(nodeId)), { added: {}, removed: [], nodeId: '', counter: 0 } as ORSet)
+  return algoCall('cmd_algo_crdt_orset_new', { nodeId }, c => c.algoCrdtOrsetNew(nodeId), { added: {}, removed: [], nodeId: '', counter: 0 } as ORSet, true)
 }
 
 export async function algoCrdtOrsetAdd(setJson: string, element: string): Promise<ORSet> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    const json = await invoke('cmd_algo_crdt_orset_add', { setJson, element }) as string
-    return JSON.parse(json)
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoCrdtOrsetAdd(setJson, element)), { added: {}, removed: [], nodeId: '', counter: 0 } as ORSet)
+  return algoCall('cmd_algo_crdt_orset_add', { setJson, element }, c => c.algoCrdtOrsetAdd(setJson, element), { added: {}, removed: [], nodeId: '', counter: 0 } as ORSet, true)
 }
 
 export async function algoCrdtOrsetRemove(setJson: string, element: string): Promise<ORSet> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    const json = await invoke('cmd_algo_crdt_orset_remove', { setJson, element }) as string
-    return JSON.parse(json)
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoCrdtOrsetRemove(setJson, element)), { added: {}, removed: [], nodeId: '', counter: 0 } as ORSet)
+  return algoCall('cmd_algo_crdt_orset_remove', { setJson, element }, c => c.algoCrdtOrsetRemove(setJson, element), { added: {}, removed: [], nodeId: '', counter: 0 } as ORSet, true)
 }
 
 export async function algoCrdtOrsetMerge(setJson: string, otherJson: string): Promise<ORSet> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    const json = await invoke('cmd_algo_crdt_orset_merge', { setJson, otherJson }) as string
-    return JSON.parse(json)
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoCrdtOrsetMerge(setJson, otherJson)), { added: {}, removed: [], nodeId: '', counter: 0 } as ORSet)
+  return algoCall('cmd_algo_crdt_orset_merge', { setJson, otherJson }, c => c.algoCrdtOrsetMerge(setJson, otherJson), { added: {}, removed: [], nodeId: '', counter: 0 } as ORSet, true)
 }
 
 export async function algoCrdtOrsetElements(setJson: string): Promise<string[]> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_crdt_orset_elements', { setJson }) as Promise<string[]>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoCrdtOrsetElements(setJson)), [] as string[])
+  return algoCall('cmd_algo_crdt_orset_elements', { setJson }, c => c.algoCrdtOrsetElements(setJson), [] as string[], false)
 }
 
 export async function algoCrdtRgaNew(nodeId: string): Promise<RGA> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    const json = await invoke('cmd_algo_crdt_rga_new', { nodeId }) as string
-    return JSON.parse(json)
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoCrdtRgaNew(nodeId)), { nodes: {}, nodeId: '', counter: 0 } as RGA)
+  return algoCall('cmd_algo_crdt_rga_new', { nodeId }, c => c.algoCrdtRgaNew(nodeId), { nodes: {}, nodeId: '', counter: 0 } as RGA, true)
 }
 
 export async function algoCrdtRgaInsert(rgaJson: string, index: number, content: string): Promise<RGAInsertResult> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_crdt_rga_insert', { rgaJson, index, content }) as Promise<RGAInsertResult>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoCrdtRgaInsert(rgaJson, index, content)), { rga: { nodes: {}, nodeId: '', counter: 0 }, insertedId: '' } as RGAInsertResult)
+  return algoCall('cmd_algo_crdt_rga_insert', { rgaJson, index, content }, c => c.algoCrdtRgaInsert(rgaJson, index, content), { rga: { nodes: {}, nodeId: '', counter: 0 }, insertedId: '' } as RGAInsertResult, false)
 }
 
 export async function algoCrdtRgaDelete(rgaJson: string, id: string): Promise<RGA> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    const json = await invoke('cmd_algo_crdt_rga_delete', { rgaJson, id }) as string
-    return JSON.parse(json)
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoCrdtRgaDelete(rgaJson, id)), { nodes: {}, nodeId: '', counter: 0 } as RGA)
+  return algoCall('cmd_algo_crdt_rga_delete', { rgaJson, id }, c => c.algoCrdtRgaDelete(rgaJson, id), { nodes: {}, nodeId: '', counter: 0 } as RGA, true)
 }
 
 export async function algoCrdtRgaMerge(rgaJson: string, otherJson: string): Promise<RGA> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    const json = await invoke('cmd_algo_crdt_rga_merge', { rgaJson, otherJson }) as string
-    return JSON.parse(json)
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoCrdtRgaMerge(rgaJson, otherJson)), { nodes: {}, nodeId: '', counter: 0 } as RGA)
+  return algoCall('cmd_algo_crdt_rga_merge', { rgaJson, otherJson }, c => c.algoCrdtRgaMerge(rgaJson, otherJson), { nodes: {}, nodeId: '', counter: 0 } as RGA, true)
 }
 
 export async function algoCrdtRgaText(rgaJson: string): Promise<string> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_crdt_rga_text', { rgaJson }) as Promise<string>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => core!.algoCrdtRgaText(rgaJson), '')
+  return algoCall('cmd_algo_crdt_rga_text', { rgaJson }, c => c.algoCrdtRgaText(rgaJson), '', false)
 }
 
 export async function algoCrdtVcCompare(clockAJson: string, clockBJson: string): Promise<VectorClockCompareResult> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_crdt_vc_compare', { clockAJson, clockBJson }) as Promise<VectorClockCompareResult>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoCrdtVcCompare(clockAJson, clockBJson)), { happensBefore: false, isConcurrent: false })
+  return algoCall('cmd_algo_crdt_vc_compare', { clockAJson, clockBJson }, c => c.algoCrdtVcCompare(clockAJson, clockBJson), { happensBefore: false, isConcurrent: false }, false)
 }
 
 export async function algoTerrainNoise(x: number, y: number, config?: NoiseConfig): Promise<number> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_terrain_noise', { x, y, configJson: config ? JSON.stringify(config) : null }) as Promise<number>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => core!.algoTerrainNoise(x, y, config ? JSON.stringify(config) : undefined), 0)
+  return algoCall('cmd_algo_terrain_noise', { x, y, configJson: config ? JSON.stringify(config) : null }, c => c.algoTerrainNoise(x, y, config ? JSON.stringify(config) : undefined), 0, false)
 }
 
 export async function algoTerrainHeightmapGenerate(config: NoiseConfig | undefined, width: number, height: number, offsetX: number, offsetY: number): Promise<HeightMap> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    const json = await invoke('cmd_algo_terrain_heightmap_generate', { configJson: config ? JSON.stringify(config) : null, width, height, offsetX, offsetY }) as string
-    return JSON.parse(json)
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoTerrainHeightmapGenerate(config ? JSON.stringify(config) : undefined, width, height, offsetX, offsetY)), { width: 0, height: 0, data: [] } as HeightMap)
+  return algoCall('cmd_algo_terrain_heightmap_generate', { configJson: config ? JSON.stringify(config) : null, width, height, offsetX, offsetY }, c => c.algoTerrainHeightmapGenerate(config ? JSON.stringify(config) : undefined, width, height, offsetX, offsetY), { width: 0, height: 0, data: [] } as HeightMap, true, 'algoTerrainHeightmapGenerate', [config ? JSON.stringify(config) : undefined, width, height, offsetX, offsetY])
 }
 
 export async function algoTerrainHeightmapSlope(heightmapJson: string, x: number, y: number): Promise<SlopeResult> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_terrain_heightmap_slope', { heightmapJson, x, y }) as Promise<SlopeResult>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoTerrainHeightmapSlope(heightmapJson, x, y)), { dx: 0, dy: 0, magnitude: 0 })
+  return algoCall('cmd_algo_terrain_heightmap_slope', { heightmapJson, x, y }, c => c.algoTerrainHeightmapSlope(heightmapJson, x, y), { dx: 0, dy: 0, magnitude: 0 }, false)
 }
 
 export async function algoTerrainHeightmapAspect(heightmapJson: string, x: number, y: number): Promise<number> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_terrain_heightmap_aspect', { heightmapJson, x, y }) as Promise<number>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => core!.algoTerrainHeightmapAspect(heightmapJson, x, y), 0)
+  return algoCall('cmd_algo_terrain_heightmap_aspect', { heightmapJson, x, y }, c => c.algoTerrainHeightmapAspect(heightmapJson, x, y), 0, false)
 }
 
 export async function algoTerrainMarchingSquares(heightmapJson: string, levels: number[]): Promise<ContourLine[]> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    const result = await invoke('cmd_algo_terrain_marching_squares', { heightmapJson, levelsJson: JSON.stringify(levels) }) as ContourLine[]
-    return result
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoTerrainMarchingSquares(heightmapJson, levels)), [] as ContourLine[])
+  return algoCall('cmd_algo_terrain_marching_squares', { heightmapJson, levelsJson: JSON.stringify(levels) }, c => c.algoTerrainMarchingSquares(heightmapJson, levels), [] as ContourLine[], false)
 }
 
 export async function algoConstraintSolve(systemJson: string, maxIterations: number, tolerance: number): Promise<ConstraintSolveOutput> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_constraint_solve', { systemJson, maxIterations, tolerance }) as Promise<ConstraintSolveOutput>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoConstraintSolve(systemJson, maxIterations, tolerance)), { result: { solved: false, iterations: 0, residual: 0, violations: [] }, system: { points: [], lines: [], constraints: [] } } as ConstraintSolveOutput)
+  return algoCall('cmd_algo_constraint_solve', { systemJson, maxIterations, tolerance }, c => c.algoConstraintSolve(systemJson, maxIterations, tolerance), { result: { solved: false, iterations: 0, residual: 0, violations: [] }, system: { points: [], lines: [], constraints: [] } } as ConstraintSolveOutput, false, 'algoConstraintSolve', [systemJson, maxIterations, tolerance])
 }
 
 export async function algoDxfParse(content: string): Promise<DxfImportResult> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_dxf_parse', { content }) as Promise<DxfImportResult>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoDxfParse(content)), { entities: [], constraintSystem: { points: [], lines: [], constraints: [] }, layerNames: [], warnings: [] } as DxfImportResult)
+  return algoCall('cmd_algo_dxf_parse', { content }, c => c.algoDxfParse(content), { entities: [], constraintSystem: { points: [], lines: [], constraints: [] }, layerNames: [], warnings: [] } as DxfImportResult, false, 'algoDxfParse', [content])
 }
 
 export async function algoDxfGenerate(entities: DxfEntity[]): Promise<string> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_dxf_generate', { entitiesJson: JSON.stringify(entities) }) as Promise<string>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => core!.algoDxfGenerate(JSON.stringify(entities)), '')
+  return algoCall('cmd_algo_dxf_generate', { entitiesJson: JSON.stringify(entities) }, c => c.algoDxfGenerate(JSON.stringify(entities)), '', false)
 }
 
 export async function algoDxfExtractConstraints(systemJson: string): Promise<Constraint[]> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_dxf_extract_constraints', { systemJson }) as Promise<Constraint[]>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoDxfExtractConstraints(systemJson)), [] as Constraint[])
+  return algoCall('cmd_algo_dxf_extract_constraints', { systemJson }, c => c.algoDxfExtractConstraints(systemJson), [] as Constraint[], false)
 }
 
 export async function algoPolygonBoolean(op: 'union' | 'intersection' | 'difference' | 'xor', a: Polygon2DResult, b: Polygon2DResult): Promise<Polygon2DResult[]> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_polygon_boolean', { op, aJson: JSON.stringify(a), bJson: JSON.stringify(b) }) as Promise<Polygon2DResult[]>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoPolygonBoolean(op, JSON.stringify(a), JSON.stringify(b))), [] as Polygon2DResult[])
+  return algoCall('cmd_algo_polygon_boolean', { op, aJson: JSON.stringify(a), bJson: JSON.stringify(b) }, c => c.algoPolygonBoolean(op, JSON.stringify(a), JSON.stringify(b)), [] as Polygon2DResult[], false, 'algoPolygonBoolean', [op, JSON.stringify(a), JSON.stringify(b)])
 }
 
 export async function algoPolygonOffset(polygon: Polygon2DResult, delta: number): Promise<Polygon2DResult> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    const json = await invoke('cmd_algo_polygon_offset', { polygonJson: JSON.stringify(polygon), delta }) as string
-    return JSON.parse(json)
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoPolygonOffset(JSON.stringify(polygon), delta)), { exterior: [], interiors: [] } as Polygon2DResult)
+  return algoCall('cmd_algo_polygon_offset', { polygonJson: JSON.stringify(polygon), delta }, c => c.algoPolygonOffset(JSON.stringify(polygon), delta), { exterior: [], interiors: [] } as Polygon2DResult, true)
 }
 
 export async function algoPolygonSimplify(polygon: Polygon2DResult, epsilon: number): Promise<Polygon2DResult> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    const json = await invoke('cmd_algo_polygon_simplify', { polygonJson: JSON.stringify(polygon), epsilon }) as string
-    return JSON.parse(json)
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoPolygonSimplify(JSON.stringify(polygon), epsilon)), { exterior: [], interiors: [] } as Polygon2DResult)
+  return algoCall('cmd_algo_polygon_simplify', { polygonJson: JSON.stringify(polygon), epsilon }, c => c.algoPolygonSimplify(JSON.stringify(polygon), epsilon), { exterior: [], interiors: [] } as Polygon2DResult, true)
 }
 
 export async function algoLineLength(points: Point2D[]): Promise<number> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_line_length', { pointsJson: JSON.stringify(points) }) as Promise<number>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => core!.algoLineLength(JSON.stringify(points)), 0)
+  return algoCall('cmd_algo_line_length', { pointsJson: JSON.stringify(points) }, c => c.algoLineLength(JSON.stringify(points)), 0, false)
 }
 
 export async function algoPageRank(graphJson: string, damping: number, maxIterations: number, tolerance: number): Promise<PageRankResult> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_pagerank', { graphJson, damping, maxIterations, tolerance }) as Promise<PageRankResult>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoPageRank(graphJson, damping, maxIterations, tolerance)), { scores: {}, iterations: 0, converged: false })
+  return algoCall('cmd_algo_pagerank', { graphJson, damping, maxIterations, tolerance }, c => c.algoPageRank(graphJson, damping, maxIterations, tolerance), { scores: {}, iterations: 0, converged: false }, false, 'algoPageRank', [graphJson, damping, maxIterations, tolerance])
 }
 
 export async function algoCommunityDetection(graphJson: string): Promise<CommunityDetectionResult> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_community_detection', { graphJson }) as Promise<CommunityDetectionResult>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoCommunityDetection(graphJson)), { communities: [], modularity: 0 })
+  return algoCall('cmd_algo_community_detection', { graphJson }, c => c.algoCommunityDetection(graphJson), { communities: [], modularity: 0 }, false, 'algoCommunityDetection', [graphJson])
 }
 
 export async function algoBetweennessCentrality(graphJson: string): Promise<BetweennessResult> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_betweenness_centrality', { graphJson }) as Promise<BetweennessResult>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoBetweennessCentrality(graphJson)), { betweenness: {} })
+  return algoCall('cmd_algo_betweenness_centrality', { graphJson }, c => c.algoBetweennessCentrality(graphJson), { betweenness: {} }, false, 'algoBetweennessCentrality', [graphJson])
 }
 
 export async function algoHydraulicErosion(heightmapJson: string, config?: ErosionConfig): Promise<HeightMap> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    const json = await invoke('cmd_algo_hydraulic_erosion', { heightmapJson, configJson: config ? JSON.stringify(config) : null }) as string
-    return JSON.parse(json)
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoHydraulicErosion(heightmapJson, config ? JSON.stringify(config) : undefined)), { width: 0, height: 0, data: [] } as HeightMap)
+  return algoCall('cmd_algo_hydraulic_erosion', { heightmapJson, configJson: config ? JSON.stringify(config) : null }, c => c.algoHydraulicErosion(heightmapJson, config ? JSON.stringify(config) : undefined), { width: 0, height: 0, data: [] } as HeightMap, true, 'algoHydraulicErosion', [heightmapJson, config ? JSON.stringify(config) : undefined])
 }
 
 export async function algoViewshed(heightmapJson: string, observerX: number, observerY: number, observerHeight: number, radius: number): Promise<ViewshedResult> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_viewshed', { heightmapJson, observerX, observerY, observerHeight, radius }) as Promise<ViewshedResult>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoViewshed(heightmapJson, observerX, observerY, observerHeight, radius)), { visible: [], width: 0, height: 0 })
+  return algoCall('cmd_algo_viewshed', { heightmapJson, observerX, observerY, observerHeight, radius }, c => c.algoViewshed(heightmapJson, observerX, observerY, observerHeight, radius), { visible: [], width: 0, height: 0 }, false, 'algoViewshed', [heightmapJson, observerX, observerY, observerHeight, radius])
 }
 
 export async function algoChaikinSmooth(vertices: Point2D[], iterations: number): Promise<Point2D[]> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    const json = await invoke('cmd_algo_chaikin_smooth', { verticesJson: JSON.stringify(vertices), iterations }) as string
-    return JSON.parse(json)
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoChaikinSmooth(JSON.stringify(vertices), iterations)), [] as Point2D[])
+  return algoCall('cmd_algo_chaikin_smooth', { verticesJson: JSON.stringify(vertices), iterations }, c => c.algoChaikinSmooth(JSON.stringify(vertices), iterations), [] as Point2D[], true)
 }
 
 export async function algoFindSharedEdges(verticesA: Point2D[], verticesB: Point2D[], threshold: number): Promise<SharedEdge[]> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_find_shared_edges', { verticesAJson: JSON.stringify(verticesA), verticesBJson: JSON.stringify(verticesB), threshold }) as Promise<SharedEdge[]>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoFindSharedEdges(JSON.stringify(verticesA), JSON.stringify(verticesB), threshold)), [] as SharedEdge[])
+  return algoCall('cmd_algo_find_shared_edges', { verticesAJson: JSON.stringify(verticesA), verticesBJson: JSON.stringify(verticesB), threshold }, c => c.algoFindSharedEdges(JSON.stringify(verticesA), JSON.stringify(verticesB), threshold), [] as SharedEdge[], false)
 }
 
 export async function algoFindLinePolygonIntersections(line: Point2D[], polygon: Point2D[]): Promise<LinePolygonIntersection[]> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_find_line_polygon_intersections', { lineJson: JSON.stringify(line), polygonJson: JSON.stringify(polygon) }) as Promise<LinePolygonIntersection[]>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoFindLinePolygonIntersections(JSON.stringify(line), JSON.stringify(polygon))), [] as LinePolygonIntersection[])
+  return algoCall('cmd_algo_find_line_polygon_intersections', { lineJson: JSON.stringify(line), polygonJson: JSON.stringify(polygon) }, c => c.algoFindLinePolygonIntersections(JSON.stringify(line), JSON.stringify(polygon)), [] as LinePolygonIntersection[], false)
 }
 
 export async function algoPolygonSplit(polygon: Point2D[], cuttingLine: Point2D[]): Promise<Point2D[][]> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_algo_polygon_split', { polygonJson: JSON.stringify(polygon), cuttingLineJson: JSON.stringify(cuttingLine) }) as Promise<Point2D[][]>
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoPolygonSplit(JSON.stringify(polygon), JSON.stringify(cuttingLine))), [] as Point2D[][])
+  return algoCall('cmd_algo_polygon_split', { polygonJson: JSON.stringify(polygon), cuttingLineJson: JSON.stringify(cuttingLine) }, c => c.algoPolygonSplit(JSON.stringify(polygon), JSON.stringify(cuttingLine)), [] as Point2D[][], false)
 }
 
 export async function algoPolygonAugment(polygon: Point2D[], addingLine: Point2D[]): Promise<Point2D[]> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    const json = await invoke('cmd_algo_polygon_augment', { polygonJson: JSON.stringify(polygon), addingLineJson: JSON.stringify(addingLine) }) as string
-    return JSON.parse(json)
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.algoPolygonAugment(JSON.stringify(polygon), JSON.stringify(addingLine))), [] as Point2D[])
+  return algoCall('cmd_algo_polygon_augment', { polygonJson: JSON.stringify(polygon), addingLineJson: JSON.stringify(addingLine) }, c => c.algoPolygonAugment(JSON.stringify(polygon), JSON.stringify(addingLine)), [] as Point2D[], true)
 }
 
+// ── Schema API ──
+
+const EMPTY_ENTITY_TYPE_SCHEMA: EntityTypeSchema = { typeKey: '', label: '', icon: '', fields: [], relations: [], validations: [], views: [], iconMap: {}, idPrefix: '' }
+
 export async function schemaRegisterEntityType(schemaJson: string): Promise<EntityTypeSchema> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    const result = await invoke('cmd_schema_register_entity_type', { schemaJson }) as string
-    return JSON.parse(result)
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.schemaRegisterEntityType(schemaJson)), { typeKey: '', label: '', icon: '', fields: [], relations: [], validations: [], views: [], iconMap: {}, idPrefix: '' } as EntityTypeSchema)
+  return algoCall('cmd_schema_register_entity_type', { schemaJson }, c => c.schemaRegisterEntityType(schemaJson), EMPTY_ENTITY_TYPE_SCHEMA, true)
 }
 
 export async function schemaUnregisterEntityType(typeKey: string): Promise<void> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_schema_unregister_entity_type', { typeKey }) as Promise<void>
-  }
-  const core = await getCoreCached()
-  wasmCall(() => { core!.schemaUnregisterEntityType(typeKey) }, undefined)
+  return algoCall('cmd_schema_unregister_entity_type', { typeKey }, c => c.schemaUnregisterEntityType(typeKey), undefined, false)
 }
 
 export async function schemaGetEntityType(typeKey: string): Promise<EntityTypeSchema | null> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    const result = await invoke('cmd_schema_get_entity_type', { typeKey }) as string
-    return JSON.parse(result)
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.schemaGetEntityType(typeKey)), null)
+  return algoCall('cmd_schema_get_entity_type', { typeKey }, c => c.schemaGetEntityType(typeKey), null, true)
 }
 
 export async function schemaListEntityTypes(): Promise<EntityTypeSchema[]> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    const result = await invoke('cmd_schema_list_entity_types') as string
-    return JSON.parse(result)
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.schemaListEntityTypes()), [] as EntityTypeSchema[])
+  return algoCall('cmd_schema_list_entity_types', {}, c => c.schemaListEntityTypes(), [] as EntityTypeSchema[], true)
 }
 
 export async function schemaUpdateEntityType(typeKey: string, updatesJson: string): Promise<EntityTypeSchema> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    const result = await invoke('cmd_schema_update_entity_type', { typeKey, updatesJson }) as string
-    return JSON.parse(result)
-  }
-  const core = await getCoreCached()
-  return wasmCall(() => JSON.parse(core!.schemaUpdateEntityType(typeKey, updatesJson)), { typeKey: '', label: '', icon: '', fields: [], relations: [], validations: [], views: [], iconMap: {}, idPrefix: '' } as EntityTypeSchema)
+  return algoCall('cmd_schema_update_entity_type', { typeKey, updatesJson }, c => c.schemaUpdateEntityType(typeKey, updatesJson), EMPTY_ENTITY_TYPE_SCHEMA, true)
 }
 
 export async function schemaRegisterValidation(typeKey: string, ruleJson: string): Promise<void> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_schema_register_validation', { typeKey, ruleJson }) as Promise<void>
-  }
-  const core = await getCoreCached()
-  wasmCall(() => { core!.schemaRegisterValidation(typeKey, ruleJson) }, undefined)
+  return algoCall('cmd_schema_register_validation', { typeKey, ruleJson }, c => c.schemaRegisterValidation(typeKey, ruleJson), undefined, false)
 }
 
 export async function schemaRegisterView(typeKey: string, viewJson: string): Promise<void> {
-  const backend = detectBackend()
-  if (backend === 'tauri') {
-    const invoke = await getTauriInvoke()
-    return invoke('cmd_schema_register_view', { typeKey, viewJson }) as Promise<void>
-  }
-  const core = await getCoreCached()
-  wasmCall(() => { core!.schemaRegisterView(typeKey, viewJson) }, undefined)
+  return algoCall('cmd_schema_register_view', { typeKey, viewJson }, c => c.schemaRegisterView(typeKey, viewJson), undefined, false)
 }

@@ -13,5 +13,9 @@
     "./composables": "./src/composables/index.ts",
     "./GifEncoder": "./src/GifEncoder.ts",
     "./FrameCapture": "./src/FrameCapture.ts"
+  },
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.build.json --noEmit"
   }
 }

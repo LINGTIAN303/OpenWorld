@@ -1,27 +1,37 @@
 <template>
   <n-config-provider :theme-overrides="naiveThemeOverrides" abstract>
-    <AgentSpace v-if="uiStore.currentShell === 'space'" />
-    <template v-else>
-      <Shell />
-      <GlobalCaretIndicator />
-    </template>
+    <n-dialog-provider>
+      <n-message-provider>
+        <AppMessageHandler>
+          <AgentSpace v-if="uiStore.currentShell === 'space'" />
+          <template v-else>
+            <Shell />
+            <GlobalCaretIndicator />
+          </template>
+        </AppMessageHandler>
+      </n-message-provider>
+    </n-dialog-provider>
   </n-config-provider>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
-import { NConfigProvider, type GlobalThemeOverrides } from 'naive-ui'
-import Shell from './ui/Shell.vue'
+import { ref, onMounted, watch, provide } from 'vue'
+import { NConfigProvider, NDialogProvider, NMessageProvider, type GlobalThemeOverrides } from 'naive-ui'
+import Shell from './ui/layout/Shell.vue'
 import AgentSpace from './space/AgentSpace.vue'
-import GlobalCaretIndicator from './ui/GlobalCaretIndicator.vue'
+import GlobalCaretIndicator from './ui/layout/GlobalCaretIndicator.vue'
+import AppMessageHandler from './ui/companion/AppMessageHandler.vue'
 import { pluginManager } from './plugins/PluginManager'
 import { usePluginStore, pluginAPI, useEntityStore } from '@worldsmith/entity-core'
-import type { ExternalNodeRegistry } from '@worldsmith/entity-core'
-import { nodeRegistry } from '../worldsmith-agent/src/workflow/node-registry'
+
 import { useUIStore } from './stores/uiStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useTheme } from './composables/useTheme'
 import { useAutoCleanup } from '@worldsmith/entity-core/composables'
+import { useFontBootstrap } from './composables/useFontBootstrap'
+import { checkWasmAvailability } from './core/worldsmithCore'
+import { provideGlobalSelection, SelectionKey } from '@worldsmith/ui-kit'
+import { OFFICIAL_PLUGINS } from './plugins/plugin-manifest'
 
 const { buildNaiveThemeOverrides, currentThemeId } = useTheme()
 const uiStore = useUIStore()
@@ -32,40 +42,38 @@ watch(currentThemeId, () => {
   naiveThemeOverrides.value = buildNaiveThemeOverrides() as GlobalThemeOverrides
 })
 
-const pluginLoaders: Record<string, () => Promise<any>> = {
-  'official.characters': () => import('./plugins/official/characters/index'),
-  'official.regions': () => import('./plugins/official/regions/index'),
-  'official.timeline': () => import('./plugins/official/timeline/index'),
-  'official.organizations': () => import('./plugins/official/organizations/index'),
-  'official.concepts': () => import('./plugins/official/concepts/index'),
-  'official.items': () => import('./plugins/official/items/index'),
-  'official.mindmap': () => import('./plugins/official/mindmap/index'),
-  'official.custom': () => import('./plugins/official/custom/index'),
-  'official.module-builder': () => import('./plugins/official/module-builder/index'),
-  'official.graph': () => import('./plugins/official/graph/index'),
-  'official.buildings': () => import('./plugins/official/buildings/index'),
-  'official.species': () => import('./plugins/official/species/index'),
-  'official.magic': () => import('./plugins/official/magic/index'),
-  'official.outline': () => import('./plugins/official/outline/index'),
-  'official.languages': () => import('./plugins/official/languages/index'),
-  'official.culture': () => import('./plugins/official/culture/index'),
-  'official.conflict': () => import('./plugins/official/conflict/index'),
-  'official.inspiration': () => import('./plugins/official/inspiration/index'),
-  'official.plants': () => import('./plugins/official/plants/index'),
-  'official.combat_stats': () => import('./plugins/official/combat_stats/index'),
-  'official.weapons': () => import('./plugins/official/weapons/index'),
-  'official.manuscript': () => import('./plugins/official/manuscript/index'),
-  'official.drawing': () => import('./plugins/official/drawing/index'),
-  'official.tactical-board': () => import('./plugins/official/tactical-board/index'),
-  'official.apparel': () => import('./plugins/official/apparel/index'),
-  'official.notebook': () => import('./plugins/official/notebook/index'),
-  'official.workflow': () => import('./plugins/official/workflow/index'),
-}
+const settingsStore = useSettingsStore()
+watch(() => settingsStore.detailPanelPosition, (pos) => {
+  document.documentElement.dataset.detailPanelSide = pos
+}, { immediate: true })
+
+/* ── 全局选中状态（provide/inject）── */
+const globalSelection = provideGlobalSelection()
+provide(SelectionKey, globalSelection)
+
+/* ── 插件加载 ── */
+const pluginLoaders: Record<string, () => Promise<any>> = Object.fromEntries(
+  OFFICIAL_PLUGINS.map(entry => [
+    entry.id,
+    () => import(/* @vite-ignore */ `./plugins/official/${entry.importPath}`),
+  ])
+)
 
 onMounted(async () => {
   try {
 
-  pluginAPI.setExternalNodeRegistry(nodeRegistry as unknown as ExternalNodeRegistry)
+  // ★ 项目空间初始化（必须在所有其他初始化之前）
+  const { useProjectSwitcher } = await import('./composables/useProjectSwitcher')
+  const projectSwitcher = useProjectSwitcher()
+  // 不 await：让初始化在后台进行，不阻塞首屏渲染
+  projectSwitcher.initialize().then(async () => {
+    // 初始化完成后加载实体数据
+    const entityStore = useEntityStore()
+    entityStore.loadAll()
+  }).catch(err => console.warn('[App] 项目初始化:', err))
+
+  // 触发 WASM 可用性检测（异步，不阻塞）
+  checkWasmAvailability().catch(() => {})
 
   const pluginStore = usePluginStore()
 
@@ -81,6 +89,22 @@ onMounted(async () => {
   const settingsStore = useSettingsStore()
   const activeIds = settingsStore.getActivePluginIds()
 
+  // 全局预注册所有实体类型（确保关系查询不断裂）
+  pluginManager.preRegisterAllEntityTypes()
+
+  // 初始化全局关系定义（去重合并）— 不阻塞
+  import('@worldsmith/entity-core/relations').then(m => {
+    // 将 V2 关系同步到旧版 relationSchemaRegistry
+    return import('@worldsmith/entity-core').then(m2 => m2.syncToLegacyRegistry())
+  }).catch(e => console.warn('[App] 关系初始化:', e))
+
+  // 迁移旧版 weapon/apparel 实体 — 不阻塞首屏
+  import('./core/FacetMigrator').then(async ({ migrateWeaponApparelToItemFacet }) => {
+    const report = await migrateWeaponApparelToItemFacet()
+    if (!report.skipped) console.info('[App] Facet 迁移完成:', report)
+  }).catch(e => console.warn('[App] Facet 迁移:', e))
+
+  // 插件加载 — 并行加载模块，但激活仍需顺序
   const loadPromises = activeIds
     .filter(id => pluginLoaders[id])
     .map(async id => {
@@ -114,9 +138,7 @@ onMounted(async () => {
     }
   }) as EventListener)
 
-  const entityStore = useEntityStore()
-  entityStore.loadAll()
-
+  // 模块系统 — 不阻塞首屏
   Promise.all([
     import('./modules/store').then(m => m.moduleStore.migrateFromLocalStorage()),
     import('./modules/registry').then(m => m.moduleRegistry.initialize()),
@@ -124,6 +146,14 @@ onMounted(async () => {
 
   const { runIfNeeded: runAutoCleanup } = useAutoCleanup()
   runAutoCleanup()
+
+  /* ── 字体预设加载 ── */
+  const { bootstrap: fontBootstrap } = useFontBootstrap()
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(() => fontBootstrap())
+  } else {
+    setTimeout(() => fontBootstrap(), 200)
+  }
 
   } catch (err) {
     console.warn('[App]', err)
@@ -133,4 +163,25 @@ onMounted(async () => {
 
 <style>
 /* Global styles migrated to design-tokens/component.css */
+
+/* ── 实体详情面板左右位置切换 ── */
+[data-detail-panel-side="left"] .detail-panel {
+  right: auto !important;
+  left: 0 !important;
+  border-left: none !important;
+  border-right: 1px solid var(--glass-border, var(--color-border, var(--border))) !important;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3) !important;
+}
+[data-detail-panel-side="left"] .detail-panel .resize-handle-left {
+  left: auto !important;
+  right: 0 !important;
+}
+[data-detail-panel-side="left"] .detail-panel.ws-detail-slide-enter-from,
+[data-detail-panel-side="left"] .detail-panel.ws-detail-slide-leave-to {
+  transform: translateX(-100%) !important;
+}
+[data-detail-panel-side="left"] .detail-panel.slide-enter-from,
+[data-detail-panel-side="left"] .detail-panel.slide-leave-to {
+  transform: translateX(-100%) !important;
+}
 </style>

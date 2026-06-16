@@ -5,7 +5,7 @@
       <div class="dialog-title">新建群聊</div>
 
       <div class="avatar-section">
-        <div class="avatar-placeholder">📷</div>
+        <div class="avatar-placeholder"><WsIcon name="camera" size="sm" /></div>
         <input class="name-input" v-model="groupName" placeholder="输入群名" />
       </div>
 
@@ -13,7 +13,7 @@
         <div class="section-label">添加成员</div>
         <div class="selected-members">
           <span v-for="m in selectedMembers" :key="m.id" class="member-chip">
-            {{ m.name }} <span class="chip-remove" @click="toggleMember(m)">✕</span>
+            {{ m.name }} <span class="chip-remove" @click="toggleMember(m)"><WsIcon name="x" size="xs" /></span>
           </span>
         </div>
         <input class="member-search" v-model="memberSearch" placeholder="搜索 Agent..." />
@@ -43,6 +43,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import WsIcon from '../../../ui/WsIcon.vue'
 
 export interface AgentItem {
   id: string
@@ -54,6 +55,10 @@ export interface AgentItem {
   modelId?: string
   enabledTools: string[]
   enabledSkills: string[]
+  baseLayerMode?: string
+  customBaseLayer?: string
+  toolSource?: string
+  providerSlotId?: string
 }
 
 export interface CreateGroupData {

@@ -164,7 +164,7 @@
             v-for="(tab, idx) in (comp.tabItems || [])"
             :key="idx"
             :class="['a2ui-tab-btn', { active: activeTab === idx }]"
-            @click="activeTab = idx"
+            @click="setActiveTab(Number(idx))"
           >
             {{ tab.title }}
           </button>
@@ -541,6 +541,10 @@ const entityCoverStyle = computed(() => {
     transformOrigin: pos,
   }
 })
+
+function setActiveTab(index: number): void {
+  activeTab.value = index
+}
 
 function isSelected(value: string): boolean {
   const current = props.resolveBinding(props.comp.selections, props.dataModel)

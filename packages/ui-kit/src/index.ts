@@ -20,36 +20,36 @@ export { default as WsEmpty } from '../../../src/ui/WsEmpty.vue'
 // Currently re-exported from src/ui/; will eventually move into
 // packages/ui-kit/src/components/
 // ----------------------------------------------------------------------------
-export { default as RichTextEditor } from '../../../src/ui/RichTextEditor.vue'
-export { default as FloatingPanel } from '../../../src/ui/FloatingPanel.vue'
-export { default as ColorPickerDialog } from '../../../src/ui/ColorPickerDialog.vue'
-export { default as InfoPanel } from '../../../src/ui/InfoPanel.vue'
-export { default as DialogContainer } from '../../../src/ui/DialogContainer.vue'
-export { default as Toast } from '../../../src/ui/Toast.vue'
-export { default as Shell } from '../../../src/ui/Shell.vue'
-export { default as Sidebar } from '../../../src/ui/Sidebar.vue'
-export { default as MenuBar } from '../../../src/ui/MenuBar.vue'
-export { default as LayoutManager } from '../../../src/ui/LayoutManager.vue'
-export { default as ViewContainer } from '../../../src/ui/ViewContainer.vue'
-export { default as GlobalSearch } from '../../../src/ui/GlobalSearch.vue'
-export { default as SettingsDialog } from '../../../src/ui/SettingsDialog.vue'
-export { default as WelcomeOverlay } from '../../../src/ui/WelcomeOverlay.vue'
-export { default as ShortcutHelpModal } from '../../../src/ui/ShortcutHelpModal.vue'
-export { default as VersionHistory } from '../../../src/ui/VersionHistory.vue'
-export { default as UndoHistoryPanel } from '../../../src/ui/UndoHistoryPanel.vue'
-export { default as DocExport } from '../../../src/ui/DocExport.vue'
-export { default as ExportImportDialog } from '../../../src/ui/ExportImportDialog.vue'
-export { default as ImportExportModal } from '../../../src/ui/ImportExportModal.vue'
-export { default as RegionMap } from '../../../src/ui/RegionMap.vue'
-export { default as TemplateManager } from '../../../src/ui/TemplateManager.vue'
-export { default as CustomModuleView } from '../../../src/ui/CustomModuleView.vue'
-export { default as GlobalCaretIndicator } from '../../../src/ui/GlobalCaretIndicator.vue'
-export { default as GenericTreeView } from '../../../src/ui/GenericTreeView.vue'
-export type { TreeNodeData } from '../../../src/ui/GenericTreeView.vue'
-export { default as FontSelector } from '../../../src/ui/FontSelector.vue'
-export { default as TextRenderPreview } from '../../../src/ui/TextRenderPreview.vue'
-export { default as FontPreviewPanel } from '../../../src/ui/FontPreviewPanel.vue'
-export { default as AnimatedFontExportPanel } from '../../../src/ui/AnimatedFontExportPanel.vue'
+export { default as RichTextEditor } from '../../../src/ui/editor/RichTextEditor.vue'
+export { default as FloatingPanel } from '../../../src/ui/layout/FloatingPanel.vue'
+export { default as ColorPickerDialog } from '../../../src/ui/editor/ColorPickerDialog.vue'
+export { default as InfoPanel } from '../../../src/ui/entity/InfoPanel.vue'
+export { default as DialogContainer } from '../../../src/ui/layout/DialogContainer.vue'
+export { default as Toast } from '../../../src/ui/feedback/Toast.vue'
+export { default as Shell } from '../../../src/ui/layout/Shell.vue'
+export { default as Sidebar } from '../../../src/ui/layout/Sidebar.vue'
+export { default as MenuBar } from '../../../src/ui/layout/MenuBar.vue'
+export { default as LayoutManager } from '../../../src/ui/layout/LayoutManager.vue'
+export { default as ViewContainer } from '../../../src/ui/layout/ViewContainer.vue'
+export { default as GlobalSearch } from '../../../src/ui/search/GlobalSearch.vue'
+export { default as SettingsDialog } from '../../../src/ui/settings/SettingsDialog.vue'
+export { default as WelcomeOverlay } from '../../../src/ui/layout/WelcomeOverlay.vue'
+export { default as ShortcutHelpModal } from '../../../src/ui/settings/ShortcutHelpModal.vue'
+export { default as VersionHistory } from '../../../src/ui/data/VersionHistory.vue'
+export { default as UndoHistoryPanel } from '../../../src/ui/data/UndoHistoryPanel.vue'
+export { default as DocExport } from '../../../src/ui/data/DocExport.vue'
+export { default as ExportImportDialog } from '../../../src/ui/data/ExportImportDialog.vue'
+export { default as ImportExportModal } from '../../../src/ui/data/ImportExportModal.vue'
+export { default as RegionMap } from '../../../src/ui/entity/RegionMap.vue'
+export { default as TemplateManager } from '../../../src/ui/entity/TemplateManager.vue'
+export { default as CustomModuleView } from '../../../src/ui/entity/CustomModuleView.vue'
+export { default as GlobalCaretIndicator } from '../../../src/ui/layout/GlobalCaretIndicator.vue'
+export { default as GenericTreeView } from '../../../src/ui/entity/GenericTreeView.vue'
+export type { TreeNodeData } from '../../../src/ui/entity/GenericTreeView.vue'
+export { default as FontSelector } from '../../../src/ui/font/FontSelector.vue'
+export { default as TextRenderPreview } from '../../../src/ui/font/TextRenderPreview.vue'
+export { default as FontPreviewPanel } from '../../../src/ui/font/FontPreviewPanel.vue'
+export { default as AnimatedFontExportPanel } from '../../../src/ui/font/AnimatedFontExportPanel.vue'
 
 // ----------------------------------------------------------------------------
 // Business Components — delegated to @worldsmith/plugin-sdk
@@ -102,7 +102,11 @@ export {
   formatKeysForDisplay,
   type ShortcutScope,
   type ShortcutDef,
+  type ShortcutConflict,
   useSelection,
+  SelectionKey,
+  provideGlobalSelection,
+  type SelectionState,
 } from '@worldsmith/plugin-sdk/composables'
 
 // ----------------------------------------------------------------------------
@@ -134,7 +138,7 @@ export {
   type SGCamera,
   type SGCallbacks,
 } from '@worldsmith/canvas-engine/core'
-export { useGraphData, type GraphNode, type GraphEdge } from '@worldsmith/canvas-engine/graph'
+export { useGraphData, GRAPH_NODE_THRESHOLD, type GraphNode, type GraphEdge } from '@worldsmith/canvas-engine/graph'
 export { useGraphFilter, type FilterCriteria } from '@worldsmith/canvas-engine/graph'
 export { graphToWeightedGraph, useGraphAlgorithms } from '@worldsmith/canvas-engine/algorithms'
 export {

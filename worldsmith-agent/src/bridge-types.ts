@@ -7,7 +7,7 @@ export interface ImageAttachment {
   mimeType: string
 }
 
-export type ChatMode = 'normal' | 'deep' | 'explore'
+export type ChatMode = 'normal' | 'deep' | 'explore' | 'group-chat'
 
 export interface PromptOptions {
   skillNames?: string[]
@@ -45,7 +45,7 @@ export type AgentEvent =
   | { type: 'message_update'; messageId: string; content: string; thinking: string }
   | { type: 'message_end'; messageId: string; content: string; thinking: string; usage?: UsageData }
   | { type: 'tool_execution_start'; toolCall: { id: string; name: string; args: Record<string, unknown> } }
-  | { type: 'tool_execution_update'; toolCallId: string; progress: number }
+  | { type: 'tool_execution_update'; toolCallId: string; progress: number; status?: string }
   | { type: 'tool_execution_end'; toolCallId: string; result: string; success: boolean }
   | { type: 'usage'; usage: UsageData }
   | { type: 'a2ui'; surfaceId: string; message: A2UIMessage }
@@ -77,7 +77,9 @@ export type MessageBlock =
   | ComparisonBlock
   | TimelineBlock
   | ImageBlock
+  | VideoBlock
   | AccordionBlock
+  | ManuscriptBlock
 
 export interface TableBlock {
   type: 'table'
@@ -203,6 +205,64 @@ export interface AccordionBlock {
   collapsible: true
 }
 
+export interface VideoBlock {
+  type: 'video'
+  id: string
+  src: string
+  caption?: string
+  collapsible: true
+}
+
+export interface ManuscriptBlock {
+  type: 'manuscript'
+  id: string
+  title?: string
+  content: string
+  layout: 'horizontal' | 'vertical'
+  animation: 'ink-drop' | 'brush-stroke' | 'fade-in' | 'float-up'
+  shadow: 'sunlight' | 'soft' | 'none'
+  decoration?: 'seal' | 'flourish' | 'border' | 'none'
+  fontSize?: 'sm' | 'md' | 'lg' | 'xl'
+  fontFamily?: string
+  collapsible: true
+  textColor?: string
+  background?: string
+  backgroundImage?: string
+  backgroundOverlay?: string
+  shadowColor?: string
+  shadowOffset?: string
+  shadowBlur?: number
+  fontWeight?: string
+  fontStyle?: 'normal' | 'italic'
+  letterSpacing?: string
+  lineHeight?: string
+  width?: number
+  height?: number
+  sourceSessionId?: string
+  exportConfig?: ExportCorrectorConfig
+}
+
+export interface ExportCorrectorConfig {
+  dimensionMode: 'auto' | 'fixed'
+  aspectRatio: number | null
+  width: number | null
+  height: number | null
+  padding: number
+  maxWidth: number
+  backgroundFit: 'cover' | 'contain' | 'stretch'
+  bgColorOverride: string | null
+  fontSizeOverride: number | null
+  lineHeightOverride: number | null
+  textShadow: string | null
+  watermark: string
+  borderRadius: number
+  outputFormat: 'png' | 'jpeg' | 'webp'
+  outputQuality: number
+  outputScale: number
+  textAlign: 'left' | 'center' | 'right'
+  letterSpacingOverride: number | null
+}
+
 export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
 
 export interface IAgentBackend {
@@ -231,6 +291,8 @@ export interface ToolDefinition {
   name: string
   description: string
   parameters: Record<string, ToolParameter>
+  /** 声明式元数据（权限级别、分类、平台、别名等） */
+  meta?: import('@worldsmith/agent-core').ToolMeta
   execute: (args: Record<string, unknown>, ctx: IToolContext) => Promise<string>
 }
 
@@ -240,4 +302,5 @@ export interface ToolParameter {
   required?: boolean
   enum?: string[]
   items?: ToolParameter
+  properties?: Record<string, ToolParameter>
 }

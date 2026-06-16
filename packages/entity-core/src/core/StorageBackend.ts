@@ -1,12 +1,74 @@
 import type { Entity } from '../types'
 import type { Relation } from '../types'
 import type { ProjectFile, ProjectFileContent } from '../types'
-import { db } from './database'
+import { type WorldDatabase, db as legacyDb } from './database'
+import { getProjectManager } from './ProjectManager'
+import { FileStorageBackend } from './FileStorageBackend'
+
+/**
+ * 结构化存储错误 — Tauri IPC 和 Web 端通用
+ */
+export class StorageError extends Error {
+  /** 错误分类，便于 UI 层展示不同的提示 */
+  readonly category: 'permission' | 'corruption' | 'disk_full' | 'not_found' | 'network' | 'unknown'
+  /** 原始命令（仅 Tauri 端） */
+  readonly command?: string
+  /** 是否可重试 */
+  readonly retryable: boolean
+
+  constructor(options: {
+    message: string
+    category?: StorageError['category']
+    command?: string
+    retryable?: boolean
+    cause?: unknown
+  }) {
+    super(options.message, { cause: options.cause })
+    this.name = 'StorageError'
+    this.category = options.category ?? 'unknown'
+    this.command = options.command
+    this.retryable = options.retryable ?? false
+  }
+}
+
+/**
+ * 从 Tauri IPC 错误中提取分类
+ */
+function classifyTauriError(error: unknown, cmd: string): StorageError {
+  const msg = error instanceof Error ? error.message : String(error)
+  const lower = msg.toLowerCase()
+
+  let category: StorageError['category'] = 'unknown'
+  let retryable = false
+
+  if (lower.includes('permission') || lower.includes('access denied') || lower.includes('权限')) {
+    category = 'permission'
+  } else if (lower.includes('disk full') || lower.includes('no space') || lower.includes('磁盘满') || lower.includes('空间不足')) {
+    category = 'disk_full'
+  } else if (lower.includes('corrupt') || lower.includes('损坏') || lower.includes('malformed')) {
+    category = 'corruption'
+  } else if (lower.includes('not found') || lower.includes('未找到') || lower.includes('不存在')) {
+    category = 'not_found'
+  } else if (lower.includes('network') || lower.includes('timeout') || lower.includes('网络') || lower.includes('超时')) {
+    category = 'network'
+    retryable = true
+  }
+
+  return new StorageError({
+    message: `[Storage] ${cmd} 失败: ${msg}`,
+    category,
+    command: cmd,
+    retryable,
+    cause: error,
+  })
+}
 
 export interface StorageBackend {
   getAllEntities(): Promise<Entity[]>
   getEntity(id: string): Promise<Entity | undefined>
   getEntitiesByType(type: string): Promise<Entity[]>
+  /** 按 facet 名称过滤实体（仅返回包含指定 facet 的实体） */
+  getEntitiesByFacet(type: string, facetName: string): Promise<Entity[]>
   putEntity(entity: Entity): Promise<void>
   updateEntity(id: string, changes: Partial<Entity>): Promise<void>
   deleteEntity(id: string): Promise<void>
@@ -40,13 +102,17 @@ export interface StorageBackend {
 }
 
 export function isTauri(): boolean {
-  return typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
+  return typeof window !== 'undefined' && (!!(window as any).__TAURI_INTERNALS__ || !!(window as any).__TAURI__)
 }
 
 class TauriStorageBackend implements StorageBackend {
   private async invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-    const { invoke } = await import('@tauri-apps/api/core')
-    return invoke<T>(cmd, args)
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      return await invoke<T>(cmd, args)
+    } catch (e) {
+      throw classifyTauriError(e, cmd)
+    }
   }
 
   async getAllEntities(): Promise<Entity[]> {
@@ -59,6 +125,11 @@ class TauriStorageBackend implements StorageBackend {
 
   async getEntitiesByType(type: string): Promise<Entity[]> {
     return this.invoke<Entity[]>('cmd_get_entities_by_type', { entityType: type })
+  }
+
+  async getEntitiesByFacet(type: string, facetName: string): Promise<Entity[]> {
+    const entities = await this.getEntitiesByType(type)
+    return entities.filter(e => e.facets && facetName in e.facets)
   }
 
   async putEntity(entity: Entity): Promise<void> {
@@ -181,32 +252,51 @@ class TauriStorageBackend implements StorageBackend {
 }
 
 class WebStorageBackend implements StorageBackend {
+  /**
+   * 获取当前项目的数据库实例。
+   * 每次操作动态获取，确保切换项目后立即生效。
+   */
+  private get db(): WorldDatabase {
+    try {
+      return getProjectManager().getCurrentProjectDb()
+    } catch {
+      // 项目系统未初始化时，回退到旧的全局数据库（迁移过程中使用）
+      return legacyDb
+    }
+  }
+
   async getAllEntities(): Promise<Entity[]> {
-    return db.entities.toArray()
+    return this.db.entities.toArray()
   }
 
   async getEntity(id: string): Promise<Entity | undefined> {
-    return db.entities.get(id)
+    return this.db.entities.get(id)
   }
 
   async getEntitiesByType(type: string): Promise<Entity[]> {
-    return db.entities.where('type').equals(type).toArray()
+    return this.db.entities.where('type').equals(type).toArray()
+  }
+
+  async getEntitiesByFacet(type: string, facetName: string): Promise<Entity[]> {
+    const entities = await this.db.entities.where('type').equals(type).toArray()
+    return entities.filter(e => e.facets && facetName in e.facets)
   }
 
   async putEntity(entity: Entity): Promise<void> {
-    await db.entities.put(entity)
+    await this.db.entities.put(entity)
   }
 
   async updateEntity(id: string, changes: Partial<Entity>): Promise<void> {
-    await db.entities.update(id, changes)
+    await this.db.entities.update(id, changes)
   }
 
   async deleteEntity(id: string): Promise<void> {
-    await db.entities.delete(id)
+    await this.db.entities.delete(id)
   }
 
   async deleteEntityAtomic(id: string): Promise<{ success: boolean; error?: string }> {
     try {
+      const db = this.db
       await db.transaction('rw', db.entities, db.relations, async () => {
         await db.relations.where('sourceId').equals(id).delete()
         await db.relations.where('targetId').equals(id).delete()
@@ -219,7 +309,7 @@ class WebStorageBackend implements StorageBackend {
   }
 
   async countEntitiesByType(): Promise<Map<string, number>> {
-    const all = await db.entities.toArray()
+    const all = await this.db.entities.toArray()
     const map = new Map<string, number>()
     for (const e of all) {
       map.set(e.type, (map.get(e.type) || 0) + 1)
@@ -228,19 +318,20 @@ class WebStorageBackend implements StorageBackend {
   }
 
   async clearEntities(): Promise<void> {
-    await db.entities.clear()
+    await this.db.entities.clear()
   }
 
   async importEntities(entities: Entity[]): Promise<number> {
-    await db.entities.bulkPut(entities)
+    await this.db.entities.bulkPut(entities)
     return entities.length
   }
 
   async getAllRelations(): Promise<Relation[]> {
-    return db.relations.toArray()
+    return this.db.relations.toArray()
   }
 
   async getRelationsByEntity(entityId: string): Promise<Relation[]> {
+    const db = this.db
     const [sources, targets] = await Promise.all([
       db.relations.where('sourceId').equals(entityId).toArray(),
       db.relations.where('targetId').equals(entityId).toArray(),
@@ -249,91 +340,119 @@ class WebStorageBackend implements StorageBackend {
   }
 
   async putRelation(relation: Relation): Promise<void> {
-    await db.relations.put(relation)
+    await this.db.relations.put(relation)
   }
 
   async updateRelation(id: string, changes: Partial<Relation>): Promise<void> {
-    await db.relations.update(id, changes)
+    await this.db.relations.update(id, changes)
   }
 
   async deleteRelation(id: string): Promise<void> {
-    await db.relations.delete(id)
+    await this.db.relations.delete(id)
   }
 
   async deleteRelationsByEntity(entityId: string): Promise<number> {
+    const db = this.db
     const sourceDeleted = await db.relations.where('sourceId').equals(entityId).delete()
     const targetDeleted = await db.relations.where('targetId').equals(entityId).delete()
     return sourceDeleted + targetDeleted
   }
 
   async clearRelations(): Promise<void> {
-    await db.relations.clear()
+    await this.db.relations.clear()
   }
 
   async importRelations(relations: Relation[]): Promise<number> {
-    await db.relations.bulkPut(relations)
+    await this.db.relations.bulkPut(relations)
     return relations.length
   }
 
   async kvGet(key: string): Promise<string | null> {
-    const val = await db.table('kv_store').get(key)
+    const val = await this.db.table('kv_store').get(key)
     return val ? (val as any).value ?? null : null
   }
 
   async kvSet(key: string, value: string): Promise<void> {
-    await db.table('kv_store').put({ key, value })
+    await this.db.table('kv_store').put({ key, value })
   }
 
   async kvDelete(key: string): Promise<void> {
-    await db.table('kv_store').delete(key)
+    await this.db.table('kv_store').delete(key)
   }
 
   async kvGetAll(): Promise<[string, string][]> {
-    const all = await db.table('kv_store').toArray()
+    const all = await this.db.table('kv_store').toArray()
     return all.map((r: any) => [r.key as string, r.value as string])
   }
 
   async getAllFiles(): Promise<ProjectFile[]> {
-    return db.files.toArray()
+    return this.db.files.toArray()
   }
 
   async getFile(id: string): Promise<ProjectFile | undefined> {
-    return db.files.get(id)
+    return this.db.files.get(id)
   }
 
   async getFileByPath(path: string): Promise<ProjectFile | undefined> {
-    return db.files.where('path').equals(path).first()
+    return this.db.files.where('path').equals(path).first()
   }
 
   async getFilesByEntity(entityId: string): Promise<ProjectFile[]> {
-    return db.files.where('entityId').equals(entityId).toArray()
+    return this.db.files.where('entityId').equals(entityId).toArray()
   }
 
   async putFile(file: ProjectFile, content: ProjectFileContent): Promise<void> {
-    await db.files.put(file)
-    await db.file_contents.put(content)
+    await this.db.files.put(file)
+    await this.db.file_contents.put(content)
   }
 
   async updateFile(id: string, changes: Partial<ProjectFile>): Promise<void> {
-    await db.files.update(id, changes)
+    await this.db.files.update(id, changes)
   }
 
   async deleteFile(id: string): Promise<void> {
-    await db.files.delete(id)
-    await db.file_contents.delete(id)
+    await this.db.files.delete(id)
+    await this.db.file_contents.delete(id)
   }
 
   async getFileContent(id: string): Promise<ProjectFileContent | undefined> {
-    return db.file_contents.get(id)
+    return this.db.file_contents.get(id)
   }
 }
 
 let _backend: StorageBackend | null = null
+let _fileBackend: FileStorageBackend | null = null
 
 export function getStorageBackend(): StorageBackend {
   if (_backend) return _backend
-  _backend = isTauri() ? new TauriStorageBackend() : new WebStorageBackend()
+  if (isTauri()) {
+    // Tauri 模式：FileStorageBackend（有目录时用文件系统，否则降级到 TauriStorageBackend）
+    const fallback = new TauriStorageBackend()
+    _fileBackend = new FileStorageBackend(fallback)
+    _backend = _fileBackend
+  } else {
+    _backend = new WebStorageBackend()
+  }
   return _backend
 }
 
 export const storage = getStorageBackend()
+
+/**
+ * 设置当前项目的存储目录。
+ * 由 useProjectSwitcher 在项目切换时调用。
+ * - dir 非空：FileStorageBackend 以文件系统为主存储
+ * - dir 为 null：降级到 fallback（IndexedDB/SQLite）
+ */
+export async function setStorageProjectDir(dir: string | null): Promise<void> {
+  if (_fileBackend) {
+    await _fileBackend.setProjectDir(dir)
+  }
+}
+
+/**
+ * 获取 FileStorageBackend 实例（如果存在）。
+ */
+export function getFileStorageBackend(): FileStorageBackend | null {
+  return _fileBackend
+}

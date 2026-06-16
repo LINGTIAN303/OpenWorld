@@ -402,9 +402,9 @@ function onExternalDragLeave() {
 function onExternalDrop(e: DragEvent) {
   isExternalDragOver.value = false
   const viewId = e.dataTransfer?.getData('application/worldsmith-view-id')
-  const viewLabel = e.dataTransfer?.getData('application/worldsmith-view-label') || viewId
-  const viewIcon = e.dataTransfer?.getData('application/worldsmith-view-icon') || 'outline'
   if (!viewId) return
+  const viewLabel = e.dataTransfer!.getData('application/worldsmith-view-label') || viewId
+  const viewIcon = e.dataTransfer!.getData('application/worldsmith-view-icon') || 'outline'
   if (panels.value.some(p => p.viewId === viewId)) {
     toastWarn('该视图已在面板中')
     return

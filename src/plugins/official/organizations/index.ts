@@ -4,135 +4,45 @@ import OrganizationView from './OrganizationView.vue'
 export const manifest = {
   id: 'official.organizations',
   name: '势力/组织',
-  version: '1.0.0',
-  description: '管理世界观中的势力、组织、派系及其关系',
+  version: '2.0.0',
+  description: '管理世界观中的王国、公会、学派、家族等组织势力',
   author: 'WorldSmith',
   agentSkills: ['worldbuilding'],
   agentCapabilities: [
     { action: 'create_entity', description: '创建组织', params: ['name', 'description'] },
     { action: 'update_entity', description: '更新组织属性', params: ['entityId', 'changes'] },
   ],
+  permissions: [
+    { name: 'storage:read', description: '读取实体数据' },
+    { name: 'entities:write', description: '创建和编辑组织' },
+    { name: 'relations:read', description: '查询关联关系' },
+    { name: 'schema:register', description: '注册实体类型和关系类型' },
+    { name: 'views:register', description: '注册视图' },
+  ],
 }
 
 export function activate(api: PluginAPIType) {
-  api.registerEntityType({
+  api.registerEntityV2({
     type: 'organization',
-    label: '势力',
+    label: '组织',
     icon: 'organization',
-    fields: [
-      { key: 'name', label: '名称', type: 'text', required: true, placeholder: '势力名称' },
-      { key: 'description', label: '描述', type: 'textarea' },
-      { key: 'orgType', label: '类型', type: 'select',
-        options: ['王国', '帝国', '部落', '教会', '公会', '佣兵团', '学派', '家族', '商团', '联盟', '其他'] },
-      { key: 'founder', label: '创立者', type: 'text' },
-      { key: 'foundedYear', label: '创立时间', type: 'text' },
-      { key: 'dissolutionYear', label: '瓦解时间', type: 'text' },
+    traits: [
+      { traitId: 'identifiable' },
+      { traitId: 'taggable' },
+      { traitId: 'visual' },
+    ],
+    ownFields: [
+      { key: 'orgType', label: '类型', type: 'select', options: ['王国', '帝国', '共和国', '部落', '公会', '教团', '商会', '帮派', '军事组织', '秘密组织', '其他'] },
+      { key: 'size', label: '规模', type: 'select', options: ['小型', '中型', '大型', '超大型'] },
+      { key: 'alignment', label: '阵营', type: 'select', options: ['守序善良', '中立善良', '混沌善良', '守序中立', '绝对中立', '混沌中立', '守序邪恶', '中立邪恶', '混沌邪恶'] },
+      { key: 'motto', label: '座右铭', type: 'text' },
+      { key: 'headquarters', label: '总部', type: 'text' },
+      { key: 'leader', label: '领袖', type: 'text' },
+      { key: 'foundingDate', label: '创立日期', type: 'text' },
+      { key: 'dissolutionDate', label: '解散日期', type: 'text' },
       { key: 'ideology', label: '理念/宗旨', type: 'textarea' },
-      { key: 'structure', label: '组织结构', type: 'textarea' },
-      { key: 'headquarters', label: '总部/首都', type: 'text' },
-      { key: 'population', label: '规模/人口', type: 'number' },
-      { key: 'wealth', label: '财富水平', type: 'text' },
-      { key: 'symbol', label: '旗帜/徽记', type: 'text' },
-      { key: 'coverImage', label: '封面图', type: 'image' },
-      { key: 'tags', label: '标签', type: 'text' },
     ],
   })
 
-  // 关系类型
-  api.registerRelationType({
-    type: 'member_of',
-    label: '成员',
-    sourceTypes: ['character'],
-    targetTypes: ['organization'],
-    directed: true,
-    properties: [
-      { key: 'role', label: '职位/称号', type: 'text' },
-      { key: 'since', label: '加入时间', type: 'text' },
-    ],
-  })
-  api.registerRelationType({
-    type: 'sub_organization',
-    label: '下属势力',
-    sourceTypes: ['organization'],
-    targetTypes: ['organization'],
-    directed: true,
-  })
-  api.registerRelationType({
-    type: 'allied_with',
-    label: '盟友',
-    sourceTypes: ['organization'],
-    targetTypes: ['organization'],
-    directed: false,
-    properties: [
-      { key: 'treaty', label: '盟约名称', type: 'text' },
-      { key: 'since', label: '起始时间', type: 'text' },
-    ],
-  })
-  api.registerRelationType({
-    type: 'at_war_with',
-    label: '交战',
-    sourceTypes: ['organization'],
-    targetTypes: ['organization'],
-    directed: false,
-    properties: [
-      { key: 'cause', label: '原因', type: 'text' },
-    ],
-  })
-  api.registerRelationType({
-    type: 'controls',
-    label: '控制区域',
-    sourceTypes: ['organization'],
-    targetTypes: ['region'],
-    directed: true,
-    properties: [
-      { key: 'since', label: '起始时间', type: 'text' },
-    ],
-  })
-  api.registerRelationType({
-    type: 'trade_with',
-    label: '贸易',
-    sourceTypes: ['organization'],
-    targetTypes: ['organization'],
-    directed: false,
-    properties: [
-      { key: 'goods', label: '贸易品', type: 'text' },
-    ],
-  })
-
-  // 跨插件关系
-  api.registerRelationType({
-    type: 'member_of',
-    label: '成员',
-    sourceTypes: ['character'],
-    targetTypes: ['organization'],
-    directed: true,
-  })
-  api.registerRelationType({
-    type: 'involved_in',
-    label: '涉及事件',
-    sourceTypes: ['organization'],
-    targetTypes: ['event'],
-    directed: true,
-  })
-  api.registerRelationType({
-    type: 'allied_with',
-    label: '同盟',
-    sourceTypes: ['organization'],
-    targetTypes: ['organization'],
-    directed: false,
-  })
-  api.registerRelationType({
-    type: 'hostile_to',
-    label: '敌对',
-    sourceTypes: ['organization'],
-    targetTypes: ['organization'],
-    directed: false,
-  })
-
-  api.registerView({
-    id: 'organizations',
-    label: '势力/组织',
-    icon: 'organization',
-    component: OrganizationView,
-  })
+  api.registerView({ id: 'organizations', label: '势力/组织', icon: 'organization', component: OrganizationView })
 }

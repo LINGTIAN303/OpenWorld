@@ -16,7 +16,12 @@ async function runCommand(command: string, cwd?: string, timeout = 15000): Promi
   if (!adapter.isAvailable()) return JSON.stringify({ ok: false, error: 'CLI 工具当前不可用。Tauri 桌面模式请确认环境正常，Web 模式请启动 worldsmith-server 服务。' })
   try {
     const result = await adapter.executeCommand(command, { cwd, timeout })
-    return result.stdout
+    // 清理 ANSI 转义码和不可打印字符，避免输出被误解析为二进制/图片
+    const clean = (result.stdout || '')
+      .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+      .replace(/\x1b\].*?\x07/g, '')
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
+    return clean || '(命令已执行，无输出)'
   } catch (err) {
     return JSON.stringify({ ok: false, error: err instanceof Error ? err.message : String(err) })
   }

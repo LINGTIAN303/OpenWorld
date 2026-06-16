@@ -23,6 +23,8 @@ export interface WorldSmithToolContext {
     name: string
     entityTypes: string[]
     relationTypes: string[]
+    /** 项目关联的本地目录路径（Phase 2：文件系统主存储） */
+    dirPath?: string | null
   }
   /** 向 A2UI 画布发射 UI 更新消息 */
   emitA2UI?: (surfaceId: string, message: import('../bridge-types').A2UIMessage) => void
@@ -30,6 +32,8 @@ export interface WorldSmithToolContext {
   platform?: import('../toolbus/capability-types').Platform
   /** 向聊天消息追加交互式 Block 组件（表格、图片等） */
   appendBlock?: (block: import('../bridge-types').MessageBlock) => void
+  /** 上报工具执行进度（0-100），用于图片/视频生成等耗时操作 */
+  reportProgress?: (progress: number, status?: string) => void
 }
 
 /** 实体的通用形状，兼容不同 store 实现的返回值 */

@@ -180,6 +180,26 @@ impl SqliteStore {
             CREATE TABLE IF NOT EXISTS workflow_settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS files (
+                id          TEXT PRIMARY KEY,
+                name        TEXT NOT NULL,
+                path        TEXT NOT NULL,
+                mime_type   TEXT NOT NULL DEFAULT '',
+                size        INTEGER NOT NULL DEFAULT 0,
+                entity_id   TEXT,
+                tags        TEXT NOT NULL DEFAULT '[]',
+                created_at  TEXT NOT NULL DEFAULT '',
+                updated_at  TEXT NOT NULL DEFAULT ''
+            );
+            CREATE INDEX IF NOT EXISTS idx_files_path ON files(path);
+            CREATE INDEX IF NOT EXISTS idx_files_entity_id ON files(entity_id);
+
+            CREATE TABLE IF NOT EXISTS file_contents (
+                id           TEXT PRIMARY KEY REFERENCES files(id) ON DELETE CASCADE,
+                text_content TEXT,
+                binary_data  TEXT
             );",
       )
       .map_err(|e| CoreError::storage(format!("建表失败: {e}")))?;
@@ -620,6 +640,29 @@ impl SqliteStore {
     Ok(())
   }
 
+  /// 删除指定键的键值对（不存在则静默成功）
+  pub fn kv_delete(&self, key: &str) -> Result<(), CoreError> {
+    let conn = self.conn.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    conn
+      .execute("DELETE FROM kv_store WHERE key = ?1", params![key])
+      .map_err(|e| CoreError::storage(format!("KV 删除失败: {e}")))?;
+    Ok(())
+  }
+
+  /// 清空所有键值对
+  pub fn kv_clear(&self) -> Result<(), CoreError> {
+    let conn = self.conn.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    conn.execute("DELETE FROM kv_store", []).map_err(|e| CoreError::storage(format!("KV 清空失败: {e}")))?;
+    Ok(())
+  }
+
+  /// 清空模块表
+  pub fn clear_modules(&self) -> Result<(), CoreError> {
+    let conn = self.conn.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    conn.execute("DELETE FROM modules", []).map_err(|e| CoreError::storage(format!("清空 modules 失败: {e}")))?;
+    Ok(())
+  }
+
   /// 获取所有键值对
   ///
   /// - 返回 (键, 值) 元组列表，查询失败时返回 `CoreError`
@@ -910,6 +953,285 @@ impl SqliteStore {
     Ok(affected > 0)
   }
 
+  // ── 文件存储方法 ──────────────────────────────────────────
+
+  /// 写入或替换一个文件及其内容
+  ///
+  /// 同时向 files 和 file_contents 表插入记录。如果同 id 已存在则覆盖。
+  ///
+  /// - `file_json` - 文件元数据的 JSON 字符串，包含 id、name、path、mimeType、size、entityId、tags、createdAt、updatedAt
+  /// - `content_json` - 文件内容的 JSON 字符串，包含 id、textContent、binaryData
+  /// - 返回写入成功或错误
+  ///
+  /// # Errors
+  ///
+  /// Returns `CoreError` if the lock cannot be acquired, JSON parsing fails, or the insert fails.
+  pub fn put_file(&self, file_json: &str, content_json: &str) -> Result<(), CoreError> {
+    let file: serde_json::Value = serde_json::from_str(file_json)?;
+    let content: serde_json::Value = serde_json::from_str(content_json)?;
+
+    let id = file["id"].as_str().unwrap_or("").to_string();
+    if id.is_empty() {
+      return Err(CoreError::InvalidArgument("文件 ID 不能为空".to_string()));
+    }
+
+    let conn = self.conn.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+
+    conn.execute(
+            "INSERT OR REPLACE INTO files (id, name, path, mime_type, size, entity_id, tags, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                id,
+                file["name"].as_str().unwrap_or(""),
+                file["path"].as_str().unwrap_or(""),
+                file["mimeType"].as_str().unwrap_or(""),
+                file["size"].as_i64().unwrap_or(0),
+                file["entityId"].as_str(),
+                serde_json::to_string(&file["tags"]).unwrap_or_else(|_| "[]".to_string()),
+                file["createdAt"].as_str().unwrap_or(""),
+                file["updatedAt"].as_str().unwrap_or(""),
+            ],
+        ).map_err(|e| CoreError::storage(format!("写入文件失败: {e}")))?;
+
+    let text_content = content["textContent"].as_str();
+    let binary_data = content["binaryData"].as_str();
+
+    conn.execute(
+            "INSERT OR REPLACE INTO file_contents (id, text_content, binary_data)
+             VALUES (?1, ?2, ?3)",
+            params![id, text_content, binary_data],
+        ).map_err(|e| CoreError::storage(format!("写入文件内容失败: {e}")))?;
+
+    drop(conn);
+    Ok(())
+  }
+
+  /// 获取所有文件元数据
+  ///
+  /// - 返回文件 JSON 对象列表，每个对象包含 id、name、path、mimeType、size、entityId、tags、createdAt、updatedAt 字段
+  ///
+  /// # Errors
+  ///
+  /// Returns `CoreError` if the lock cannot be acquired or the query fails.
+  #[allow(clippy::significant_drop_tightening)]
+  pub fn get_all_files(&self) -> Result<Vec<serde_json::Value>, CoreError> {
+    let conn = self.conn.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    let mut stmt = conn
+      .prepare("SELECT id, name, path, mime_type AS mimeType, size, entity_id AS entityId, tags, created_at AS createdAt, updated_at AS updatedAt FROM files")
+      .map_err(|e| CoreError::storage(format!("查询准备失败: {e}")))?;
+
+    let files = stmt
+      .query_map([], |row| Ok(file_from_row(row)))
+      .map_err(|e| CoreError::storage(format!("查询文件失败: {e}")))?
+      .filter_map(Result::ok)
+      .collect();
+
+    Ok(files)
+  }
+
+  /// 根据 id 查询文件元数据
+  ///
+  /// - `id` - 文件唯一标识
+  /// - 返回 Some(JSON对象) 表示找到，None 表示不存在
+  ///
+  /// # Errors
+  ///
+  /// Returns `CoreError` if the lock cannot be acquired or the query fails.
+  #[allow(clippy::significant_drop_tightening)]
+  pub fn get_file(&self, id: &str) -> Result<Option<serde_json::Value>, CoreError> {
+    let conn = self.conn.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    let mut stmt = conn
+      .prepare("SELECT id, name, path, mime_type AS mimeType, size, entity_id AS entityId, tags, created_at AS createdAt, updated_at AS updatedAt FROM files WHERE id = ?1")
+      .map_err(|e| CoreError::storage(format!("查询准备失败: {e}")))?;
+
+    let result = stmt.query_row(params![id], |row| Ok(file_from_row(row))).ok();
+    Ok(result)
+  }
+
+  /// 根据路径查询文件元数据
+  ///
+  /// - `path` - 文件路径
+  /// - 返回 Some(JSON对象) 表示找到，None 表示不存在
+  ///
+  /// # Errors
+  ///
+  /// Returns `CoreError` if the lock cannot be acquired or the query fails.
+  #[allow(clippy::significant_drop_tightening)]
+  pub fn get_file_by_path(&self, path: &str) -> Result<Option<serde_json::Value>, CoreError> {
+    let conn = self.conn.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    let mut stmt = conn
+      .prepare("SELECT id, name, path, mime_type AS mimeType, size, entity_id AS entityId, tags, created_at AS createdAt, updated_at AS updatedAt FROM files WHERE path = ?1")
+      .map_err(|e| CoreError::storage(format!("查询准备失败: {e}")))?;
+
+    let result = stmt.query_row(params![path], |row| Ok(file_from_row(row))).ok();
+    Ok(result)
+  }
+
+  /// 根据关联实体 id 查询文件列表
+  ///
+  /// - `entity_id` - 关联的实体唯一标识
+  /// - 返回与该实体关联的所有文件
+  ///
+  /// # Errors
+  ///
+  /// Returns `CoreError` if the lock cannot be acquired or the query fails.
+  #[allow(clippy::significant_drop_tightening)]
+  pub fn get_files_by_entity(&self, entity_id: &str) -> Result<Vec<serde_json::Value>, CoreError> {
+    let conn = self.conn.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    let mut stmt = conn
+      .prepare("SELECT id, name, path, mime_type AS mimeType, size, entity_id AS entityId, tags, created_at AS createdAt, updated_at AS updatedAt FROM files WHERE entity_id = ?1")
+      .map_err(|e| CoreError::storage(format!("查询准备失败: {e}")))?;
+
+    let files = stmt
+      .query_map(params![entity_id], |row| Ok(file_from_row(row)))
+      .map_err(|e| CoreError::storage(format!("查询文件失败: {e}")))?
+      .filter_map(Result::ok)
+      .collect();
+
+    Ok(files)
+  }
+
+  /// 根据 id 部分更新文件元数据字段
+  ///
+  /// 仅更新 changes 对象中包含的字段，支持 name、path、mimeType、size、entityId、tags、updatedAt/updated_at。
+  /// 如果 changes 为空对象则不做任何操作。
+  ///
+  /// - `id` - 要更新的文件唯一标识
+  /// - `changes` - JSON 对象，包含需要更新的字段和值
+  /// - 返回 true 表示更新成功，false 表示无字段需要更新或文件不存在
+  ///
+  /// # Errors
+  ///
+  /// Returns `CoreError` if the lock cannot be acquired, `changes` is not an object, or the update fails.
+  pub fn update_file(&self, id: &str, changes: &serde_json::Value) -> Result<bool, CoreError> {
+    let conn = self.conn.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+
+    let obj = changes
+      .as_object()
+      .ok_or_else(|| CoreError::InvalidArgument("changes 必须是对象".to_string()))?;
+
+    let mut set_clauses: Vec<String> = Vec::new();
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+    for (key, value) in obj {
+      match key.as_str() {
+        "name" => {
+          if let Some(s) = value.as_str() {
+            set_clauses.push("name = ?".to_string());
+            param_values.push(Box::new(s.to_string()));
+          }
+        }
+        "path" => {
+          if let Some(s) = value.as_str() {
+            set_clauses.push("path = ?".to_string());
+            param_values.push(Box::new(s.to_string()));
+          }
+        }
+        "mimeType" | "mime_type" => {
+          if let Some(s) = value.as_str() {
+            set_clauses.push("mime_type = ?".to_string());
+            param_values.push(Box::new(s.to_string()));
+          }
+        }
+        "size" => {
+          if let Some(n) = value.as_i64() {
+            set_clauses.push("size = ?".to_string());
+            param_values.push(Box::new(n));
+          }
+        }
+        "entityId" | "entity_id" => {
+          let s = value.as_str().map(ToString::to_string);
+          set_clauses.push("entity_id = ?".to_string());
+          param_values.push(Box::new(s));
+        }
+        "tags" => {
+          let s = serde_json::to_string(value).unwrap_or_default();
+          set_clauses.push("tags = ?".to_string());
+          param_values.push(Box::new(s));
+        }
+        "updatedAt" | "updated_at" => {
+          if let Some(s) = value.as_str() {
+            set_clauses.push("updated_at = ?".to_string());
+            param_values.push(Box::new(s.to_string()));
+          }
+        }
+        _ => {}
+      }
+    }
+
+    if set_clauses.is_empty() {
+      drop(conn);
+      return Ok(false);
+    }
+
+    let sql = format!(
+      "UPDATE files SET {set_clauses} WHERE id = ?",
+      set_clauses = set_clauses.join(", ")
+    );
+
+    param_values.push(Box::new(id.to_string()));
+
+    let params: Vec<&dyn rusqlite::types::ToSql> =
+      param_values.iter().map(std::convert::AsRef::as_ref).collect();
+
+    let affected = conn
+      .execute(&sql, params.as_slice())
+      .map_err(|e| CoreError::storage(format!("更新文件失败: {e}")))?;
+
+    drop(conn);
+    Ok(affected > 0)
+  }
+
+  /// 根据 id 删除文件及其内容
+  ///
+  /// 同时删除 files 和 file_contents 表中的记录。
+  ///
+  /// - `id` - 要删除的文件唯一标识
+  /// - 返回 true 表示成功删除，false 表示文件不存在
+  ///
+  /// # Errors
+  ///
+  /// Returns `CoreError` if the lock cannot be acquired or the delete fails.
+  pub fn delete_file(&self, id: &str) -> Result<bool, CoreError> {
+    let conn = self.conn.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    // file_contents has ON DELETE CASCADE, so deleting from files is sufficient
+    let affected = conn
+      .execute("DELETE FROM files WHERE id = ?1", params![id])
+      .map_err(|e| CoreError::storage(format!("删除文件失败: {e}")))?;
+    drop(conn);
+    Ok(affected > 0)
+  }
+
+  /// 根据 id 查询文件内容
+  ///
+  /// - `id` - 文件唯一标识
+  /// - 返回 Some(JSON对象) 表示找到（包含 id、textContent、binaryData），None 表示不存在
+  ///
+  /// # Errors
+  ///
+  /// Returns `CoreError` if the lock cannot be acquired or the query fails.
+  #[allow(clippy::significant_drop_tightening)]
+  pub fn get_file_content(&self, id: &str) -> Result<Option<serde_json::Value>, CoreError> {
+    let conn = self.conn.lock().map_err(|e| CoreError::Lock(e.to_string()))?;
+    let mut stmt = conn
+      .prepare("SELECT id, text_content AS textContent, binary_data AS binaryData FROM file_contents WHERE id = ?1")
+      .map_err(|e| CoreError::storage(format!("查询准备失败: {e}")))?;
+
+    let result = stmt
+      .query_row(params![id], |row| {
+        let text_content: Option<String> = row.get(1).unwrap_or(None);
+        let binary_data: Option<String> = row.get(2).unwrap_or(None);
+        Ok(serde_json::json!({
+            "id": row.get::<_, String>(0).unwrap_or_default(),
+            "textContent": text_content,
+            "binaryData": binary_data,
+        }))
+      })
+      .ok();
+
+    Ok(result)
+  }
+
   /// 清空所有实体记录
   ///
   /// 删除 entities 表中的全部数据。
@@ -1053,6 +1375,23 @@ fn relation_from_row(row: &rusqlite::Row) -> Relation {
   }
 }
 
+fn file_from_row(row: &rusqlite::Row) -> serde_json::Value {
+  let tags_str: String = row.get(6).unwrap_or_default();
+  let entity_id: Option<String> = row.get(5).unwrap_or(None);
+
+  serde_json::json!({
+      "id": row.get::<_, String>(0).unwrap_or_default(),
+      "name": row.get::<_, String>(1).unwrap_or_default(),
+      "path": row.get::<_, String>(2).unwrap_or_default(),
+      "mimeType": row.get::<_, String>(3).unwrap_or_default(),
+      "size": row.get::<_, i64>(4).unwrap_or(0),
+      "entityId": entity_id,
+      "tags": serde_json::from_str::<serde_json::Value>(&tags_str).unwrap_or_else(|_| serde_json::Value::Array(vec![])),
+      "createdAt": row.get::<_, String>(7).unwrap_or_default(),
+      "updatedAt": row.get::<_, String>(8).unwrap_or_default(),
+  })
+}
+
 impl super::StorageBackend for SqliteStore {
   fn put_entity(&self, entity: &Entity) -> Result<(), CoreError> {
     Self::put_entity(self, entity)
@@ -1118,6 +1457,9 @@ impl super::StorageBackend for SqliteStore {
   }
   fn kv_get_all(&self) -> Result<Vec<(String, String)>, CoreError> {
     Self::kv_get_all(self)
+  }
+  fn kv_delete(&self, key: &str) -> Result<(), CoreError> {
+    Self::kv_delete(self, key)
   }
 
   fn put_module(

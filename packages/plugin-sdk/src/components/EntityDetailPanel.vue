@@ -8,11 +8,13 @@
       <div class="resize-handle-left" @mousedown="resizable.onResizeStart" />
 
       <div class="dp-header">
-        <WsIcon v-if="icon" :name="icon" size="sm" />
-        <div class="dp-title-area">
-          <h3>{{ title }}</h3>
-          <span v-if="subtitle" class="dp-subtitle">{{ subtitle }}</span>
-        </div>
+        <slot name="header" :entity="entity" :editing="editing">
+          <WsIcon v-if="icon" :name="icon" size="sm" />
+          <div class="dp-title-area">
+            <h3>{{ title }}</h3>
+            <span v-if="subtitle" class="dp-subtitle">{{ subtitle }}</span>
+          </div>
+        </slot>
         <button v-if="showEdit" class="detail-edit-toggle" @click="$emit('edit')">
           <WsIcon name="edit" size="sm" />
         </button>
@@ -69,6 +71,7 @@ const props = withDefaults(defineProps<{
   maxWidth?: number
   defaultWidth?: number
   panelId?: string
+  resizeSide?: 'left' | 'right'
 }>(), {
   icon: '',
   title: '',
@@ -81,6 +84,7 @@ const props = withDefaults(defineProps<{
   maxWidth: 0,
   defaultWidth: 380,
   panelId: 'detail-default',
+  resizeSide: 'left',
 })
 
 const emit = defineEmits<{
@@ -90,12 +94,13 @@ const emit = defineEmits<{
   'tab-change': [tabId: string]
 }>()
 
+const resizeSide = computed(() => props.resizeSide || 'left')
 const resizable = useResizable({
   panelId: props.panelId,
   defaultWidth: props.defaultWidth,
   minWidth: props.minWidth,
   maxWidth: props.maxWidth || undefined,
-  side: 'left',
+  sideRef: resizeSide,
 })
 
 const panelWidth = computed(() => resizable.width.value)
@@ -110,6 +115,11 @@ function switchTab(tabId: string) {
   activeTab.value = tabId
   emit('tab-change', tabId)
 }
+
+defineExpose({
+  switchTab,
+  activeTab,
+})
 </script>
 
 <style scoped>

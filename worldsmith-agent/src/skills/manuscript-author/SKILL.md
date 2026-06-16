@@ -13,32 +13,32 @@
 
 ### 创建章节
 1. 确认章节标题和所属卷
-2. 使用 `manuscript_create_chapter` 创建
+2. 使用 `manuscript(action='create_chapter')` 创建
 3. 提供初始内容（可为空）
 4. 设置状态（草稿/进行中/完成）
 
 ### 编辑章节
-1. 使用 `manuscript_get_chapter_content` 获取当前内容
-2. 使用 `manuscript_update_chapter` 更新内容或状态
-3. 使用 `manuscript_insert_mention` 插入实体引用标记
+1. 使用 `manuscript(action='get_chapter_content')` 获取当前内容
+2. 使用 `manuscript(action='update_chapter')` 更新内容或状态
+3. 使用 `manuscript(action='insert_mention')` 插入实体引用标记
 
 ### 引用实体
-- 使用 `manuscript_insert_mention` 在指定位置插入实体引用
+- 使用 `manuscript(action='insert_mention')` 在指定位置插入实体引用
 - 引用会自动渲染为链接或标注
 
 ### 导出
-- `manuscript_export_document` — 导出为指定格式
+- `manuscript(action='export_document')` — 导出为指定格式
 
 ## 工具绑定
 
 | 工具 | 用途 |
 |------|------|
-| `manuscript_create_chapter` | 创建章节 |
-| `manuscript_update_chapter` | 更新章节内容/状态 |
-| `manuscript_list_chapters` | 列出所有章节 |
-| `manuscript_get_chapter_content` | 获取章节内容 |
-| `manuscript_insert_mention` | 插入实体引用 |
-| `manuscript_export_document` | 导出文档 |
+| `manuscript(action='create_chapter')` | 创建章节 |
+| `manuscript(action='update_chapter')` | 更新章节内容/状态 |
+| `manuscript(action='list_chapters')` | 列出所有章节 |
+| `manuscript(action='get_chapter_content')` | 获取章节内容 |
+| `manuscript(action='insert_mention')` | 插入实体引用 |
+| `manuscript(action='export_document')` | 导出文档 |
 | `entity_get` / `content_search` | 查找可引用的实体 |
 | `file_write` | 导出到文件 |
 

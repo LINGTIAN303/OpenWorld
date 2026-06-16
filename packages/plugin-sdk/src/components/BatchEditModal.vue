@@ -173,9 +173,7 @@ async function doBatchDelete() {
   if (ids.length === 0) return
   beginTransaction()
   for (const id of ids) {
-    const rels = await relationStore.getConnected(id)
-    for (const r of rels) await relationStore.remove(r.id)
-    await entityStore.remove(id)
+    await entityStore.remove(id) // 级联删除已内置
   }
   commitTransaction()
   getEventBus().emit('batch:edit', { entityIds: ids, action: 'delete' })

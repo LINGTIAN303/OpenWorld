@@ -1,7 +1,7 @@
 /**
  * 输出块工具集
  *
- * 提供 12 个交互式输出工具，用于在聊天消息中渲染 UI 组件，
+ * 提供 13 个交互式输出工具，用于在聊天消息中渲染 UI 组件，
  * 替代传统的 Markdown 表格/代码块/编号列表等方式。
  *
  * 工具列表:
@@ -17,13 +17,14 @@
  *   output_timeline  — 时间线
  *   output_image     — 图片展示
  *   output_accordion — 可折叠内容区
+ *   output_manuscript — 文境面板（诗歌、铭文等文学性内容）
  *
  * 每个工具通过 ctx.appendBlock() 将组件数据追加到当前消息，
  * 由前端 Block 渲染器按 type 分发到对应的 Vue 组件。
  */
 
 import type { ToolDefinition } from '../bridge-types'
-import type { TableBlock, ChoiceBlock, CodeBlockData, EntityCardBlock, AlertBlock, StatBlock, ListBlock, ProgressBlock, ComparisonBlock, TimelineBlock, ImageBlock, AccordionBlock } from '../bridge-types'
+import type { TableBlock, ChoiceBlock, CodeBlockData, EntityCardBlock, AlertBlock, StatBlock, ListBlock, ProgressBlock, ComparisonBlock, TimelineBlock, ImageBlock, AccordionBlock, ManuscriptBlock } from '../bridge-types'
 
 /** 全局 Block ID 计数器，确保每个 block 的 ID 全局唯一 */
 let blockCounter = 0
@@ -345,10 +346,79 @@ export const outputAccordion: ToolDefinition = {
   },
 }
 
-/** 所有 12 个输出工具的集合 */
+/** output_manuscript — 文境面板（诗歌、铭文、书信等文学性内容） */
+export const outputManuscript: ToolDefinition = {
+  name: 'output_manuscript',
+  description: '向用户展示文境面板——用于呈现诗歌、词赋、铭文、书信、歌词等文学性内容。支持竖式古排版、逐字入场动画和悬浮文字阴影。当输出的内容是"作品"（而非信息性文本）时，调用此工具。',
+  parameters: {
+    title: { type: 'string', description: '文境标题', required: false },
+    content: { type: 'string', description: '文学文本内容', required: true },
+    layout: { type: 'string', description: '排版模式: horizontal(横式) | vertical(竖式古排版)，默认 horizontal', required: false },
+    animation: { type: 'string', description: '逐字入场动画: ink-drop(墨滴) | brush-stroke(笔触) | fade-in(渐显) | float-up(浮升)，默认 ink-drop', required: false },
+    shadow: { type: 'string', description: '文字阴影: sunlight(阳光悬浮) | soft(柔和) | none(无)，默认 sunlight', required: false },
+    decoration: { type: 'string', description: '装饰: seal(印章) | flourish(花饰) | border(边框) | none(无)，默认 none', required: false },
+    fontSize: { type: 'string', description: '字号: sm | md | lg | xl，默认 md', required: false },
+    fontFamily: { type: 'string', description: '字体名称（如 "Noto Serif SC"、"Georgia"），默认使用当前主题字体', required: false },
+    textColor: { type: 'string', description: '文字颜色，CSS 颜色值。覆盖主题默认色。例: "#ffd700"(金色), "rgb(255,215,0)", "gold"。不填则使用主题默认。', required: false },
+    background: { type: 'string', description: '容器背景，CSS background 值。覆盖主题默认背景。支持纯色和渐变。例: "#1a0a0a"(暗红), "linear-gradient(145deg, #1a0a0a, #2d0a0a)"。不填则使用主题默认。', required: false },
+    backgroundImage: { type: 'string', description: '容器背景图片。支持以下格式：1) 网络 URL（https://example.com/bg.jpg）；2) 本地绝对路径（D:\\images\\parchment.jpg 或 /home/user/bg.png）；3) 本地相对路径（./assets/bg.jpg，相对于项目目录）；4) Data URI（data:image/png;base64,...）。支持静态图片（png/jpg/webp/svg/bmp/avif）和动图（gif）。图片以 cover 模式铺满容器。设置后覆盖 background 渐变。', required: false },
+    backgroundOverlay: { type: 'string', description: '背景图片上的遮罩层颜色，CSS 颜色值。当背景图片导致文字不可读时务必设置。强烈建议：使用背景图片时，若文字颜色与图片色调相近（如浅色文字+浅色图片、深色文字+深色图片），应设置此参数添加半透明遮罩。例: "rgba(0,0,0,0.4)"(深色遮罩), "rgba(255,255,255,0.3)"(浅色遮罩), "rgba(0,0,0,0.5)"(强遮罩)。不填则无遮罩。', required: false },
+    shadowColor: { type: 'string', description: '阴影颜色，CSS 颜色值。覆盖阴影预设的颜色，不影响偏移和模糊。例: "rgba(255,200,0,0.3)"(金色光晕), "#ff0000"(红色阴影)。不填则使用预设默认色。', required: false },
+    shadowOffset: { type: 'string', description: '阴影偏移，格式 "Xpx Ypx"。覆盖预设偏移方向。例: "2px 3px"(右下), "-1px -1px"(左上), "0px 4px"(正下方)。不填则使用预设默认偏移。', required: false },
+    shadowBlur: { type: 'number', description: '阴影模糊半径(px)。覆盖预设模糊值。值越大阴影越柔和。例: 4(锐利), 12(柔和), 24(弥散)。不填则使用预设默认值。', required: false },
+    fontWeight: { type: 'string', description: '字重。例: "300"(细体), "400"(常规), "700"(粗体), "900"(黑体)。不填则使用默认。', required: false },
+    fontStyle: { type: 'string', description: '字体样式: normal(正常) | italic(斜体)。默认 normal。', required: false, enum: ['normal', 'italic'] },
+    letterSpacing: { type: 'string', description: '字间距，CSS letter-spacing 值。例: "0.2em"(宽松), "0.05em"(紧凑), "4px"(固定间距)。不填则使用默认。', required: false },
+    lineHeight: { type: 'string', description: '行高，CSS line-height 值。例: "1.8"(紧凑), "2.5"(宽松), "3"(极宽)。不填则使用默认。', required: false },
+    width: { type: 'number', description: '容器初始宽度(px)。不填则自适应内容。例: 480, 600。', required: false },
+    height: { type: 'number', description: '容器初始高度(px)。不填则自适应内容。例: 320, 400。', required: false },
+  },
+  execute: async (args, ctx) => {
+    if (!args.content || typeof args.content !== 'string') {
+      return '错误：content 参数不能为空'
+    }
+    const layout = args.layout === 'vertical' ? 'vertical' : 'horizontal'
+    const validAnims = ['ink-drop', 'brush-stroke', 'fade-in', 'float-up'] as const
+    const animation = validAnims.includes(args.animation as typeof validAnims[number]) ? args.animation as typeof validAnims[number] : 'ink-drop'
+    const validShadows = ['sunlight', 'soft', 'none'] as const
+    const shadow = validShadows.includes(args.shadow as typeof validShadows[number]) ? args.shadow as typeof validShadows[number] : 'sunlight'
+    const validDecos = ['seal', 'flourish', 'border', 'none'] as const
+    const decoration = args.decoration && validDecos.includes(args.decoration as typeof validDecos[number]) ? args.decoration as typeof validDecos[number] : 'none'
+    const validSizes = ['sm', 'md', 'lg', 'xl'] as const
+    const fontSize = args.fontSize && validSizes.includes(args.fontSize as typeof validSizes[number]) ? args.fontSize as typeof validSizes[number] : 'md'
+
+    const blockId = nextId('msc')
+    const block: ManuscriptBlock = {
+      type: 'manuscript', id: blockId,
+      title: args.title ? String(args.title) : undefined,
+      content: String(args.content),
+      layout, animation, shadow, decoration, fontSize,
+      fontFamily: args.fontFamily ? String(args.fontFamily) : undefined,
+      collapsible: true,
+      textColor: args.textColor ? String(args.textColor) : undefined,
+      background: args.background ? String(args.background) : undefined,
+      backgroundImage: args.backgroundImage ? String(args.backgroundImage) : undefined,
+      backgroundOverlay: args.backgroundOverlay ? String(args.backgroundOverlay) : undefined,
+      shadowColor: args.shadowColor ? String(args.shadowColor) : undefined,
+      shadowOffset: args.shadowOffset ? String(args.shadowOffset) : undefined,
+      shadowBlur: typeof args.shadowBlur === 'number' ? args.shadowBlur : undefined,
+      fontWeight: args.fontWeight ? String(args.fontWeight) : undefined,
+      fontStyle: args.fontStyle === 'italic' ? 'italic' : undefined,
+      letterSpacing: args.letterSpacing ? String(args.letterSpacing) : undefined,
+      lineHeight: args.lineHeight ? String(args.lineHeight) : undefined,
+      width: typeof args.width === 'number' ? args.width : undefined,
+      height: typeof args.height === 'number' ? args.height : undefined,
+    }
+    ctx.appendBlock?.(block)
+    return `已创建文境"${block.title || '文稿'}"（${layout === 'vertical' ? '竖式' : '横式'}排版，${animation}动画），组件会自动显示在消息中。`
+  },
+}
+
+/** 所有 13 个输出工具的集合 */
 export const outputTools: ToolDefinition[] = [
   outputTable, outputChoice, outputCode,
   outputEntityCard, outputAlert, outputStat,
   outputList, outputProgress, outputComparison,
   outputTimeline, outputImage, outputAccordion,
+  outputManuscript,
 ]

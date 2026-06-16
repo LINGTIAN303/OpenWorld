@@ -1,11 +1,7 @@
 <template>
   <div class="combat-stat-view">
     <div v-if="viewMode === 'staircase'" class="csv-staircase">
-      <div class="csv-back-bar">
-        <button class="btn-ghost" @click="viewMode = 'list'">← 返回列表</button>
-        <span class="csv-title">境界阶梯</span>
-      </div>
-      <RealmStaircaseView />
+      <RealmStaircaseView @back="viewMode = 'list'" />
     </div>
     <SchemaRenderer v-else type-key="combat_stat">
       <template #toolbar-extra>
@@ -36,9 +32,5 @@ const viewMode = ref<'list' | 'staircase'>('list')
   color: var(--color-text-primary); font-size: var(--font-size-sm); cursor: pointer; transition: all 0.15s; white-space: nowrap;
 }
 .csv-stair-btn:hover { background: var(--color-bg-hover); border-color: var(--color-text-secondary); color: var(--color-text-primary); }
-.csv-back-bar {
-  display: flex; align-items: center; gap: 12px; padding: 8px 16px;
-  border-bottom: 1px solid var(--border, #333);
-}
-.csv-title { font-weight: var(--font-weight-semibold); font-size: var(--font-size-base); }
+
 </style>

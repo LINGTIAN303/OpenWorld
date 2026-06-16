@@ -9,7 +9,9 @@ export interface FormFieldDef {
   source?: 'builtin' | 'user' | 'shared'
   refType?: string
   relationType?: string
-  autoLink?: boolean
+  autoLink?: boolean | { targetType: string; relationType: string; searchField?: string; createIfMissing?: boolean }
+  /** 是否启用智能填充。默认 text/textarea/richtext 为 true，其他类型为 false */
+  smartFill?: boolean
 }
 
 export interface RelationTabDef {
@@ -21,4 +23,24 @@ export interface RelationTabDef {
   targetIcon?: string
   showProperty?: string
   reverseDirection?: boolean
+}
+
+export interface CardFieldDef {
+  key: string
+  label?: string
+  type?: 'text' | 'tag' | 'icon' | 'badge'
+  classMap?: Record<string, string>
+}
+
+export interface CustomTabDef {
+  id: string
+  label: string
+  icon?: string
+}
+
+export interface FilterDef {
+  key: string
+  label: string
+  options?: { value: string; label: string }[]
+  dynamic?: boolean
 }

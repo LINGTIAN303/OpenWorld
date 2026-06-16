@@ -16,6 +16,8 @@ import type { ToolDefinition } from '../bridge-types'
 import type { IToolContext } from '../toolbus/types'
 import { storeImages, getImages, removeImages, type StoredImage } from '../stores/image-store'
 import { loadApiKey } from '../providers/key-store'
+import { getAllProviderManifests } from '../providers/provider-registry'
+import { smartFetch, resolveApiBaseUrl } from '../utils/smart-fetch'
 
 export { storeImages, getImages, removeImages, type StoredImage }
 
@@ -23,19 +25,16 @@ export { storeImages, getImages, removeImages, type StoredImage }
 const VISION_SUB_AGENT_PROVIDER_KEY = 'worldsmith_vision_sub_agent_provider'
 const VISION_SUB_AGENT_MODEL_KEY = 'worldsmith_vision_sub_agent_model'
 
-/** 视觉 API 的供应商代理路径映射 */
-const PROVIDER_BASE_URLS: Record<string, string> = {
-  anthropic: '/api/anthropic',
-  openai: '/api/openai/v1',
-  google: '/api/google/v1beta',
-  deepseek: '/api/deepseek',
-  groq: '/api/groq/openai/v1',
-  openrouter: '/api/openrouter/api/v1',
-  zhipu: '/api/zhipu/api/paas/v4',
-  qwen: '/api/qwen/compatible-mode/v1',
-  minimax: '/api/minimax/v1',
-  kimi: '/api/kimi/v1',
-}
+/** 视觉 API 的供应商代理路径映射（从 provider-registry 统一读取） */
+const PROVIDER_BASE_URLS: Record<string, string> = (() => {
+  const map: Record<string, string> = {}
+  for (const m of getAllProviderManifests()) {
+    map[m.id] = resolveApiBaseUrl(m.id)
+  }
+  // Google 视觉端点路径不同
+  map['google'] = resolveApiBaseUrl('google').replace(/\/v1$/, '/v1beta')
+  return map
+})()
 
 /** 读取视觉模型配置，未配置返回 null */
 function getVisionConfig(): { provider: string; modelId: string } | null {
@@ -111,7 +110,7 @@ async function callOpenAiCompatibleApi(
   const timeout = setTimeout(() => controller.abort(), VISION_TIMEOUT)
 
   try {
-    const resp = await fetch(`${baseUrl}/chat/completions`, {
+    const resp = await smartFetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -119,6 +118,7 @@ async function callOpenAiCompatibleApi(
       },
       body: JSON.stringify(body),
       signal: controller.signal,
+      timeout: 120,
     })
 
     if (!resp.ok) {
@@ -171,7 +171,7 @@ async function callAnthropicApi(
   const timeout = setTimeout(() => controller.abort(), VISION_TIMEOUT)
 
   try {
-    const resp = await fetch(`${baseUrl}/v1/messages`, {
+    const resp = await smartFetch(`${baseUrl}/v1/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -180,6 +180,7 @@ async function callAnthropicApi(
       },
       body: JSON.stringify(body),
       signal: controller.signal,
+      timeout: 120,
     })
 
     if (!resp.ok) {
@@ -233,11 +234,12 @@ async function callGoogleApi(
 
   try {
     const url = `${baseUrl}/models/${modelId}:generateContent?key=${apiKey}`
-    const resp = await fetch(url, {
+    const resp = await smartFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
       signal: controller.signal,
+      timeout: 120,
     })
 
     if (!resp.ok) {

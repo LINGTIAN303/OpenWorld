@@ -15,5 +15,9 @@
     "./wsfont": "./src/WsFontPack.ts",
     "./tauri": "./src/TauriFontBridge.ts",
     "./composables": "./src/composables/index.ts"
+  },
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.build.json --noEmit"
   }
 }

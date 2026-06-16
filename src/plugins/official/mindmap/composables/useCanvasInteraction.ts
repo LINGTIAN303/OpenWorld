@@ -14,6 +14,10 @@ export interface CanvasInteractionCallbacks {
   onNodeDragEnd: (node: CanvasNode) => void
   onZoom: (k: number) => void
   onPan: (camera: CameraState) => void
+  /** 框选 (shift + drag) 完成，回传世界坐标矩形与命中节点列表 */
+  onSelectionRect?: (worldRect: { x1: number; y1: number; x2: number; y2: number }, hitNodes: CanvasNode[]) => void
+  /** 框选进行中：开始/结束坐标，结束为 null */
+  onSelectionRectMove?: (startWorld: { x: number; y: number } | null, endWorld: { x: number; y: number } | null) => void
 }
 
 export type InteractionInterceptor = {
@@ -33,6 +37,9 @@ export function useCanvasInteraction(
 ) {
   const isDragging = ref(false)
   const isPanning = ref(false)
+  const isSelecting = ref(false)
+  let selStartWorld = { x: 0, y: 0 }
+  let selEndWorld = { x: 0, y: 0 }
   let dragNodeId: string | null = null
   let lastMouseX = 0
   let lastMouseY = 0
@@ -78,10 +85,17 @@ export function useCanvasInteraction(
       lastMouseX = e.clientX
       lastMouseY = e.clientY
     } else {
-      isPanning.value = true
-      panStartX = e.clientX
-      panStartY = e.clientY
-      panStartCamera = { ...getCamera() }
+      // 框选模式：shift + 空白区拖动
+      if (e.shiftKey && e.button === 0 && callbacks.onSelectionRect) {
+        isSelecting.value = true
+        selStartWorld = { x: wx, y: wy }
+        selEndWorld = { x: wx, y: wy }
+      } else {
+        isPanning.value = true
+        panStartX = e.clientX
+        panStartY = e.clientY
+        panStartCamera = { ...getCamera() }
+      }
     }
   }
 
@@ -94,6 +108,12 @@ export function useCanvasInteraction(
     const { x: wx, y: wy } = screenToWorld(sx, sy)
 
     if (_interceptor?.onMouseMove?.(e, wx, wy)) return
+
+    if (isSelecting.value) {
+      selEndWorld = { x: wx, y: wy }
+      callbacks.onSelectionRectMove?.(selStartWorld, selEndWorld)
+      return
+    }
 
     if (isDragging.value && dragNodeId) {
       const dx = (e.clientX - lastMouseX) / getCamera().k
@@ -133,6 +153,29 @@ export function useCanvasInteraction(
     const { x: wx, y: wy } = screenToWorld(sx, sy)
 
     if (_interceptor?.onMouseUp?.(e, wx, wy)) {
+      isDragging.value = false
+      isPanning.value = false
+      isSelecting.value = false
+      dragNodeId = null
+      return
+    }
+
+    // 框选结束：计算矩形 + 命中节点 + 回调
+    if (isSelecting.value && callbacks.onSelectionRect) {
+      const x1 = Math.min(selStartWorld.x, selEndWorld.x)
+      const y1 = Math.min(selStartWorld.y, selEndWorld.y)
+      const x2 = Math.max(selStartWorld.x, selEndWorld.x)
+      const y2 = Math.max(selStartWorld.y, selEndWorld.y)
+      if (Math.abs(x2 - x1) > 6 && Math.abs(y2 - y1) > 6) {
+        const nodes = getAllNodes()
+        const hit = nodes.filter(n => {
+          if (n.hidden) return false
+          return n.x >= x1 && n.x <= x2 && n.y >= y1 && n.y <= y2
+        })
+        callbacks.onSelectionRect({ x1, y1, x2, y2 }, hit)
+      }
+      callbacks.onSelectionRectMove?.(null, null)
+      isSelecting.value = false
       isDragging.value = false
       isPanning.value = false
       dragNodeId = null
@@ -233,6 +276,7 @@ export function useCanvasInteraction(
   return {
     isDragging,
     isPanning,
+    isSelecting,
     bindEvents,
     unbindEvents,
     setGetAllNodes,

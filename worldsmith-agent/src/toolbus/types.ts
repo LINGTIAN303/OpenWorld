@@ -53,14 +53,36 @@ export interface IToolStores {
   ui: IUIStore
 }
 
+export interface SessionSummary {
+  id: string
+  name: string
+  createdAt: string
+  updatedAt: string
+  messageCount: number
+  pinned?: boolean
+}
+
 export interface IToolContext {
   stores: IToolStores
   projectInfo: {
     name: string
     entityTypes: string[]
     relationTypes: string[]
+    /** 项目关联的本地目录路径（Phase 2：文件系统主存储） */
+    dirPath?: string | null
   }
   emitA2UI?: (surfaceId: string, message: A2UIMessage) => void
   platform?: import('./capability-types').Platform
   appendBlock?: (block: import('../bridge-types').MessageBlock) => void
+  reportProgress?: (progress: number, status?: string) => void
+  /** 查找指定会话中的文境 block，用于 manuscript_clone */
+  findManuscriptInSession?: (sessionId: string) => Promise<import('../bridge-types').ManuscriptBlock | null>
+  /** 当前会话 ID */
+  currentSessionId?: string
+  /** 获取指定会话的摘要信息 */
+  getSessionInfo?: (sessionId: string) => Promise<SessionSummary | null>
+  /** 列出所有会话，可选按名称过滤 */
+  listSessions?: (query?: string) => Promise<SessionSummary[]>
+  /** 读取指定会话的消息内容 */
+  readSessionMessages?: (sessionId: string) => Promise<{ role: string; content: string; timestamp: number }[] | null>
 }

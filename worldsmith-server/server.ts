@@ -1,8 +1,12 @@
-import express from 'express'
+import express, { Router } from 'express'
 import { createServer } from 'http'
 import { WebSocketServer, WebSocket } from 'ws'
 import { PtyManager } from './pty-manager.js'
 import { v4 as uuid } from 'uuid'
+import { PythonBridge, parseServiceConfig } from './python-bridge.js'
+import { registerCrawlRoutes } from './routes/crawl.js'
+import { registerConvertRoutes } from './routes/convert.js'
+import { registerVectorSearchRoutes } from './routes/vector-search.js'
 
 const PORT = parseInt(process.env.PORT || '3100', 10)
 const AUTH_TOKEN = process.env.AUTH_TOKEN || 'dev'
@@ -21,6 +25,37 @@ app.use((_req, res, next) => {
     return
   }
   next()
+})
+
+// JSON 请求体解析中间件
+app.use(express.json())
+
+// 初始化 Python 微服务桥接 — 根据环境变量决定各服务是否启用
+const pythonConfig = parseServiceConfig({
+  crawl4ai: { port: 8101, enabled: process.env.CRAWL4AI_ENABLED === 'true' },
+  markitdown: { port: 8102, enabled: process.env.MARKITDOWN_ENABLED === 'true' },
+  turbovec: { port: 8103, enabled: process.env.TURBOVEC_ENABLED === 'true' },
+})
+const bridge = new PythonBridge(pythonConfig)
+
+// 注册 API 路由组
+const apiRouter = Router()
+registerCrawlRoutes(apiRouter, bridge)
+registerConvertRoutes(apiRouter, bridge)
+registerVectorSearchRoutes(apiRouter, bridge)
+app.use(apiRouter)
+
+// 服务状态查询端点 — 返回各服务的启用状态与健康检查结果
+app.get('/api/services/status', async (_req, res) => {
+  const services = ['crawl4ai', 'markitdown', 'turbovec'] as const
+  const status: Record<string, any> = {}
+  for (const s of services) {
+    status[s] = {
+      enabled: bridge.isServiceEnabled(s),
+      healthy: bridge.isServiceEnabled(s) ? await bridge.healthCheck(s) : false,
+    }
+  }
+  res.json(status)
 })
 
 const ptyManager = new PtyManager()

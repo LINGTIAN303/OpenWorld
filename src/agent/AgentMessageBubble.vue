@@ -1,7 +1,128 @@
 <template>
-  <div v-if="isDivider" class="time-divider">
+  <div v-if="isDivider && dividerText === 'turn-separator'" class="turn-separator">
+    <div class="turn-separator-line"></div>
+  </div>
+  <div v-else-if="isDivider" class="time-divider">
     <span class="time-divider-text">{{ dividerText }}</span>
   </div>
+  <!-- 深度思考模式：区域布局 -->
+  <div
+    v-else-if="msg && hasVisibleContent && isDeepMode"
+    class="deep-area"
+    :class="deepSegmentType"
+    :data-msg-id="msg.id"
+    @mouseenter="emit('hover', msg.id)"
+    @mouseleave="emit('leave')"
+  >
+    <!-- 深度模式：段标签 -->
+    <div class="deep-segment-label" :class="deepSegmentType">
+      <WsIcon :name="deepSegmentIcon" size="xs" />
+      <span>{{ deepSegmentLabel }}</span>
+    </div>
+
+    <!-- 深度模式：推理过程 -->
+    <div v-if="msg.thinking" class="deep-thinking">
+      <div class="deep-thinking-header">
+        <span class="deep-thinking-title">推理过程</span>
+        <button class="deep-thinking-toggle" @click="thinkingOpen = thinkingOpen === null ? !isThinkingOpen : !thinkingOpen">
+          {{ isThinkingOpen ? '收起' : '展开' }}
+        </button>
+      </div>
+      <div v-show="isThinkingOpen" class="deep-thinking-content">{{ msg.thinking }}</div>
+    </div>
+
+    <!-- 深度模式：段分隔线（推理→工具） -->
+    <div v-if="msg.thinking && msg.toolCalls?.length" class="deep-segment-divider"></div>
+
+    <!-- 深度模式：阶段头 + 内联工具卡片 -->
+    <div v-if="msg.toolCalls?.length" class="deep-phases">
+      <template v-for="group in deepPhaseGroups" :key="group.label">
+        <PhaseHeader
+          :label="group.label"
+          :index="group.index"
+          :tools="group.tools"
+          :is-active="group.isActive"
+          :is-done="group.isDone"
+          :default-expanded="group.isActive"
+        />
+        <div class="deep-phase-tools">
+          <InlineToolCall v-for="tc in group.tools" :key="tc.id" :tc="tc" />
+        </div>
+      </template>
+    </div>
+
+    <!-- 深度模式：段分隔线（工具→输出 或 推理→输出） -->
+    <div v-if="(msg.toolCalls?.length || msg.thinking) && msg.content" class="deep-segment-divider"></div>
+
+    <!-- 深度模式：图片 -->
+    <div v-if="msg.images?.length" class="deep-images">
+      <img v-for="(img, idx) in msg.images" :key="idx" :src="`data:${img.mimeType};base64,${img.data}`" class="deep-img" />
+    </div>
+
+    <!-- 深度模式：文件 -->
+    <div v-if="msg.files?.length" class="deep-files">
+      <div v-for="(file, idx) in msg.files" :key="idx" class="deep-file-item">
+        <span class="deep-file-icon"><WsIcon name="manuscript" size="xs" /></span>
+        <span class="deep-file-name">{{ file.name }}</span>
+      </div>
+    </div>
+
+    <!-- 深度模式：正文内容 -->
+    <div class="deep-text" :style="agentFontStyle">
+      <div class="deep-text-content" :class="{ 'text-collapsed': !textExpanded && isTextLong }">
+        <div v-html="renderedMarkdown"></div>
+      </div>
+      <div v-if="isTextLong" class="text-expand-btn" @click="textExpanded = !textExpanded">
+        {{ textExpanded ? '收起' : '展开全文' }}
+      </div>
+      <BlockTable v-for="block in tableBlocks" :key="block.id" :block="block" @action="emit('blockAction', $event)" />
+      <BlockChoice v-for="block in choiceBlocks" :key="block.id" :block="block" @action="emit('blockAction', $event)" />
+      <BlockCode v-for="block in codeBlocks" :key="block.id" :block="block" @action="emit('blockAction', $event)" />
+      <BlockEntityCard v-for="block in entityCardBlocks" :key="block.id" :block="block" @action="emit('blockAction', $event)" />
+      <BlockAlert v-for="block in alertBlocks" :key="block.id" :block="block" @action="emit('blockAction', $event)" />
+      <BlockStat v-for="block in statBlocks" :key="block.id" :block="block" @action="emit('blockAction', $event)" />
+      <BlockList v-for="block in listBlocks" :key="block.id" :block="block" @action="emit('blockAction', $event)" />
+      <BlockProgress v-for="block in progressBlocks" :key="block.id" :block="block" @action="emit('blockAction', $event)" />
+      <BlockComparison v-for="block in comparisonBlocks" :key="block.id" :block="block" @action="emit('blockAction', $event)" />
+      <BlockTimeline v-for="block in timelineBlocks" :key="block.id" :block="block" @action="emit('blockAction', $event)" />
+      <BlockImage v-for="block in imageBlocks" :key="block.id" :block="block" @action="emit('blockAction', $event)" />
+      <BlockVideo v-for="block in videoBlocks" :key="block.id" :block="block" @action="emit('blockAction', $event)" />
+      <BlockAccordion v-for="block in accordionBlocks" :key="block.id" :block="block" @action="emit('blockAction', $event)" />
+    </div>
+
+    <!-- 深度模式：内联活动日志 -->
+    <div v-if="deepActivityLogs.length > 0" class="deep-activity">
+      <div class="deep-activity-header">
+        <WsIcon name="clipboard-list" size="xs" />
+        <span>活动记录</span>
+        <span class="deep-activity-count">{{ deepActivityLogs.length }}</span>
+      </div>
+      <div class="deep-activity-list">
+        <div v-for="log in deepActivityLogs" :key="log.id" class="deep-activity-item" :class="`log-${log.type}`">
+          <span class="deep-activity-dot"></span>
+          <span class="deep-activity-msg">{{ log.message }}</span>
+          <span class="deep-activity-time">{{ formatActivityTime(log.timestamp) }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 深度模式：操作栏 -->
+    <div class="deep-actions" :class="{ visible: isHovered }">
+      <button class="action-btn" @click="emit('copy', msg)" title="复制"><WsIcon name="outline" size="xs" /></button>
+      <button class="action-btn" @click="onExportImage" title="导出为图片"><WsIcon name="image" size="xs" /></button>
+      <button class="action-btn" @click="onExportGif" title="导出为GIF"><WsIcon name="video" size="xs" /></button>
+      <span class="msg-time">{{ formatTime(msg.timestamp) }}</span>
+    </div>
+
+    <BlockManuscript
+      v-for="block in manuscriptBlocks"
+      :key="block.id"
+      :block="block"
+      @action="emit('blockAction', $event)"
+      @local-action="emit('manuscriptLocalAction', $event)"
+    />
+  </div>
+  <!-- 普通模式：气泡布局 -->
   <div
     v-else-if="msg && hasVisibleContent"
     class="chat-msg"
@@ -11,7 +132,7 @@
     @mouseleave="emit('leave')"
   >
     <span class="msg-icon"><WsIcon :name="msg.role === 'user' ? 'character' : 'profile'" size="xs" /></span>
-    <div class="msg-body" :style="msg.role === 'assistant' ? { fontFamily: fontFamily } : undefined">
+    <div class="msg-body" :style="msg.role === 'assistant' ? agentFontStyle : undefined">
       <div v-if="msg.thinking" class="msg-thinking" :class="{ 'thinking-deep': chatMode === 'deep' }">
         <details :open="isThinkingOpen" @toggle="(e: Event) => thinkingOpen = (e.target as HTMLDetailsElement).open">
           <summary><WsIcon name="manuscript" size="xs" /> {{ thinkingLabel }}</summary>
@@ -29,10 +150,7 @@
       </div>
       <div v-if="msg.role === 'assistant'" class="msg-text">
         <div v-if="msg.toolCalls?.length" class="msg-tool-calls">
-          <template v-if="chatMode === 'deep'">
-            <StepChain :tool-calls="msg.toolCalls" />
-          </template>
-          <template v-else-if="chatMode === 'explore'">
+          <template v-if="chatMode === 'explore'">
             <SearchPath :tool-calls="msg.toolCalls" />
           </template>
           <template v-else>
@@ -66,9 +184,15 @@
         <BlockComparison v-for="block in comparisonBlocks" :key="block.id" :block="block" @action="emit('blockAction', $event)" />
         <BlockTimeline v-for="block in timelineBlocks" :key="block.id" :block="block" @action="emit('blockAction', $event)" />
         <BlockImage v-for="block in imageBlocks" :key="block.id" :block="block" @action="emit('blockAction', $event)" />
+        <BlockVideo v-for="block in videoBlocks" :key="block.id" :block="block" @action="emit('blockAction', $event)" />
         <BlockAccordion v-for="block in accordionBlocks" :key="block.id" :block="block" @action="emit('blockAction', $event)" />
       </div>
-      <div v-else-if="msg.role !== 'assistant'" class="msg-text">{{ msg.content }}</div>
+      <div v-else class="msg-text">
+        <template v-for="(seg, i) in userContentSegments" :key="i">
+          <span v-if="seg.type === 'chip'" class="kb-chip-inline"><WsIcon name="file" size="xs" />{{ seg.label }}</span>
+          <span v-else>{{ seg.text }}</span>
+        </template>
+      </div>
       <div class="msg-actions" :class="{ visible: isHovered }">
         <button class="action-btn" @click="emit('copy', msg)" title="复制"><WsIcon name="outline" size="xs" /></button>
         <button v-if="msg.role === 'user'" class="action-btn" @click="emit('retry', msg)" title="重试"><WsIcon name="delete" size="xs" /></button>
@@ -77,11 +201,18 @@
         <span class="msg-time">{{ formatTime(msg.timestamp) }}</span>
       </div>
     </div>
+    <BlockManuscript
+      v-for="block in manuscriptBlocks"
+      :key="block.id"
+      :block="block"
+      @action="emit('blockAction', $event)"
+      @local-action="emit('manuscriptLocalAction', $event)"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, nextTick, watch } from 'vue'
 import WsIcon from '../ui/WsIcon.vue'
 import { Marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -96,13 +227,32 @@ import BlockProgress from './blocks/BlockProgress.vue'
 import BlockComparison from './blocks/BlockComparison.vue'
 import BlockTimeline from './blocks/BlockTimeline.vue'
 import BlockImage from './blocks/BlockImage.vue'
+import BlockVideo from './blocks/BlockVideo.vue'
 import BlockAccordion from './blocks/BlockAccordion.vue'
+import BlockManuscript from './blocks/BlockManuscript.vue'
 import StepChain from './blocks/StepChain.vue'
+import InlineToolCall from './blocks/InlineToolCall.vue'
+import type { ToolCallView } from './blocks/InlineToolCall.vue'
+import PhaseHeader from './blocks/PhaseHeader.vue'
 import SearchPath from './blocks/SearchPath.vue'
 import { usePersonaFont } from '../space/composables/usePersonaFont'
+import { useActivityLog } from '../space/composables/useActivityLog'
+import { replaceFontSpans } from '../composables/fontSpanParser'
+import { useFontStore } from '../stores/fontStore'
 import { renderText, toBlob, renderAnimatedText } from '@worldsmith/font-kit'
 import { encodeGif } from '@worldsmith/motion-kit'
 const { fontFamily, enterAnimation, profile } = usePersonaFont()
+const { logs: activityLogs } = useActivityLog()
+const fontStore = useFontStore()
+const agentFontFamily = computed(() => fontStore.prefs.agent.family || fontFamily.value || '')
+const agentFontStyle = computed(() => {
+  const style: Record<string, string> = {}
+  if (agentFontFamily.value) style.fontFamily = agentFontFamily.value
+  const pref = fontStore.prefs.agent
+  if (pref.family && pref.weight !== 400) style.fontWeight = String(pref.weight)
+  if (pref.family && pref.style !== 'normal') style.fontStyle = pref.style
+  return style
+})
 
 const TOOL_LABELS: Record<string, string> = {
   entity_create: '创建实体',
@@ -127,6 +277,7 @@ const TOOL_LABELS: Record<string, string> = {
   output_timeline: '时间线',
   output_image: '图片',
   output_accordion: '折叠区',
+  output_manuscript: '文境',
   consistency_check: '一致性检查',
   content_search: '内容搜索',
   memory_store: '存储记忆',
@@ -288,6 +439,18 @@ const TOOL_LABELS: Record<string, string> = {
   magic_get_skill_tree: '获取技能树',
   magic_validate_tree: '验证技能树',
   magic_export_skill_tree: '导出技能树',
+  plan_create: '创建计划',
+  plan_update: '更新计划',
+  image_generate: '图片生成',
+  image_edit: '图片编辑',
+  video_generate: '视频生成',
+  kb_write: '知识写入',
+  kb_read: '知识读取',
+  kb_search: '知识搜索',
+  kb_delete: '知识删除',
+  persona_apply: '人格附体',
+  persona_reset: '人格重置',
+  persona_update: '人格更新',
 }
 
 const SNAKE_TRANSLATIONS: Record<string, string> = {
@@ -333,7 +496,7 @@ function getToolLabel(name: string): string {
   return translated !== name ? translated : name.replace(/_/g, ' ')
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   isDivider?: boolean
   dividerText?: string
   msg?: {
@@ -349,7 +512,11 @@ const props = defineProps<{
     metadata?: Record<string, unknown>
   }
   isHovered: boolean
-}>()
+  chatMode?: 'normal' | 'deep' | 'explore' | 'group-chat'
+  useDeepLayout?: boolean
+}>(), {
+  useDeepLayout: true,
+})
 
 const emit = defineEmits<{
   (e: 'hover', msgId: string): void
@@ -357,13 +524,17 @@ const emit = defineEmits<{
   (e: 'copy', msg: any): void
   (e: 'retry', msg: any): void
   (e: 'blockAction', event: { blockId: string; action: string; data?: Record<string, unknown> }): void
+  (e: 'manuscriptLocalAction', event: { blockId: string; action: string; data?: Record<string, unknown> }): void
 }>()
 
 const marked = new Marked({ gfm: true, breaks: true })
 
 const renderedMarkdown = computed(() => {
   if (!props.msg || props.msg.role !== 'assistant' || !props.msg.content) return ''
-  const filtered = stripJsonBlocks(props.msg.content.trim())
+  // 先替换字体标记（避免 stripJsonBlocks 误吞 {font:...}）
+  const withFontSpans = replaceFontSpans(props.msg.content.trim())
+  if (!withFontSpans) return ''
+  const filtered = stripJsonBlocks(withFontSpans)
   return filtered ? renderMd(filtered) : ''
 })
 
@@ -442,6 +613,30 @@ const completedCount = computed(() =>
   props.msg?.toolCalls?.filter(tc => tc.status === 'completed').length ?? 0
 )
 
+/** 解析用户消息中的 @path 引用为 chip + 文本片段 */
+const userContentSegments = computed(() => {
+  const content = props.msg?.content || ''
+  if (!content) return []
+  const segments: Array<{ type: 'text'; text: string } | { type: 'chip'; label: string }> = []
+  // 匹配 @project/xxx 或 @xxx/yyy.md 格式的知识引用
+  const pattern = /@([\w/.-]+\.md|[\w/.-]+\/[\w/.-]+\.\w+)/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ type: 'text', text: content.slice(lastIndex, match.index) })
+    }
+    const fullPath = match[1]
+    const label = fullPath.split('/').pop() || fullPath
+    segments.push({ type: 'chip', label })
+    lastIndex = pattern.lastIndex
+  }
+  if (lastIndex < content.length) {
+    segments.push({ type: 'text', text: content.slice(lastIndex) })
+  }
+  return segments
+})
+
 const isTextLong = computed(() => {
   if (!props.msg?.content) return false
   const lines = props.msg.content.split('\n').length
@@ -452,7 +647,143 @@ const isTextLong = computed(() => {
 const textExpanded = ref(false)
 
 const blocks = computed(() => props.msg?.blocks || [])
-const chatMode = computed(() => (props.msg?.metadata?.chatMode as string) || 'normal')
+const chatMode = computed(() => props.chatMode || (props.msg?.metadata?.chatMode as string) || 'normal')
+const isDeepMode = computed(() => chatMode.value === 'deep' && props.useDeepLayout)
+
+/** 深度模式阶段定义：工具名→阶段映射 */
+const DEEP_PHASES = [
+  { label: '问题拆解', tools: ['output_list', 'output_choice'] },
+  { label: '证据收集', tools: [
+    'entity_get', 'entity_list', 'entity_suggest_field', 'entity_smart_fill', 'entity_get_context',
+    'content_search', 'relation_list',
+    'kb_search', 'kb_list', 'kb_read', 'kb_extract', 'kb_reflect', 'kb_link',
+    'web_search', 'web_fetch', 'web_search_cli', 'web_fetch_cli', 'web_qa_cli',
+    'vision_analyze', 'list_vision_images',
+    'memory_recall',
+    'fs_read', 'fs_list', 'fs_search', 'fs_stat',
+    'read_file', 'search_files', 'list_directory',
+    'file_read', 'file_list', 'file_analyze',
+  ] },
+  { label: '推理分析', tools: [
+    'algo_graph_analysis', 'algo_pagerank', 'algo_community_detection',
+    'algo_shortest_path', 'algo_k_shortest_paths', 'algo_topological_sort',
+    'algo_force_layout',
+    'consistency_check', 'schema_validate',
+    'graph_get_nodes', 'graph_get_edges', 'graph_find_path', 'graph_cluster_analysis',
+    'graph_highlight_nodes', 'graph_export_snapshot', 'graph_filter_by_type', 'graph_search_subgraph',
+  ] },
+  { label: '创作操作', tools: [
+    'entity_create', 'entity_update', 'entity_delete',
+    'relation_create', 'relation_delete',
+    'kb_write', 'kb_delete', 'kb_init',
+    'memory_store', 'memory_delete',
+    'image_generate', 'image_edit', 'image_gen_config', 'image_list', 'image_show',
+    'video_generate', 'video_status', 'video_list', 'video_show', 'video_gen_config',
+    'persona_apply', 'persona_reset', 'persona_update',
+    'load_skill',
+    'schema_register_entity_type', 'schema_unregister_entity_type',
+    'schema_get_entity_type', 'schema_list_entity_types', 'schema_update_entity_type',
+    'schema_register_validation', 'schema_register_view', 'schema_export',
+    'ui_create_surface', 'ui_update_components', 'ui_update_data', 'ui_delete_surface',
+    'a2ui_show_entity', 'a2ui_show_relation',
+    'fs_write', 'fs_move', 'fs_delete', 'fs_mkdir', 'fs_copy',
+    'write_file', 'edit_file',
+    'file_write', 'file_delete', 'file_associate',
+    'plugin_write',
+    'project_export', 'project_import',
+    'daily_report',
+    'plan_create', 'plan_update',
+  ] },
+  { label: '结论输出', tools: [
+    'output_table', 'output_comparison', 'output_accordion', 'output_alert',
+    'output_stat', 'output_code', 'output_entity_card', 'output_progress',
+    'output_timeline', 'output_image', 'output_manuscript',
+  ] },
+]
+
+const ALL_PHASE_TOOLS = new Set(DEEP_PHASES.flatMap(p => p.tools))
+
+/** 深度模式：将工具调用按阶段分组，返回阶段列表（含阶段头+工具卡片） */
+interface PhaseGroup {
+  label: string
+  index: number
+  tools: ToolCallView[]
+  isActive: boolean
+  isDone: boolean
+}
+
+const deepPhaseGroups = computed<PhaseGroup[]>(() => {
+  if (!isDeepMode.value || !props.msg?.toolCalls?.length) return []
+  const toolCalls = props.msg.toolCalls as ToolCallView[]
+
+  // 将每个工具分配到阶段
+  const phaseToolMap = DEEP_PHASES.map(phase =>
+    toolCalls.filter(tc => phase.tools.includes(tc.name))
+  )
+  // 兜底：未匹配的工具归入"其他操作"
+  const unmatched = toolCalls.filter(tc => !ALL_PHASE_TOOLS.has(tc.name))
+
+  const groups: PhaseGroup[] = []
+  let activeFound = false
+
+  DEEP_PHASES.forEach((phase, idx) => {
+    const tools = phaseToolMap[idx]
+    if (tools.length === 0) return // 跳过空阶段
+    const hasRunning = tools.some(tc => tc.status === 'running')
+    const allDone = tools.every(tc => tc.status === 'completed' || tc.status === 'failed')
+    const isActive = !activeFound && (hasRunning || !allDone)
+    if (isActive) activeFound = true
+    groups.push({
+      label: phase.label,
+      index: groups.length,
+      tools,
+      isActive,
+      isDone: allDone,
+    })
+  })
+
+  // 兜底阶段
+  if (unmatched.length > 0) {
+    const hasRunning = unmatched.some(tc => tc.status === 'running')
+    const allDone = unmatched.every(tc => tc.status === 'completed' || tc.status === 'failed')
+    const isActive = !activeFound && (hasRunning || !allDone)
+    groups.push({
+      label: '其他操作',
+      index: groups.length,
+      tools: unmatched,
+      isActive,
+      isDone: allDone,
+    })
+  }
+
+  return groups
+})
+
+/** 深度模式：判断当前消息的段类型（推理/工具/输出） */
+const deepSegmentType = computed(() => {
+  if (!props.msg) return 'output'
+  if (props.msg.thinking && !props.msg.content && !props.msg.toolCalls?.length) return 'thinking'
+  if (props.msg.toolCalls?.length && !props.msg.content) return 'tooling'
+  return 'output'
+})
+
+const deepSegmentLabel = computed(() => {
+  switch (deepSegmentType.value) {
+    case 'thinking': return '推理过程'
+    case 'tooling': return '调用工具'
+    case 'output': return '输出'
+    default: return '输出'
+  }
+})
+
+const deepSegmentIcon = computed(() => {
+  switch (deepSegmentType.value) {
+    case 'thinking': return 'manuscript'
+    case 'tooling': return 'wrench'
+    case 'output': return 'file'
+    default: return 'file'
+  }
+})
 const thinkingLabel = computed(() => chatMode.value === 'explore' ? '搜索思路' : '推理链')
 const thinkingDefaultOpen = computed(() => chatMode.value === 'deep')
 const thinkingOpen = ref<boolean | null>(null)
@@ -471,17 +802,68 @@ const progressBlocks = computed(() => blocks.value.filter(b => b.type === 'progr
 const comparisonBlocks = computed(() => blocks.value.filter(b => b.type === 'comparison'))
 const timelineBlocks = computed(() => blocks.value.filter(b => b.type === 'timeline'))
 const imageBlocks = computed(() => blocks.value.filter(b => b.type === 'image'))
+const videoBlocks = computed(() => blocks.value.filter(b => b.type === 'video'))
 const accordionBlocks = computed(() => blocks.value.filter(b => b.type === 'accordion'))
+const manuscriptBlocks = computed(() => blocks.value.filter(b => b.type === 'manuscript'))
+
+/** 深度模式：与当前消息时间窗口相关的活动日志（消息前后30秒内） */
+const deepActivityLogs = computed(() => {
+  if (!isDeepMode.value || !props.msg) return []
+  const msgTime = props.msg.timestamp
+  const window = 120_000 // 2分钟窗口
+  return activityLogs.value.filter(log =>
+    log.timestamp >= msgTime - 5_000 && log.timestamp <= msgTime + window
+  )
+})
+
+let purifyHookRegistered = false
+if (!purifyHookRegistered) {
+  DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
+    if (data.attrName?.startsWith('data-ws-')) {
+      data.forceKeepAttr = true
+    }
+  })
+  purifyHookRegistered = true
+}
 
 function renderMd(text: string): string {
   if (!text) return ''
   return DOMPurify.sanitize(marked.parse(text) as string)
 }
 
+/** 扫描 [data-ws-font] 元素并应用内联字体样式 */
+function applyFontSpanStyles() {
+  if (!props.msg?.id) return
+  const el = document.querySelector(`[data-msg-id="${props.msg.id}"]`)
+  if (!el) return
+  const fontSpans = el.querySelectorAll('[data-ws-font]')
+  for (const span of fontSpans) {
+    const family = span.getAttribute('data-ws-font')
+    const weight = span.getAttribute('data-ws-weight')
+    const style = span.getAttribute('data-ws-style')
+    if (family) {
+      const htmlEl = span as HTMLElement
+      htmlEl.style.fontFamily = `"${family}", sans-serif`
+      if (weight && weight !== '400') htmlEl.style.fontWeight = weight
+      if (style && style !== 'normal') htmlEl.style.fontStyle = style
+    }
+  }
+}
+
+watch(renderedMarkdown, () => {
+  nextTick(applyFontSpanStyles)
+})
+
 function formatTime(ts: number): string {
   if (!ts) return ''
   const d = new Date(ts)
   return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+}
+
+function formatActivityTime(ts: number): string {
+  if (!ts) return ''
+  const d = new Date(ts)
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`
 }
 
 async function onExportImage() {
@@ -546,7 +928,7 @@ async function onExportGif() {
     }))
 
     const gifData = encodeGif({ width: result.width, height: result.height, frames: gifFrames, loop: 0 })
-    const gifBlob = new Blob([gifData], { type: 'image/gif' })
+    const gifBlob = new Blob([Uint8Array.from(gifData)], { type: 'image/gif' })
     const url = URL.createObjectURL(gifBlob)
     const a = document.createElement('a')
     a.href = url
@@ -560,6 +942,368 @@ async function onExportGif() {
 </script>
 
 <style scoped>
+/* ===== 轮次分隔线 ===== */
+.turn-separator {
+  padding: 8px 20px;
+  display: flex;
+  align-items: center;
+}
+
+.turn-separator-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--agent-primary) 25%, transparent) 20%,
+    color-mix(in srgb, var(--agent-primary) 25%, transparent) 80%,
+    transparent
+  );
+}
+
+/* ===== 深度思考模式：区域布局 ===== */
+.deep-area {
+  width: 100%;
+  max-width: 100%;
+  padding: 16px 20px;
+  border-left: 3px solid var(--agent-primary);
+  background: color-mix(in srgb, var(--agent-primary) 3%, transparent);
+  border-radius: 0 12px 12px 0;
+  animation: deep-area-in 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 深度模式：段标签 */
+.deep-segment-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  width: fit-content;
+}
+
+.deep-segment-label.thinking {
+  color: var(--agent-segment-thinking);
+  background: color-mix(in srgb, var(--agent-segment-thinking) 10%, transparent);
+}
+
+.deep-segment-label.tooling {
+  color: var(--agent-segment-tooling);
+  background: color-mix(in srgb, var(--agent-segment-tooling) 10%, transparent);
+}
+
+.deep-segment-label.output {
+  color: var(--agent-segment-output);
+  background: color-mix(in srgb, var(--agent-segment-output) 10%, transparent);
+}
+
+/* 段类型边框色 */
+.deep-area.thinking {
+  border-left-color: var(--agent-segment-thinking);
+  background: color-mix(in srgb, var(--agent-segment-thinking) 3%, transparent);
+}
+
+.deep-area.tooling {
+  border-left-color: var(--agent-segment-tooling);
+  background: color-mix(in srgb, var(--agent-segment-tooling) 3%, transparent);
+}
+
+.deep-area.output {
+  border-left-color: var(--agent-segment-output);
+  background: color-mix(in srgb, var(--agent-segment-output) 3%, transparent);
+}
+
+/* 深度模式：段内分隔线 */
+.deep-segment-divider {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--agent-hover-bg) 10%,
+    var(--agent-hover-bg) 90%,
+    transparent
+  );
+  margin: 2px 0;
+}
+
+@keyframes deep-area-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 深度模式：推理过程 */
+.deep-thinking {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--agent-primary) 15%, transparent);
+  background: color-mix(in srgb, var(--agent-primary) 4%, transparent);
+}
+
+.deep-thinking-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--agent-primary) 6%, transparent);
+  color: var(--agent-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.deep-thinking-title {
+  flex: 1;
+}
+
+.deep-thinking-toggle {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--agent-primary) 20%, transparent);
+  background: color-mix(in srgb, var(--agent-primary) 8%, transparent);
+  color: var(--agent-primary);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.deep-thinking-toggle:hover {
+  background: color-mix(in srgb, var(--agent-primary) 15%, transparent);
+}
+
+.deep-thinking-content {
+  padding: 10px 14px;
+  font-size: var(--font-size-sm);
+  color: var(--agent-text-secondary);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  max-height: 400px;
+  overflow-y: auto;
+  word-break: break-word;
+}
+
+/* 深度模式：阶段+内联工具卡片 */
+.deep-phases {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.deep-phase-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 12px;
+  border-left: 2px solid var(--agent-hover-bg);
+  margin-left: 10px;
+}
+
+/* 深度模式：图片 */
+.deep-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.deep-img {
+  max-width: 280px;
+  max-height: 200px;
+  border-radius: 8px;
+  object-fit: contain;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.deep-img:hover {
+  transform: scale(1.03);
+}
+
+/* 深度模式：文件 */
+.deep-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.deep-file-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--agent-hover-bg);
+  border: 1px solid var(--agent-hover-bg);
+  border-radius: 8px;
+  font-size: var(--font-size-sm);
+  color: var(--agent-text-secondary);
+}
+
+.deep-file-icon { font-size: var(--font-size-sm); }
+
+.deep-file-name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 深度模式：正文 */
+.deep-text {
+  font-size: var(--font-size-base);
+  line-height: 1.7;
+  color: var(--agent-text);
+  word-break: break-word;
+  font-family: var(--agent-font);
+}
+
+.deep-text-content {
+  position: relative;
+}
+
+.deep-text-content.text-collapsed {
+  max-height: 200px;
+  overflow: hidden;
+}
+
+.deep-text-content.text-collapsed::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: linear-gradient(transparent, color-mix(in srgb, var(--agent-primary) 3%, transparent));
+  pointer-events: none;
+}
+
+.deep-text :deep(h1), .deep-text :deep(h2), .deep-text :deep(h3) {
+  margin: 12px 0 6px;
+  font-weight: var(--font-weight-semibold);
+}
+
+.deep-text :deep(h1) { font-size: var(--font-size-xl) }
+.deep-text :deep(h2) { font-size: var(--font-size-lg) }
+.deep-text :deep(h3) { font-size: var(--font-size-md) }
+.deep-text :deep(p) { margin: 6px 0 }
+.deep-text :deep(ul), .deep-text :deep(ol) { margin: 6px 0; padding-left: 22px }
+.deep-text :deep(li) { margin: 3px 0 }
+.deep-text :deep(code) {
+  background: var(--agent-hover-bg);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: var(--font-size-sm);
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.deep-text :deep(pre) {
+  background: color-mix(in srgb, var(--agent-bg) 20%, transparent);
+  padding: 12px 14px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 10px 0;
+}
+.deep-text :deep(pre code) { background: none; padding: 0; font-size: var(--font-size-sm); line-height: 1.5 }
+.deep-text :deep(blockquote) {
+  border-left: 3px solid var(--agent-primary);
+  margin: 8px 0; padding: 6px 14px; opacity: 0.85;
+}
+.deep-text :deep(table) { border-collapse: collapse; margin: 10px 0; font-size: var(--font-size-sm) }
+.deep-text :deep(th), .deep-text :deep(td) {
+  border: 1px solid var(--agent-border-color); padding: 6px 10px;
+}
+.deep-text :deep(a) { color: var(--agent-primary); text-decoration: underline }
+.deep-text :deep(hr) { border: none; border-top: 1px solid var(--agent-border-color); margin: 10px 0 }
+
+/* 深度模式：内联活动日志 */
+.deep-activity {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--agent-hover-bg);
+  background: var(--agent-hover-bg);
+}
+
+.deep-activity-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--agent-text-secondary);
+  border-bottom: 1px solid var(--agent-hover-bg);
+}
+
+.deep-activity-count {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--agent-primary) 10%, transparent);
+  color: var(--agent-primary);
+  margin-left: auto;
+}
+
+.deep-activity-list {
+  padding: 4px 0;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.deep-activity-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  font-size: 11px;
+  transition: background 0.1s;
+}
+
+.deep-activity-item:hover {
+  background: var(--agent-hover-bg);
+}
+
+.deep-activity-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--agent-text-tertiary);
+}
+
+.deep-activity-item.log-tool .deep-activity-dot { background: var(--agent-primary); }
+.deep-activity-item.log-knowledge .deep-activity-dot { background: var(--agent-success); }
+.deep-activity-item.log-memory .deep-activity-dot { background: var(--agent-warning); }
+.deep-activity-item.log-error .deep-activity-dot { background: var(--agent-danger); }
+
+.deep-activity-msg {
+  flex: 1;
+  color: var(--agent-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deep-activity-time {
+  font-size: 10px;
+  color: var(--agent-text-tertiary);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* 深度模式：操作栏 */
+.deep-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  height: 20px;
+}
+
+.deep-actions.visible { opacity: 1 }
+
+/* ===== 普通模式：气泡布局 ===== */
 .chat-msg {
   display: flex;
   align-items: flex-start;
@@ -579,11 +1323,11 @@ async function onExportGif() {
   justify-content: center;
   font-size: var(--font-size-sm);
   border-radius: 50%;
-  background: var(--agent-hover-bg, rgba(255,255,255,0.06));
+  background: var(--agent-hover-bg);
 }
 
 .msg-assistant .msg-icon {
-  box-shadow: 0 0 6px rgba(108,92,231,0.3);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--agent-primary) 30%, transparent);
 }
 
 .msg-user .msg-icon {
@@ -593,10 +1337,10 @@ async function onExportGif() {
 .msg-body {
   font-size: var(--font-size-base);
   line-height: 1.6;
-  color: var(--agent-text, #e0e0e0);
+  color: var(--agent-text);
   word-break: break-word;
   position: relative;
-  font-family: var(--agent-font, sans-serif);
+  font-family: var(--agent-font);
   background: transparent;
 }
 
@@ -605,28 +1349,28 @@ async function onExportGif() {
 .msg-thinking { margin-bottom: 6px }
 .msg-thinking summary {
   cursor: pointer; font-size: var(--font-size-sm);
-  color: var(--agent-text-secondary, #aaa); padding: 2px 0;
+  color: var(--agent-text-secondary); padding: 2px 0;
 }
 .thinking-content {
   font-size: var(--font-size-sm);
-  color: var(--agent-text-tertiary, #888);
+  color: var(--agent-text-tertiary);
   line-height: 1.5; max-height: 200px; overflow-y: auto;
   padding: 6px 8px;
-  background: var(--agent-hover-bg, rgba(255,255,255,0.03));
+  background: var(--agent-hover-bg);
   border-radius: 6px; margin-top: 4px; white-space: pre-wrap;
 }
 .msg-thinking.thinking-deep {
-  border-left: 3px solid var(--agent-primary, #6c5ce7);
+  border-left: 3px solid var(--agent-primary);
   padding-left: 8px;
   margin-bottom: 8px;
 }
 .msg-thinking.thinking-deep .thinking-content {
-  background: rgba(108,92,231,0.05);
-  border: 1px solid rgba(108,92,231,0.1);
+  background: color-mix(in srgb, var(--agent-primary) 5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--agent-primary) 10%, transparent);
   max-height: 400px;
 }
 .msg-thinking.thinking-deep summary {
-  color: var(--agent-primary, #6c5ce7);
+  color: var(--agent-primary);
   font-weight: 600;
 }
 
@@ -649,11 +1393,11 @@ async function onExportGif() {
   align-items: center;
   gap: 4px;
   padding: 3px 8px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--agent-hover-bg);
+  border: 1px solid var(--agent-hover-bg);
   border-radius: 6px;
   font-size: var(--font-size-sm);
-  color: var(--agent-text-secondary, #aaa);
+  color: var(--agent-text-secondary);
 }
 
 .msg-file-icon {
@@ -686,20 +1430,37 @@ async function onExportGif() {
 
 .msg-user .msg-text {
   display: inline-block;
-  background: var(--agent-user-bubble, rgba(108, 92, 231, 0.15));
+  background: var(--agent-user-bubble);
   backdrop-filter: blur(8px);
   padding: 8px 12px;
   border-radius: 16px 16px 4px 16px;
   text-align: left;
 }
 
+.kb-chip-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  background: color-mix(in srgb, var(--agent-info) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--agent-info) 30%, transparent);
+  border-radius: 8px;
+  font-size: 11px;
+  color: color-mix(in srgb, var(--agent-info) 90%, transparent);
+  vertical-align: middle;
+  white-space: nowrap;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .msg-assistant .msg-text {
   display: inline-block;
   background: transparent;
-  backdrop-filter: blur(var(--agent-lens-blur, 8px));
-  -webkit-backdrop-filter: blur(var(--agent-lens-blur, 8px));
+  backdrop-filter: blur(var(--agent-lens-blur));
+  -webkit-backdrop-filter: blur(var(--agent-lens-blur));
   padding: 6px 12px 6px 10px;
-  border-left: 2px solid var(--agent-primary, #6c5ce7);
+  border-left: 2px solid var(--agent-primary);
   border-radius: 0 8px 8px 0;
 }
 
@@ -719,7 +1480,7 @@ async function onExportGif() {
   left: 0;
   right: 0;
   height: 48px;
-  background: linear-gradient(transparent, var(--agent-bg, rgba(18, 18, 24, 0.95)));
+  background: linear-gradient(transparent, var(--agent-bg));
   pointer-events: none;
 }
 
@@ -729,16 +1490,16 @@ async function onExportGif() {
   margin-top: 4px;
   border-radius: 8px;
   font-size: 11px;
-  color: var(--agent-accent, #b388ff);
-  background: rgba(108, 92, 231, 0.08);
-  border: 1px solid rgba(108, 92, 231, 0.15);
+  color: var(--agent-accent);
+  background: color-mix(in srgb, var(--agent-primary) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--agent-primary) 15%, transparent);
   cursor: pointer;
   user-select: none;
   transition: background 0.15s;
 }
 
 .text-expand-btn:hover {
-  background: rgba(108, 92, 231, 0.15);
+  background: color-mix(in srgb, var(--agent-primary) 15%, transparent);
 }
 
 .msg-text :deep(h1), .msg-text :deep(h2), .msg-text :deep(h3) {
@@ -751,45 +1512,45 @@ async function onExportGif() {
 .msg-text :deep(ul), .msg-text :deep(ol) { margin: 4px 0; padding-left: 20px }
 .msg-text :deep(li) { margin: 2px 0 }
 .msg-text :deep(code) {
-  background: var(--agent-hover-bg, rgba(255,255,255,0.08));
+  background: var(--agent-hover-bg);
   padding: 1px 4px;
   border-radius: 3px;
   font-size: var(--font-size-sm);
   font-family: 'Consolas', 'Monaco', monospace;
 }
 .msg-text :deep(pre) {
-  background: rgba(0,0,0,0.25);
+  background: color-mix(in srgb, var(--agent-bg) 25%, transparent);
   padding: 10px 12px;
-  border-radius: var(--agent-radius-sm, 8px);
+  border-radius: var(--agent-radius-sm);
   overflow-x: auto;
   margin: 8px 0;
 }
 .msg-text :deep(pre code) { background: none; padding: 0; font-size: var(--font-size-sm); line-height: 1.5 }
 .msg-text :deep(blockquote) {
-  border-left: 3px solid var(--agent-primary, #6c5ce7);
+  border-left: 3px solid var(--agent-primary);
   margin: 6px 0; padding: 4px 12px; opacity: 0.85;
 }
 .msg-text :deep(table) { border-collapse: collapse; margin: 8px 0; font-size: var(--font-size-sm) }
 .msg-text :deep(th), .msg-text :deep(td) {
-  border: 1px solid var(--agent-border-color, #444); padding: 4px 8px;
+  border: 1px solid var(--agent-border-color); padding: 4px 8px;
 }
-.msg-text :deep(a) { color: var(--agent-primary, #6c5ce7); text-decoration: underline }
-.msg-text :deep(hr) { border: none; border-top: 1px solid var(--agent-border-color, #444); margin: 8px 0 }
+.msg-text :deep(a) { color: var(--agent-primary); text-decoration: underline }
+.msg-text :deep(hr) { border: none; border-top: 1px solid var(--agent-border-color); margin: 8px 0 }
 
 .msg-tool-calls { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
 .tool-call-tag {
   display: inline-flex; align-items: center; gap: 3px;
   padding: 2px 8px; border-radius: 10px; font-size: 11px;
-  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
-  color: var(--agent-text-secondary, #aaa);
+  background: var(--agent-hover-bg); border: 1px solid var(--agent-hover-bg);
+  color: var(--agent-text-secondary);
 }
-.tool-call-tag.completed { border-color: rgba(34,197,94,0.3); color: #22c55e; opacity: 0.7; }
-.tool-call-tag.failed { border-color: rgba(239,68,68,0.3); color: #ef4444; }
+.tool-call-tag.completed { border-color: color-mix(in srgb, var(--agent-success) 30%, transparent); color: var(--agent-success); opacity: 0.7; }
+.tool-call-tag.failed { border-color: color-mix(in srgb, var(--agent-danger) 30%, transparent); color: var(--agent-danger); }
 .tool-call-summary {
   display: inline-flex; align-items: center; gap: 3px;
   padding: 2px 8px; border-radius: 10px; font-size: 11px;
-  background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2);
-  color: rgba(34,197,94,0.8);
+  background: color-mix(in srgb, var(--agent-success) 8%, transparent); border: 1px solid color-mix(in srgb, var(--agent-success) 20%, transparent);
+  color: color-mix(in srgb, var(--agent-success) 80%, transparent);
 }
 .tc-pulse { animation: ws-pulse 1.5s infinite; }
 
@@ -807,7 +1568,7 @@ async function onExportGif() {
 
 .msg-time {
   font-size: var(--font-size-xs);
-  color: var(--agent-text-tertiary, #666);
+  color: var(--agent-text-tertiary);
   margin-left: auto;
 }
 
@@ -824,14 +1585,14 @@ async function onExportGif() {
   content: '';
   flex: 1;
   height: 1px;
-  background: var(--agent-border, rgba(58, 58, 106, 0.3));
+  background: var(--agent-border);
 }
 
 .time-divider-text {
   font-size: var(--font-size-xs);
-  color: var(--agent-text-tertiary, #666);
+  color: var(--agent-text-tertiary);
   white-space: nowrap;
-  font-family: var(--agent-font, sans-serif);
+  font-family: var(--agent-font);
 }
 
 .chat-msg.anim-fadeIn { animation: ws-fade-in 0.3s ease-out }
@@ -846,4 +1607,22 @@ async function onExportGif() {
 @keyframes ws-pulse-in { 0% { opacity: 0; transform: scale(0.95) } 50% { transform: scale(1.02) } 100% { opacity: 1; transform: scale(1) } }
 @keyframes ws-bounce-in { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
 @keyframes ws-wave-in { 0% { opacity: 0; transform: translateX(-8px) } 100% { opacity: 1; transform: translateX(0) } }
+
+.chat-msg:has(.manuscript-canvas) {
+  max-width: 98%;
+  flex-wrap: nowrap;
+}
+
+.chat-msg:has(.manuscript-canvas) .msg-body {
+  overflow: visible;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.chat-msg:has(.manuscript-canvas) .manuscript-canvas {
+  flex: 1 1 0;
+  min-width: 280px;
+  max-width: 60%;
+  margin-left: auto;
+}
 </style>

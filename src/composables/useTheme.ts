@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import { useThemeManifest } from '@worldsmith/theme-kit'
 
 export interface ThemeDefinition {
   name: string
@@ -127,6 +128,7 @@ export function useTheme() {
     document.documentElement.setAttribute('data-theme', id)
     localStorage.setItem(STORAGE_KEY, id)
     clearDynamicTokens()
+    import('../stores/fontStore').then(m => m.useFontStore().reapplyAllLayers())
     if (userOverrides.value && Object.keys(userOverrides.value).length > 0) {
       applyTokens(userOverrides.value)
     }
@@ -139,6 +141,9 @@ export function useTheme() {
     for (const [, tokens] of Object.entries(componentOverrides.value)) {
       applyTokens(tokens)
     }
+    // 应用主题 Manifest（纹理/图标/动画/交互模式）
+    const { applyManifest } = useThemeManifest()
+    applyManifest(id)
   }
 
   function setUserOverrides(overrides: Record<string, string>) {

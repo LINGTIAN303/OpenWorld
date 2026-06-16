@@ -13,33 +13,54 @@
  * - 日志和限流
  */
 
-export { createWorldSmithAgent, getToolsForSkills, ALL_TOOLS, internalRegistry } from './agent'
+export { createWorldSmithAgent, getToolsForSkills, ALL_TOOLS, TOOL_CATEGORIES, internalRegistry } from './agent'
 export type { CreateAgentOptions } from './agent'
 export { CoreBackend } from './bridge'
 export type { IAgentBackend } from './bridge'
-export type { AgentEvent, AgentEventListener, AgentConfig, ToolDefinition, ToolParameter, PromptOptions, ImageAttachment, UsageData, ThinkingLevel, ChatMode, A2UIMessage, A2UIComponent, MessageBlock, TableBlock, ChoiceBlock, CodeBlockData, EntityCardBlock, AlertBlock, StatBlock, ListBlock, ProgressBlock, ComparisonBlock, TimelineBlock, ImageBlock, AccordionBlock } from './bridge-types'
+export type { AgentEvent, AgentEventListener, AgentConfig, ToolDefinition, ToolParameter, PromptOptions, ImageAttachment, UsageData, ThinkingLevel, ChatMode, A2UIMessage, A2UIComponent, MessageBlock, TableBlock, ChoiceBlock, CodeBlockData, EntityCardBlock, AlertBlock, StatBlock, ListBlock, ProgressBlock, ComparisonBlock, TimelineBlock, ImageBlock, VideoBlock, AccordionBlock, ManuscriptBlock, ExportCorrectorConfig } from './bridge-types'
 export type { WorldSmithToolContext, EntityLike, RelationLike } from './tools/types'
 export { DefaultToolBus } from './toolbus/toolbus'
 export type { ToolBus } from './toolbus/toolbus'
-export type { IToolContext, IToolStores, IEntityStore, IRelationStore, IFileStore, ISettingsStore, IUIStore } from './toolbus/types'
+export type { IToolContext, IToolStores, IEntityStore, IRelationStore, IFileStore, ISettingsStore, IUIStore, SessionSummary } from './toolbus/types'
 export { MCPManager } from './mcp/mcp-manager'
 export { MCPToolAdapter } from './mcp/mcp-adapter'
 export type { MCPConnectionConfig, MCPTransportType, MCPToolInfo, MCPConnectionState } from './mcp/types'
 export type { AgentSession, AgentMessage, AgentStateSnapshot, ToolCallRecord, ProviderMode, ModelInfo, ImageAttachment as SessionImageAttachment, FileAttachment, SessionUsage } from './session/types'
 export type { ProviderConfig, CloudProviderConfig, LocalProviderConfig, CustomProviderConfig, CloudProvider, LocalApiType, CustomApiType } from './providers/config'
 export { DEFAULT_CLOUD_CONFIGS } from './providers/config'
+export {
+  getProviderManifest,
+  getAllProviderManifests,
+  getDomesticProviderIds,
+  getProxyPathMap,
+  getDefaultModelMap,
+  getProviderLabelMap,
+  getProviderIds,
+  detectVisionSupport,
+  detectThinkingSupport,
+  resolveModelId,
+  buildDirectEndpoint,
+  buildModelsEndpoint,
+  buildProxyEndpoint,
+  registerProviderManifest,
+} from './providers/provider-registry'
+export type { ProviderManifest, ProviderCompatConfig, ApiType, ThinkingFormat, ThinkingLevelMap, VisionDetector, ThinkingDetector, EndpointConfig } from './providers/provider-registry'
+export { fetchModelsFromProvider, getCachedModels, refreshModels, getModelsWithBackgroundRefresh, clearModelCache, clearAllModelCache } from './providers/model-fetcher'
+export type { FetchedModelEntry } from './providers/model-fetcher'
 export { storeApiKey, loadApiKey, removeApiKey, hasApiKey } from './providers/key-store'
-export { listSessions, getSession, saveSession, deleteSession, createSession, pinSession, unpinSession, countSessions } from './session/manager'
+export { listSessions, getSession, saveSession, deleteSession, createSession, pinSession, unpinSession, renameSession, countSessions, setAgentCurrentProjectId, releaseAgentDb } from './session/manager'
 export { buildContextInjection, invalidateContextCache } from './context/builder'
-export { buildSystemPrompt } from './context/injector'
+export { buildSystemPrompt, buildSharedBaseLayer } from './context/injector'
 export { buildProjectSummary, formatSummaryForPrompt, truncateMessages } from './context/summary'
 export { logger, setLogLevel } from './utils/logger'
 export { checkRateLimit, recordRequest, recordUsage, getUsageSummary } from './utils/rate-limit'
-export { SKILL_REGISTRY, getEnabledSkills, getAllSkills, toggleSkill } from './skills/registry'
+export { SKILL_REGISTRY, getEnabledSkills, getAllSkills, toggleSkill, resolveToolNames, ALWAYS_AVAILABLE_TOOLS } from './skills/registry'
 export type { SkillMeta } from './skills/registry'
 export { resolvePluginToolNames, buildPluginCapabilityPrompt, registerPluginCapability, getPluginCapability, getAllPluginCapabilities, resolveRelatedPlugins } from './skills/plugin-bridge'
 export type { PluginCapability } from './skills/plugin-bridge'
-export { outputTools, outputTable, outputChoice, outputCode, outputEntityCard, outputAlert, outputStat, outputList, outputProgress, outputComparison, outputTimeline, outputImage, outputAccordion } from './tools/output-tools'
+export { outputTools, outputTable, outputChoice, outputCode, outputEntityCard, outputAlert, outputStat, outputList, outputProgress, outputComparison, outputTimeline, outputImage, outputAccordion, outputManuscript } from './tools/output-tools'
+export { manuscriptClone } from './tools/manuscript-tools'
+export { sessionTools, sessionInfo, sessionList, sessionRead } from './tools/session-tools'
 export { recallMemory, formatMemoryForPrompt } from './tools/memory'
 export { generateEmbedding, generateEmbeddings, cosineSimilarity, clearEmbeddingCache, getEmbeddingConfig, saveEmbeddingConfig } from './embedding/service'
 export type { EmbeddingConfig } from './embedding/service'
@@ -50,5 +71,35 @@ export type { SemanticSearchResult } from './embedding/index'
 export { EMBEDDING_PRESETS } from './embedding/service'
 export { storeImages, getImages, removeImages, type StoredImage } from './tools/vision-tools'
 export { imageGenTools } from './tools/image-gen-tools'
-export { persistImage, getImage, getImagesByPathPrefix, getAllImages, deleteImage, deleteImagesByPrefix, getImageCount, srcToBlob, downloadBlob, blobToDataUrl } from './stores/image-persistence'
-export type { PersistedImage } from './stores/image-persistence'
+export { persistImage, getImage, getByPath, getImagesByPathPrefix, getAllImages, deleteImage, deleteImagesByPrefix, getImageCount, srcToBlob, downloadBlob, blobToDataUrl, onImagePersisted } from './stores/image-persistence'
+export type { PersistedImage, ImagePersistedEvent } from './stores/image-persistence'
+export { videoGenTools } from './tools/video-gen-tools'
+export { planTools } from './tools/plan-tools'
+export { nativeTools } from './tools/native-tools'
+export { persistVideo, getVideo, getVideosByPathPrefix, getAllVideos, deleteVideo, getVideoCount, urlToBlob, blobToDataUrl as videoBlobToDataUrl } from './stores/video-persistence'
+export type { PersistedVideo } from './stores/video-persistence'
+
+/* ─── Group Chat ─── */
+export type {
+  AgentProfile,
+  AgentPersonality,
+  SpeakingDesireConfig,
+  ProviderSlot,
+  ProviderSlotEntry,
+  LoadBalanceStrategy,
+  TurnStrategy,
+  GroupChatMessage,
+  GroupChatSession,
+  RateLimitConfig,
+} from './group-chat/types'
+export { ProviderPool } from './group-chat/provider-pool'
+export { FlowController } from './group-chat/flow-control'
+export { GroupChatMessageBus } from './group-chat/message-bus'
+export type { GroupChatEvent, GroupChatEventListener } from './group-chat/message-bus'
+export { TurnEngine } from './group-chat/turn-engine'
+export type { TurnResult } from './group-chat/turn-engine'
+export { evaluateSpeakingDesire, computeTopicRelevance, createLuckState, updateLuck } from './group-chat/speaking-desire'
+export type { SpeakingDesireContext, SpeakingDesireResult, LuckState } from './group-chat/speaking-desire'
+export { runModerator } from './group-chat/moderator'
+export { listAgentProfiles, getAgentProfile, saveAgentProfile, deleteAgentProfile } from './session/manager'
+export { listGroupSessions, getGroupSession, saveGroupSession, deleteGroupSession } from './session/manager'

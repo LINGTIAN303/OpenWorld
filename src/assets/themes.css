@@ -83,9 +83,14 @@
 [data-theme="light"],
 [data-theme="ink-scroll"] {
   --glass-bg: rgba(255, 255, 255, 0.82);
+  --agent-segment-thinking: #7c3aed;
+  --agent-segment-tooling: #0284c7;
+  --agent-segment-output: #059669;
+  --agent-info: #2563eb;
 }
 
-.agent-panel {
+.agent-panel,
+.agent-settings-embedded {
   --agent-bg: var(--glass-bg);
   --agent-border: var(--glass-border);
   --agent-blur: var(--glass-blur);
@@ -108,4 +113,14 @@
   --agent-ai-bubble: var(--card-bg);
   --agent-scrollbar: var(--scrollbar-thumb);
   --agent-scrollbar-hover: var(--scrollbar-thumb-hover);
+  --agent-lens-blur: 8px;
+  --agent-font-mono: var(--font-family-mono);
+  --agent-success: var(--success);
+  --agent-warning: var(--warning);
+  --agent-danger: var(--danger);
+  --agent-info: #3b82f6;
+  --agent-segment-thinking: #a78bfa;
+  --agent-segment-tooling: #38bdf8;
+  --agent-segment-output: #34d399;
+  --agent-bg-tertiary: var(--bg-tertiary);
 }

@@ -85,6 +85,12 @@ export function useEntityEdit(selectedEntity: Ref<Entity | null>) {
       const updated = store.entities.find(e => e.id === entity.id)
       if (updated) selectedEntity.value = updated
       toastSuccess('已保存')
+
+      // 触发 AutoLink 索引（新架构）
+      try {
+        const { indexPotentialLinks } = await import('@worldsmith/entity-core')
+        await indexPotentialLinks(entity.id, entity.type, properties)
+      } catch { /* AutoLink 索引失败不影响主流程 */ }
     } catch (err) {
       toastError('保存失败')
       console.error('[useEntityEdit] save error:', err)

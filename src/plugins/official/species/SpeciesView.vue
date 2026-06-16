@@ -1,11 +1,7 @@
 <template>
   <div class="species-view">
     <div v-if="viewMode === 'tree'" class="spv-tree">
-      <div class="spv-back-bar">
-        <button class="btn-ghost" @click="viewMode = 'list'">← 返回列表</button>
-        <span class="spv-title">进化树</span>
-      </div>
-      <EvolutionTreeView />
+      <EvolutionTreeView @back="viewMode = 'list'" />
     </div>
     <SchemaRenderer v-else type-key="species" :detail-tabs="speciesTabs">
       <template #toolbar-extra>
@@ -42,9 +38,5 @@ const speciesTabs: RelationTabDef[] = [
   color: var(--color-text-primary); font-size: var(--font-size-sm); cursor: pointer; transition: all 0.15s; white-space: nowrap;
 }
 .sv-evo-btn:hover { background: var(--color-bg-hover); border-color: var(--color-text-secondary); color: var(--color-text-primary); }
-.spv-back-bar {
-  display: flex; align-items: center; gap: 12px; padding: 8px 16px;
-  border-bottom: 1px solid var(--border, #333);
-}
-.spv-title { font-weight: var(--font-weight-semibold); font-size: var(--font-size-base); }
+
 </style>

@@ -1,12 +1,17 @@
 export type DispatchMode = 'sequential' | 'concurrent' | 'streaming'
 
 export type AgentType =
+  // 开发型
   | 'terminal-worker'
   | 'review-worker'
   | 'research-worker'
   | 'test-worker'
   | 'doc-worker'
   | 'git-worker'
+  // 创作型
+  | 'creation-worker'
+  | 'consistency-worker'
+  | 'batch-creation-worker'
 
 export interface OrchestratorConfig {
   maxConcurrency: number
@@ -21,6 +26,8 @@ export interface SubAgentTask {
   skillIds?: string[]
   timeout?: number
   images?: { data: string; mimeType: string }[]
+  /** 创作编排上下文，子 Agent 完成后自动回调更新 Pipeline 步骤状态 */
+  pipelineContext?: { pipelineId: string; stepId: string }
 }
 
 export interface SubAgentResult {
@@ -75,6 +82,22 @@ export const AGENT_TYPE_CONFIG: Record<AgentType, {
     icon: '🔀',
     name: 'Git Agent',
     skillIds: ['git-operator'],
+  },
+  // 创作型
+  'creation-worker': {
+    icon: '🎨',
+    name: '创作 Agent',
+    skillIds: ['worldbuilding', 'content-craft'],
+  },
+  'consistency-worker': {
+    icon: '✅',
+    name: '校验 Agent',
+    skillIds: ['worldbuilding'],
+  },
+  'batch-creation-worker': {
+    icon: '📦',
+    name: '批量创作 Agent',
+    skillIds: ['content-craft'],
   },
 }
 

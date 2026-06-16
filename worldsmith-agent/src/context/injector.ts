@@ -23,6 +23,7 @@ export interface SystemPromptParams {
   platform?: Platform
   activeSkillIds?: string[]
   personaPreset?: string
+  availableFontFamilies?: string[]
 }
 
 /** 预定义的人格预设集合 */
@@ -45,21 +46,26 @@ export const PERSONA_PRESETS: Record<string, { name: string; instruction: string
   },
 }
 
+/** 共享基础层的输入参数（与 SystemPromptParams 相同，但语义更明确） */
+export type SharedBaseLayerParams = Pick<SystemPromptParams, 'projectName' | 'entityTypes' | 'relationTypes' | 'platform'> & {
+  availableFontFamilies?: string[]
+}
+
 /**
- * 构建完整的系统提示词
- * @param params 包含项目名称、实体/关系类型、平台、技能和人格预设
- * @returns 拼接好的系统提示词字符串
+ * 构建共享基础层
+ *
+ * 包含所有 Agent（单聊/工作台/群聊）都需要共享的知识：
+ * - 项目信息（实体类型、关系类型）
+ * - 工具使用策略
+ * - 输出规范（12 个 output 工具的使用规则）
+ * - 图像生成能力说明
+ * - 会话管理能力
+ *
+ * 群聊 Agent 的系统提示词 = 共享基础层 + 独立人格层
  */
-export function buildSystemPrompt(params: SystemPromptParams): string {
+export function buildSharedBaseLayer(params: SharedBaseLayerParams): string {
   const platform = params.platform || 'web'
   const parts: string[] = []
-
-  parts.push(`你是 WorldSmith 的 AI 助手，服务于「${params.projectName}」世界观构建项目。`)
-
-  const persona = PERSONA_PRESETS[params.personaPreset || 'default']
-  if (persona && params.personaPreset && params.personaPreset !== 'default') {
-    parts.push(`## 人格设定\n${persona.instruction}`)
-  }
 
   parts.push(buildPlatformDeclaration(platform))
 
@@ -137,6 +143,60 @@ export function buildSystemPrompt(params: SystemPromptParams): string {
 - 调用前无需确认聊天模式，任何会话中均可使用
 - 如果图像生成未配置，工具会返回提示信息，此时告知用户需要在设置面板中配置`)
 
+  parts.push(`## 会话管理能力
+
+你有 3 个会话管理工具，可以感知、发现和读取会话：
+
+### 工具列表
+1. **session_info** — 获取当前会话的详细信息（会话 ID、名称、创建时间、消息数）
+2. **session_list** — 列出所有历史会话（可选按名称搜索），返回每个会话的 ID、名称、创建时间、消息数
+3. **session_read** — 读取指定会话的完整消息内容（角色、内容、时间戳）
+
+### 使用场景
+- 用户问"之前的会话"或"上一个会话"时 → 先调 **session_list** 查看历史会话列表，再用 **session_read** 读取目标会话的内容
+- 需要知道当前会话的信息 → 调 **session_info**
+- 要使用 **manuscript_clone** 时需要 sourceSessionId → 先用 **session_list** 查到目标会话的 ID
+- 用户想切换到某个会话 → 列出历史会话供用户选择（但切换需用户手动操作）`)
+
+  parts.push(`## 字体切换能力
+
+你可以使用 set_font 工具来切换输出文本的字体，为不同段落营造不同的视觉氛围。
+
+### 使用方式
+- 调用 set_font({ family: "字体名" })，后续输出将使用该字体
+- 可选参数: weight (字体粗细 100-900), style (normal/italic/oblique)
+- 如需使用未安装的字体，设置 install: true 可请求用户安装
+
+### 可用字体列表
+${params.availableFontFamilies?.length ? params.availableFontFamilies.map(f => `- ${f}`).join('\n') : '（暂无已安装字体，使用 install: true 可请求安装）'}
+
+### 使用场景
+- 角色对话：不同角色使用不同字体增强辨识度
+- 氛围营造：诗歌用手写体，技术内容用等宽字体
+- 情感表达：强调内容用粗体，低语用斜体`)
+
+  return parts.join('\n\n')
+}
+
+/**
+ * 构建完整的系统提示词
+ * @param params 包含项目名称、实体/关系类型、平台、技能和人格预设
+ * @returns 拼接好的系统提示词字符串
+ */
+export function buildSystemPrompt(params: SystemPromptParams): string {
+  const parts: string[] = []
+
+  // 人格层：身份声明 + 人格预设
+  parts.push(`你是 WorldSmith 的 AI 助手，服务于「${params.projectName}」世界观构建项目。`)
+
+  const persona = PERSONA_PRESETS[params.personaPreset || 'default']
+  if (persona && params.personaPreset && params.personaPreset !== 'default') {
+    parts.push(`## 人格设定\n${persona.instruction}`)
+  }
+
+  // 共享基础层：项目信息 + 工具策略 + 输出规范 + 图像/会话能力
+  parts.push(buildSharedBaseLayer(params))
+
   return parts.join('\n\n')
 }
 
@@ -168,7 +228,7 @@ function buildPlatformDeclaration(platform: Platform): string {
  */
 export async function buildSkillContext(
   skillId: string,
-  platform: Platform,
+  _platform: Platform,
 ): Promise<string> {
   const skill = findSkillById(skillId)
   if (!skill) return ''

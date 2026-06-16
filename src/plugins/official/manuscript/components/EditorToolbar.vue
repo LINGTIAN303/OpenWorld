@@ -78,6 +78,7 @@ function setHeading(e: Event) {
   background: var(--menubar-bg);
   flex-shrink: 0;
   flex-wrap: wrap;
+  font-family: var(--font-family-editor-ui);
 }
 .toolbar-group { display: flex; gap: 2px; }
 .toolbar-divider { width: 1px; height: 20px; background: var(--border-light); margin: 0 4px; }

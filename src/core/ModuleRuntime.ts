@@ -3,8 +3,7 @@
  * 将 CustomModule 定义转化为可用的插件系统注册项和视图组件
  */
 import type { CustomModule, ModuleField, EntityTypeSchema, FieldSchema, RelationTypeSchema } from '@worldsmith/entity-core'
-import { entitySchemaRegistry } from './EntitySchema'
-import { relationSchemaRegistry } from './RelationSchema'
+import { entitySchemaRegistry, relationSchemaRegistry } from '@worldsmith/entity-core/core'
 
 /**
  * 将 ModuleField 转为 FieldSchema
@@ -30,6 +29,11 @@ function toFieldSchema(f: ModuleField): FieldSchema {
     'slider': 'text',
     'entity-ref': 'text',
     'entity-refs': 'text',
+    'formula': 'text',
+    'computed': 'text',
+    'template': 'textarea',
+    'location': 'text',
+    'file': 'text',
   }
   return {
     key: f.key,

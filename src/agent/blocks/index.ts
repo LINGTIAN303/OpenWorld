@@ -17,6 +17,7 @@ export { default as BlockComparison } from './BlockComparison.vue'
 export { default as BlockTimeline } from './BlockTimeline.vue'
 export { default as BlockImage } from './BlockImage.vue'
 export { default as BlockAccordion } from './BlockAccordion.vue'
+export { default as BlockManuscript } from './BlockManuscript.vue'
 
 /** Block 交互事件（如表格操作、选择器响应等） */
 export interface BlockActionEvent {
@@ -39,6 +40,7 @@ const BLOCK_ICONS: Record<string, string> = {
   'timeline': 'calendar',
   'image': 'image',
   'accordion': 'document',
+  'manuscript': 'scroll-text',
 }
 
 export function getBlockIcon(type: string): string {
@@ -79,5 +81,9 @@ export function getBlockSummary(block: import('@agent/index').MessageBlock): str
       return block.caption || '图片'
     case 'accordion':
       return `${block.title || '详情'} (${block.sections.length}段)`
+    case 'manuscript':
+      return `${block.title || '文境'} (${block.layout === 'vertical' ? '竖式' : '横式'})`
+    default:
+      return '未知块'
   }
 }

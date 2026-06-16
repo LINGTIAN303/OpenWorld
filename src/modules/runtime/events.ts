@@ -150,22 +150,30 @@ class EventBus {
   }
 
   /**
-   * 发射事件（异步执行所有处理器）
+   * 发射事件（异步执行所有处理器，但不阻塞调用方）
+   * 处理器并行执行，错误不会影响其他处理器
    */
-  async emit<K extends EventName>(name: K, data: EventMap[K]): Promise<void> {
+  emit<K extends EventName>(name: K, data: EventMap[K]): void {
     const handlers = this.listeners.get(name)
-    if (handlers) {
-      for (const handler of handlers) {
-        try { await handler(data) } catch (e) { console.error(`[EventBus] ${String(name)}:`, e) }
-      }
-    }
     const onceHandlers = this.onceListeners.get(name)
     if (onceHandlers) {
-      for (const handler of onceHandlers) {
-        try { await handler(data) } catch (e) { console.error(`[EventBus] ${String(name)}:`, e) }
-      }
       this.onceListeners.delete(name)
     }
+    if (!handlers?.size && !onceHandlers?.size) return
+
+    // 异步执行所有处理器，不阻塞调用方
+    Promise.resolve().then(() => {
+      if (handlers) {
+        for (const handler of handlers) {
+          try { Promise.resolve(handler(data)).catch(e => console.error(`[EventBus] ${String(name)}:`, e)) } catch (e) { console.error(`[EventBus] ${String(name)}:`, e) }
+        }
+      }
+      if (onceHandlers) {
+        for (const handler of onceHandlers) {
+          try { Promise.resolve(handler(data)).catch(e => console.error(`[EventBus] ${String(name)}:`, e)) } catch (e) { console.error(`[EventBus] ${String(name)}:`, e) }
+        }
+      }
+    })
   }
 
   /**

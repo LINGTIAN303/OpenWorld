@@ -15,6 +15,10 @@ export const manifest = {
     { action: 'get_structure', description: '获取树结构' },
     { action: 'auto_layout', description: '自动布局', params: ['algorithm'] },
   ],
+  permissions: [
+    { name: 'schema:register', description: '注册实体类型和关系类型' },
+    { name: 'views:register', description: '注册视图' },
+  ],
 }
 
 export function activate(api: PluginAPIType) {

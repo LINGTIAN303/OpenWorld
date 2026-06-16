@@ -277,6 +277,8 @@ pub struct WorkflowExecutor {
     engine: Arc<WorkflowEngine>,
     app: Option<AppHandle>,
     default_node_timeout_ms: u64,
+    /// 预留：工作流整体超时（1小时），后续版本启用
+    #[allow(dead_code)]
     default_workflow_timeout_ms: u64,
     registry: DispatcherRegistry,
 }

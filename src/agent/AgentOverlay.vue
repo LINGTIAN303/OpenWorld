@@ -63,6 +63,10 @@ function onGlobalKeydown(e: KeyboardEvent): void {
   }
 }
 
+function onPluginAction(): void {
+  if (!isVisible.value) show()
+}
+
 onMounted(() => {
   register({
     id: 'agent.toggle',
@@ -73,11 +77,13 @@ onMounted(() => {
     preventDefault: true,
   })
   document.addEventListener('keydown', onGlobalKeydown)
+  window.addEventListener('worldsmith:agent:plugin-action', onPluginAction)
 })
 
 onBeforeUnmount(() => {
   unregister('agent.toggle')
   document.removeEventListener('keydown', onGlobalKeydown)
+  window.removeEventListener('worldsmith:agent:plugin-action', onPluginAction)
 })
 </script>
 

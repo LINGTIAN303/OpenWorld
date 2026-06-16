@@ -2,6 +2,26 @@ import type { Entity } from '@worldsmith/entity-core'
 import { RelationTypes, getRelationLabel } from '@worldsmith/entity-core'
 import { getNodeColor, getNodeTypeInfo, getEdgeColor } from '@worldsmith/entity-core'
 
+export const EMOJI_TO_ICON: Record<string, string> = {
+  '📋': 'outline', '🏷️': 'tag', '📝': 'edit', '🎨': 'palette',
+  '📐': 'outline', '🔗': 'link', '✨': 'magic', '📂': 'folder',
+  '📁': 'folder', '🔍': 'search', '🗑️': 'delete', '⭐': 'star',
+  '🏠': 'home', '⚔️': 'war', '📜': 'manuscript', '📍': 'location',
+  '💡': 'inspiration', '🎭': 'culture', '🐉': 'species', '🧠': 'concept',
+  '🧬': 'species', '🐣': 'character', '🌱': 'plant', '⚡': 'lightning',
+  '💀': 'skull', '🛡️': 'shield', '🔮': 'magic', '💍': 'tag',
+  '🧪': 'magic', '🔧': 'settings', '🚢': 'trade', '🎵': 'music',
+  '🏺': 'item', '🍷': 'item', '👘': 'apparel', '📦': 'item',
+  '✅': 'check', '📌': 'pin', '🌿': 'plant', '🗡️': 'weapon',
+  '🏗️': 'building', '📄': 'manuscript', '🧩': 'puzzle', '👤': 'user',
+  '🖼️': 'image', '⬆️': 'arrow-up', '🔄': 'refresh', '🎯': 'target',
+  '🖌️': 'brush',
+}
+
+export function resolveIcon(emoji: string): string {
+  return EMOJI_TO_ICON[emoji] || emoji
+}
+
 export function typeColor(type: string): string {
   return getNodeColor(type, 'warm')
 }
@@ -41,6 +61,7 @@ export function guessRelType(src: string, tgt: string): string {
 }
 
 export const LAYOUT_OPTIONS = [
+  { value: 'mindmapTree', label: '思维导图' },
   { value: 'force', label: '力导向布局' },
   { value: 'radial', label: '径向布局' },
   { value: 'tree', label: '树形布局' },

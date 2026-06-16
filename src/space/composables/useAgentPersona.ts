@@ -1,7 +1,7 @@
-import { computed, watch, ref } from 'vue'
+﻿import { computed, watch, ref } from 'vue'
 import { useSpaceStore, type AgentMood } from '../stores/space-store'
 import { useAgent } from '../../agent/composables/useAgent'
-import { loadPersonaFromKB } from '../../../worldsmith-agent/src/tools/persona'
+import { loadPersonaFromKB } from '@agent/tools/persona'
 
 function generateAvatarSeed(name: string): number {
   let hash = 0

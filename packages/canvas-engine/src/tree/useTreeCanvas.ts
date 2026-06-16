@@ -179,7 +179,18 @@ export function useTreeCanvas<TNode extends TreeNodeBase, TEdge extends TreeEdge
     markDirty()
   }
 
-  function markDirty(): void { _dirty = true }
+  function markDirty(): void {
+    _dirty = true
+    if (isRunning && !animFrame) {
+      animFrame = requestAnimationFrame(() => {
+        animFrame = 0
+        if (_dirty) {
+          render()
+          _dirty = false
+        }
+      })
+    }
+  }
 
   function startRenderLoop(): void {
     isRunning = true
@@ -191,7 +202,11 @@ export function useTreeCanvas<TNode extends TreeNodeBase, TEdge extends TreeEdge
         _dirty = false
         if (_forceRenderCount > 0) _forceRenderCount--
       }
-      animFrame = requestAnimationFrame(frame)
+      if (_dirty || _forceRenderCount > 0) {
+        animFrame = requestAnimationFrame(frame)
+      } else {
+        animFrame = 0
+      }
     }
     frame()
   }
@@ -336,6 +351,7 @@ export function useTreeCanvas<TNode extends TreeNodeBase, TEdge extends TreeEdge
       return
     }
 
+    if (!canvas.value) return
     const rect = canvas.value.getBoundingClientRect()
     const sx = e.clientX - rect.left
     const sy = e.clientY - rect.top

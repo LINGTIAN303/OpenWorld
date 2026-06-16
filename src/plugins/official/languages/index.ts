@@ -4,7 +4,7 @@ import LanguageView from './LanguageView.vue'
 export const manifest = {
   id: 'official.languages',
   name: '语言/文字',
-  version: '1.0.0',
+  version: '2.0.0',
   description: '管理世界观中的语言、文字系统',
   author: 'WorldSmith',
   agentSkills: ['worldbuilding'],
@@ -12,16 +12,25 @@ export const manifest = {
     { action: 'create_entity', description: '创建语言', params: ['name', 'description'] },
     { action: 'update_entity', description: '更新语言属性', params: ['entityId', 'changes'] },
   ],
+  permissions: [
+    { name: 'storage:read', description: '读取实体数据' },
+    { name: 'entities:write', description: '创建和编辑语言' },
+    { name: 'schema:register', description: '注册实体类型和关系类型' },
+    { name: 'views:register', description: '注册视图' },
+  ],
 }
 
 export function activate(api: PluginAPIType) {
-  api.registerEntityType({
+  api.registerEntityV2({
     type: 'language',
     label: '语言',
     icon: 'language',
-    fields: [
-      { key: 'name', label: '名称', type: 'text', required: true, placeholder: '语言名称' },
-      { key: 'description', label: '描述', type: 'textarea' },
+    traits: [
+      { traitId: 'identifiable' },
+      { traitId: 'taggable' },
+      { traitId: 'visual' },
+    ],
+    ownFields: [
       { key: 'langType', label: '语言类型', type: 'select',
         options: ['自然语言', '人造语言', '古代语言', '暗语/密语', '手语', '心灵感应', '其他'] },
       { key: 'scriptType', label: '文字类型', type: 'select',
@@ -35,14 +44,8 @@ export function activate(api: PluginAPIType) {
       { key: 'grammar', label: '语法特点', type: 'textarea' },
       { key: 'vocabulary', label: '词汇示例', type: 'textarea' },
       { key: 'sampleText', label: '文字示例', type: 'textarea' },
-      { key: 'coverImage', label: '封面图', type: 'image' },
-      { key: 'tags', label: '标签', type: 'tags' },
     ],
   })
-  api.registerRelationType({ type: 'spoken_by', label: '使用者', sourceTypes: ['language'], targetTypes: ['species', 'character'], directed: true })
-  api.registerRelationType({ type: 'spoken_in', label: '通行区域', sourceTypes: ['language'], targetTypes: ['region'], directed: true })
-  api.registerRelationType({ type: 'language_branch', label: '语系分支', sourceTypes: ['language'], targetTypes: ['language'], directed: true })
-  api.registerRelationType({ type: 'related_language', label: '关联语言', sourceTypes: ['language'], targetTypes: ['language'], directed: false, properties: [{ key: 'relation', label: '关系', type: 'select', options: ['同源', '借词', '混合', '变体', '祖先语言'] }] })
-  api.registerRelationType({ type: 'script_used_in', label: '文字用于', sourceTypes: ['language'], targetTypes: ['concept'], directed: true })
+
   api.registerView({ id: 'languages', label: '语言/文字', icon: 'language', component: LanguageView })
 }

@@ -1,5 +1,6 @@
 import type { PluginPermission, PluginManifest } from '@worldsmith/entity-core/types'
 import { KNOWN_PERMISSIONS } from '@worldsmith/entity-core/types'
+import { OFFICIAL_PLUGIN_IDS } from './plugin-manifest'
 
 type PermissionName = string
 
@@ -10,7 +11,7 @@ const PERMISSION_API_MAP: Record<PermissionName, string[]> = {
   'entities:write': ['putEntity', 'updateEntity', 'deleteEntity', 'importEntities'],
   'relations:read': ['getRelations'],
   'relations:write': ['putRelation', 'updateRelation', 'deleteRelation', 'importRelations'],
-  'schema:register': ['registerEntityType', 'registerRelationType'],
+  'schema:register': ['registerEntityType', 'registerRelationType', 'registerEntityV2', 'registerFacet', 'registerRelationV2'],
   'hooks:register': ['registerHook', 'runHooks'],
   'views:register': ['registerView'],
   'network:fetch': [],
@@ -18,6 +19,10 @@ const PERMISSION_API_MAP: Record<PermissionName, string[]> = {
   'notifications:send': [],
 }
 
+/**
+ * 官方插件默认权限 — 仅当 manifest 未声明任何权限时作为回退。
+ * 注意：官方插件仍需在 manifest 中显式声明权限以获得完整权限。
+ */
 const DEFAULT_OFFICIAL_PERMISSIONS: PermissionName[] = [
   'storage:read',
   'entities:read',
@@ -27,34 +32,18 @@ const DEFAULT_OFFICIAL_PERMISSIONS: PermissionName[] = [
   'views:register',
 ]
 
-const OFFICIAL_PLUGIN_IDS: Set<string> = new Set([
-  'official.characters',
-  'official.regions',
-  'official.timeline',
-  'official.organizations',
-  'official.concepts',
-  'official.items',
-  'official.apparel',
-  'official.mindmap',
-  'official.custom',
-  'official.module-builder',
-  'official.graph',
-  'official.buildings',
-  'official.species',
-  'official.magic',
-  'official.outline',
-  'official.languages',
-  'official.culture',
-  'official.conflict',
-  'official.inspiration',
-  'official.plants',
-  'official.combat_stats',
-  'official.weapons',
-  'official.manuscript',
-  'official.drawing',
-  'official.tactical-board',
-  'official.notebook',
-  'official.workflow',
+/**
+ * 敏感属性黑名单 — 防止原型链污染攻击
+ * 这些属性名在 Proxy get handler 中将被拦截，即使 allowedMethods 中不包含
+ */
+const DANGEROUS_PROPERTY_BLACKLIST: ReadonlySet<string> = new Set([
+  '__proto__',
+  'constructor',
+  'prototype',
+  '__defineGetter__',
+  '__defineSetter__',
+  '__lookupGetter__',
+  '__lookupSetter__',
 ])
 
 export class PluginSandbox {
@@ -82,14 +71,35 @@ export class PluginSandbox {
     manifest: PluginManifest,
   ): Record<string, unknown> {
     const isOfficial = OFFICIAL_PLUGIN_IDS.has(manifest.id)
-    const permissions = isOfficial
-      ? DEFAULT_OFFICIAL_PERMISSIONS
-      : (manifest.permissions?.map(p => p.name) ?? [])
+    const manifestPermissions = manifest.permissions?.map(p => p.name) ?? []
+
+    // 官方插件也必须从 manifest 中显式声明权限
+    // 仅当 manifest 完全未声明权限时回退到默认集（向后兼容）
+    let permissions: PermissionName[]
+    if (manifestPermissions.length > 0) {
+      permissions = manifestPermissions
+    } else if (isOfficial) {
+      console.warn(
+        `[Sandbox] 官方插件 "${manifest.id}" 未在 manifest 中声明权限，使用默认权限集。` +
+        `建议在 manifest 中显式声明所需权限。`,
+      )
+      permissions = DEFAULT_OFFICIAL_PERMISSIONS
+    } else {
+      permissions = []
+    }
 
     const sandbox = new PluginSandbox(manifest.id, permissions)
 
     return new Proxy(api, {
       get(target, prop: string) {
+        // 黑名单检查 — 阻止原型链污染攻击
+        if (DANGEROUS_PROPERTY_BLACKLIST.has(prop)) {
+          console.warn(
+            `[Sandbox] 插件 "${manifest.id}" 尝试访问敏感属性 "${prop}"，已拦截`,
+          )
+          return undefined
+        }
+
         if (!sandbox.allowedMethods.has(prop)) {
           console.warn(
             `[Sandbox] 插件 "${manifest.id}" 尝试访问未授权 API: "${prop}"` +
@@ -112,17 +122,18 @@ export class PluginSandbox {
         console.warn(`[Sandbox] 插件 "${manifest.id}" 尝试修改 API 对象，已拦截`)
         return false
       },
+      // 阻止通过 has/in 检查探测内部属性
+      has(_target, prop: string) {
+        if (DANGEROUS_PROPERTY_BLACKLIST.has(prop)) return false
+        return sandbox.allowedMethods.has(prop as string)
+      },
     })
   }
 
   private wrapFunction(methodName: string, fn: Function): Function {
     const self = this
     return function (this: unknown, ...args: unknown[]) {
-      if (!self.allowedMethods.has(methodName)) {
-        throw new Error(
-          `[Sandbox] 权限不足: 插件 "${self.pluginId}" 未声明访问 "${methodName}" 的权限`,
-        )
-      }
+      // 权限已在 Proxy get handler 中校验，此处直接执行
       try {
         return fn.apply(this, args)
       } catch (e) {

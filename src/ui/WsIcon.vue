@@ -1,19 +1,19 @@
 <template>
   <svg
-    v-if="def"
-    :class="['ws-icon', `ws-icon--${resolvedSize}`, { 'ws-icon--fill': def.fill }]"
+    v-if="iconDef"
+    :class="['ws-icon', `ws-icon--${resolvedSize}`, { 'ws-icon--fill': iconDef.fill }]"
     :width="resolvedPixelSize"
     :height="resolvedPixelSize"
-    viewBox="0 0 24 24"
-    :fill="def.fill ? 'currentColor' : 'none'"
-    stroke="currentColor"
-    :stroke-width="def.fill ? 0 : resolvedStrokeWidth"
-    stroke-linecap="round"
-    stroke-linejoin="round"
+    :viewBox="iconDef.viewBox || '0 0 24 24'"
+    :fill="iconDef.fill ? 'currentColor' : 'none'"
+    :stroke="iconDef.fill ? 'none' : 'currentColor'"
+    :stroke-width="iconDef.fill ? 0 : resolvedStrokeWidth"
+    :stroke-linecap="iconStrokeLinecap"
+    :stroke-linejoin="iconStrokeLinejoin"
     aria-hidden="true"
     focusable="false"
   >
-    <path v-if="def.d" :d="def.d" />
+    <path v-if="iconDef.d" :d="iconDef.d" />
   </svg>
   <component
     v-else-if="lucideIcon"
@@ -30,6 +30,7 @@
 import { computed, type Component } from 'vue'
 import { getIcon } from '../assets/iconRegistry'
 import { resolveLucideIcon } from './lucideMap'
+import { getThemeIconOverride } from '@worldsmith/theme-kit'
 
 type IconSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
 
@@ -52,10 +53,15 @@ const props = withDefaults(defineProps<{
   fallback: '',
 })
 
-const def = computed(() => getIcon(props.name))
+/** 优先使用主题图标覆盖，否则使用注册表图标 */
+const iconDef = computed(() => {
+  const themeOverride = getThemeIconOverride(props.name)
+  if (themeOverride) return themeOverride
+  return getIcon(props.name)
+})
 
 const lucideIcon = computed<Component | null>(() => {
-  if (def.value) return null
+  if (iconDef.value) return null
   return resolveLucideIcon(props.name)
 })
 
@@ -76,6 +82,17 @@ const resolvedStrokeWidth = computed(() => {
   if (px <= 16) return 1.5
   if (px <= 24) return 2
   return 2
+})
+
+/** 从 CSS 变量读取笔触风格 */
+const iconStrokeLinecap = computed(() => {
+  if (typeof document === 'undefined') return 'round'
+  return getComputedStyle(document.documentElement).getPropertyValue('--icon-stroke-linecap').trim() || 'round'
+})
+
+const iconStrokeLinejoin = computed(() => {
+  if (typeof document === 'undefined') return 'round'
+  return getComputedStyle(document.documentElement).getPropertyValue('--icon-stroke-linejoin').trim() || 'round'
 })
 </script>
 

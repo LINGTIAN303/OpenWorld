@@ -62,6 +62,7 @@ export class GroupChatCoordinator {
   private static readonly MAX_CONSECUTIVE_FAILURES = 3
   onRoundEnd?: () => void
   onComplete?: () => void
+  onTerminate?: () => void
 
   constructor(
     config?: Partial<GroupChatConfig>,
@@ -252,7 +253,9 @@ export class GroupChatCoordinator {
         await new Promise<void>(resolve => {
           this.pauseResolve = resolve
         })
-        if (this.state !== 'running') break
+        // After await, state may have changed via resume()/terminate().
+        // Re-check the while-loop condition instead of comparing narrowed type.
+        continue
       }
 
       if (store.reviewPending) {
@@ -425,7 +428,7 @@ export class GroupChatCoordinator {
       })
 
       console.log('[GroupChatCoordinator] Calling agent.prompt() for:', participant.name, 'promptLen:', promptText.length)
-      await agent.prompt(promptText, { contextOverride: contextInjection, chatMode: 'normal' })
+      await agent.prompt(promptText, { contextOverride: contextInjection, chatMode: 'group-chat' })
       console.log('[GroupChatCoordinator] agent.prompt() completed for:', participant.name, 'contentLen:', currentContent.length, 'apiError:', apiError)
 
       if (apiError) {
@@ -602,7 +605,7 @@ export class GroupChatCoordinator {
           }
         })
 
-        await agent.prompt(promptText, { contextOverride: contextInjection, chatMode: 'normal' })
+        await agent.prompt(promptText, { contextOverride: contextInjection, chatMode: 'group-chat' })
 
         if (fallbackApiError) {
           throw new Error(fallbackApiError)
@@ -623,13 +626,15 @@ export class GroupChatCoordinator {
           } : undefined,
           degraded: true,
         }
-      } catch {
+      } catch (err) {
+        console.warn(`[GroupChatCoordinator] 参与者 ${participant.id} 降级重试失败`, err)
         store.clearStreaming(participant.id)
         return null
       } finally {
         unsub?.()
       }
-    } catch {
+    } catch (err) {
+      console.warn(`[GroupChatCoordinator] 参与者 ${participant.id} Fallback 流程异常`, err)
       return null
     }
   }
@@ -781,7 +786,7 @@ export class GroupChatCoordinator {
     }
     const store = useGroupChatStore()
     store.setState('terminated')
-    this.onComplete?.()
+    this.onTerminate?.()
     store.setCurrentSpeaker(null)
     store.setCurrentSpeakers([])
     store.setReviewPending(false)

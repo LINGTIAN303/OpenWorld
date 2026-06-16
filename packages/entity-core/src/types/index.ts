@@ -1,6 +1,6 @@
 export type { FieldSchema, EntityTypeSchema, Entity } from './entity'
 
-export type { RelationTypeSchema, Relation } from './relation'
+export type { RelationTypeSchema, RelationTypeSchemaV2, Relation } from './relation'
 
 export type { ProjectFile, ProjectFileContent } from './file'
 
@@ -33,3 +33,18 @@ export type {
   PlacedComponent,
   ComponentTypeId,
 } from './layoutSchema'
+
+export type {
+  SemanticHintName,
+  SemanticHint,
+  TraitDefinition,
+  TraitField,
+  TraitRef,
+  FacetDefinition,
+  EntitySchemaV2,
+  EntityV2,
+  TraitPreset,
+  AutoLinkStrategy,
+} from './trait'
+
+export type { EntityTemplate, WorldTemplate } from './template'

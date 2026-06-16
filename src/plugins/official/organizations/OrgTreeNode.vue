@@ -41,11 +41,11 @@ defineEmits<{
 function orgIcon(entity: any): string {
   const t = entity.properties.orgType as string
   const icons: Record<string, string> = {
-    '王国': 'war', '帝国': 'war', '部落': 'location', '教会': 'building',
-    '公会': 'settings', '佣兵团': 'war', '学派': 'manuscript', '家族': 'home',
-    '商团': 'tag', '联盟': 'link',
+    '王国': 'crown', '帝国': 'building', '共和国': 'building', '部落': 'camp',
+    '公会': 'wrench', '教团': 'church', '商会': 'coin', '帮派': 'sword',
+    '军事组织': 'sword', '秘密组织': 'scroll',
   }
-  return icons[t] || 'war'
+  return icons[t] || 'organization'
 }
 </script>
 

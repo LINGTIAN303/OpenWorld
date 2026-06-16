@@ -1,18 +1,96 @@
 /**
  * API Key 加密存储模块
  *
- * 使用 Web Crypto API (AES-GCM) 对 API Key 进行加密后存入 localStorage。
- * 加密密钥派生自设备指纹（userAgent + hostname），因此密钥在不同设备/域名下无法解密。
+ * 双后端策略：
+ * - Tauri 桌面端：优先使用系统 Keyring，写入后回读验证；
+ *   若 Keyring 不可靠（Windows Credential Manager 兼容性问题），自动降级到 localStorage 加密存储。
+ * - Web / 降级：使用 Web Crypto API (AES-GCM) 加密后存入 localStorage。
+ *   加密密钥派生自设备指纹（userAgent + hostname），因此密钥在不同设备/域名下无法解密。
  *
- * 存储格式: localStorage key = "worldsmith_ak_{provider}", value = Base64(iv || ciphertext)
+ * 存储格式:
+ * - Tauri Keyring: service = "com.worldsmith.app:{provider}", username = "api_keys"
+ * - Tauri 降级 / Web: localStorage key = "worldsmith_ak_{provider}", value = Base64(iv || ciphertext)
  *
  * 使用流程:
- *   storeApiKey('openai', 'sk-xxx') → 加密 → localStorage
- *   loadApiKey('openai') → localStorage 读取 → 解密 → 返回明文
+ *   storeApiKey('openai', 'sk-xxx') → Tauri: Keyring(验证) / 降级: AES-GCM → localStorage
+ *   loadApiKey('openai') → Tauri: Keyring / 降级: localStorage → 解密 → 返回明文
  */
 
 /** localStorage 键名前缀，用于区分 API Key 和其他存储数据 */
 const STORAGE_PREFIX = 'worldsmith_ak_'
+
+/** Keyring 是否可用（一次检测，全局缓存） */
+let _keyringAvailable: boolean | null = null
+
+/** 检测当前是否运行在 Tauri 桌面端 */
+async function isTauri(): Promise<boolean> {
+  try {
+    if (typeof window !== 'undefined' && ((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__)) {
+      return true
+    }
+  } catch {}
+  return false
+}
+
+/** 懒加载 Tauri invoke — 优先从全局 __TAURI__ 获取，降级到动态 import */
+let _invoke: any = null
+async function getTauriInvoke(): Promise<(cmd: string, args?: Record<string, unknown>) => Promise<any>> {
+  if (!_invoke) {
+    if (typeof window !== 'undefined' && (window as any).__TAURI__?.invoke) {
+      _invoke = (window as any).__TAURI__.invoke
+    } else {
+      const mod = await import('@tauri-apps/api/core')
+      _invoke = mod.invoke
+    }
+  }
+  return _invoke
+}
+
+// ── Tauri Keyring 后端 ──
+
+async function tauriStore(key: string, value: string): Promise<void> {
+  const invoke = await getTauriInvoke()
+  await invoke('cmd_secure_store', { key, value })
+}
+
+async function tauriLoad(key: string): Promise<string> {
+  const invoke = await getTauriInvoke()
+  return invoke('cmd_secure_load', { key }) as Promise<string>
+}
+
+async function tauriDelete(key: string): Promise<void> {
+  const invoke = await getTauriInvoke()
+  await invoke('cmd_secure_delete', { key })
+}
+
+/**
+ * 检测 Keyring 是否真正可用
+ * 写入测试值 → 回读验证 → 删除测试值
+ * 解决 Windows Credential Manager 下 set_password 不报错但数据未持久化的问题
+ */
+async function checkKeyringAvailable(): Promise<boolean> {
+  if (_keyringAvailable !== null) return _keyringAvailable
+  try {
+    const testKey = '__worldsmith_keyring_test__'
+    const testValue = 'test_' + Date.now()
+    await tauriStore(testKey, testValue)
+    const readBack = await tauriLoad(testKey)
+    // 清理测试数据
+    try { await tauriDelete(testKey) } catch { /* ignore */ }
+    _keyringAvailable = readBack === testValue
+    if (!_keyringAvailable) {
+      console.warn('[key-store] Keyring 回读验证失败，降级到 localStorage 加密存储')
+    } else {
+      console.log('[key-store] Keyring 可用')
+    }
+  } catch (e) {
+    console.warn('[key-store] Keyring 检测失败，降级到 localStorage 加密存储:', e)
+    _keyringAvailable = false
+  }
+  return _keyringAvailable
+}
+
+// ── Web AES-GCM 后端 ──
 
 /**
  * 派生加密密钥
@@ -55,14 +133,34 @@ async function decrypt(encoded: string): Promise<string> {
   return new TextDecoder().decode(decrypted)
 }
 
+// ── 公开 API ──
+
 /**
- * 加密并存储 API Key
+ * 存储加密 API Key
  * @param provider 供应商名称，如 'openai'、'custom:api.example.com'
  * @param key 明文的 API Key
  */
 export async function storeApiKey(provider: string, key: string): Promise<void> {
+  const storeKey = STORAGE_PREFIX + provider
+  if (await isTauri()) {
+    const keyringOk = await checkKeyringAvailable()
+    if (keyringOk) {
+      try {
+        await tauriStore(storeKey, key)
+        return
+      } catch (e) {
+        console.warn('[key-store] Keyring 写入失败，降级到 localStorage:', e)
+        _keyringAvailable = false
+      }
+    }
+    // Keyring 不可用 → 降级到 localStorage 加密存储
+  }
+  if (!key) {
+    await removeApiKey(provider)
+    return
+  }
   const encrypted = await encrypt(key)
-  localStorage.setItem(STORAGE_PREFIX + provider, encrypted)
+  localStorage.setItem(storeKey, encrypted)
 }
 
 /**
@@ -71,21 +169,65 @@ export async function storeApiKey(provider: string, key: string): Promise<void> 
  * @returns 解密的 API Key，未找到或解密失败返回空字符串
  */
 export async function loadApiKey(provider: string): Promise<string> {
-  const raw = localStorage.getItem(STORAGE_PREFIX + provider)
+  const storeKey = STORAGE_PREFIX + provider
+  if (await isTauri()) {
+    const keyringOk = await checkKeyringAvailable()
+    if (keyringOk) {
+      try {
+        const result = await tauriLoad(storeKey)
+        if (result) return result
+      } catch { /* keyring 读取失败 */ }
+    }
+    // Keyring 不可用或无值 → 从 localStorage 读取
+    const raw = localStorage.getItem(storeKey)
+    if (!raw) return ''
+    try {
+      const decrypted = await decrypt(raw)
+      if (!decrypted) {
+        await removeApiKey(provider)
+        return ''
+      }
+      return decrypted
+    } catch {
+      await removeApiKey(provider)
+      return ''
+    }
+  }
+  const raw = localStorage.getItem(storeKey)
   if (!raw) return ''
   try {
-    return await decrypt(raw)
+    const decrypted = await decrypt(raw)
+    if (!decrypted) {
+      await removeApiKey(provider)
+      return ''
+    }
+    return decrypted
   } catch {
+    await removeApiKey(provider)
     return ''
   }
 }
 
 /** 删除指定供应商的 API Key */
-export function removeApiKey(provider: string): void {
-  localStorage.removeItem(STORAGE_PREFIX + provider)
+export async function removeApiKey(provider: string): Promise<void> {
+  const storeKey = STORAGE_PREFIX + provider
+  if (await isTauri()) {
+    try { await tauriDelete(storeKey) } catch { /* ignore */ }
+  }
+  localStorage.removeItem(storeKey)
 }
 
 /** 检查指定供应商是否已存储 API Key（仅检查是否存在，不解密） */
-export function hasApiKey(provider: string): boolean {
-  return !!localStorage.getItem(STORAGE_PREFIX + provider)
+export async function hasApiKey(provider: string): Promise<string | null> {
+  const storeKey = STORAGE_PREFIX + provider
+  if (await isTauri()) {
+    const keyringOk = await checkKeyringAvailable()
+    if (keyringOk) {
+      try {
+        const result = await tauriLoad(storeKey)
+        if (result) return result
+      } catch { /* ignore */ }
+    }
+  }
+  return localStorage.getItem(storeKey)
 }

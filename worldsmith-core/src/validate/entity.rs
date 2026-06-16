@@ -160,7 +160,8 @@ fn validate_field(
     "select" => {
       if let Some(ref options) = field.options {
         if let Some(s) = val.as_str() {
-          if !options.contains(&s.to_string()) {
+          // 空字符串表示未选择，跳过选项验证
+          if !s.is_empty() && !options.contains(&s.to_string()) {
             report.add_error(
               path,
               &format!(

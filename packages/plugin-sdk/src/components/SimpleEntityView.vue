@@ -15,6 +15,9 @@
       <button v-if="selectedIds.size > 0" class="btn-ghost btn-sm" @click="clearSelection">取消选择</button>
     </div>
 
+    <n-alert v-if="filteredItems.length > 200" type="warning" :show-icon="true" class="large-list-warning">
+      当前显示 {{ filteredItems.length }} 项，建议使用筛选器缩小范围以获得最佳体验。
+    </n-alert>
     <div class="entity-grid">
       <div
         v-for="item in filteredItems"
@@ -101,6 +104,13 @@
       @edit="isEditing ? cancelEdit() : startEdit()"
     >
       <template #info="{ entity, editing }">
+        <AutoLinkSuggestions
+          v-if="entity && !editing"
+          :entity-id="entity.id"
+          :entity-type="entityType"
+          :properties="entity.properties"
+        />
+
         <slot name="detail-info" :entity="entity" :editing="editing" :edit-form="editForm">
           <div class="detail-fields">
             <DetailField
@@ -181,6 +191,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, reactive } from 'vue'
+import { NAlert } from 'naive-ui'
 import { WsIcon, WsEmpty } from '@worldsmith/ui-kit'
 import { useEntityStore, useRelationStore, entitySchemaRegistry } from '@worldsmith/entity-core'
 import type { Entity } from '@worldsmith/entity-core'
@@ -204,6 +215,7 @@ import EntityFormModal from './EntityFormModal.vue'
 import CreateButton from './CreateButton.vue'
 import EntityCardCover from './EntityCardCover.vue'
 import EntityCardBack from './EntityCardBack.vue'
+import AutoLinkSuggestions from './AutoLinkSuggestions.vue'
 
 export interface FilterDef {
   key: string
@@ -246,6 +258,7 @@ const props = withDefaults(defineProps<{
   cardFooterFields?: CardFieldDef[]
   detailTabs?: (DetailTabDef | RelationTabDef)[]
   customDetailSlots?: boolean
+  additionalFilter?: (entity: any) => boolean
 }>(), {
   icon: '',
   filterDefs: () => [],
@@ -304,7 +317,9 @@ const displayFields = computed(() => {
 })
 
 const allItems = computed(() =>
-  (entityStore.entities ?? []).filter(e => e.type === props.entityType)
+  (entityStore.entities ?? [])
+    .filter(e => e.type === props.entityType)
+    .filter(e => props.additionalFilter ? props.additionalFilter(e) : true)
 )
 
 const filteredItems = computed(() => {
@@ -430,6 +445,17 @@ async function onFormSave(data: { name: string; description: string; properties:
   showForm.value = false
   editingEntity.value = null
   await entityStore.loadAll()
+
+  // 触发 AutoLink 索引（新架构）
+  if (savedEntityId) {
+    try {
+      const { indexPotentialLinks } = await import('@worldsmith/entity-core')
+      const savedEntity = entityStore.entities.find(e => e.id === savedEntityId)
+      if (savedEntity) {
+        await indexPotentialLinks(savedEntityId, savedEntity.type, savedEntity.properties ?? {})
+      }
+    } catch { /* AutoLink 索引失败不影响主流程 */ }
+  }
 }
 
 async function onSaveEdit() {
@@ -548,6 +574,10 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
+.large-list-warning {
+  margin-bottom: 12px;
+}
+
 .entity-grid {
   flex: 1;
   display: grid;
@@ -555,6 +585,7 @@ onBeforeUnmount(() => {
   gap: 12px;
   overflow-y: auto;
   align-content: start;
+  place-items: center;
   padding-top: 12px;
 }
 
