@@ -51,6 +51,7 @@ apiKeys/
 
 # ── User / runtime data (never commit) ─────────────────────────────────
 My-Data-Project/
+worldsmith-data/
 *.sqlite
 *.sqlite3
 *.db

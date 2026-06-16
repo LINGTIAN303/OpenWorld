@@ -137,7 +137,7 @@ function inferPhase(toolName: string): string {
   }
   return '其他操作'
 }
-import { createWorldSmithAgent, loadApiKey } from '@agent/index'
+import { createWorldSmithAgent, loadApiKey, setActiveCliAgentConnection } from '@agent/index'
 import type { ProviderConfig, CloudProvider } from '@agent/index'
 import { useEntityStore, useRelationStore, useFileStore } from '@worldsmith/entity-core'
 import { useSettingsStore } from '../../stores/settingsStore'
@@ -156,6 +156,7 @@ import { useActivityLog } from '../../space/composables/useActivityLog'
 import { useSpaceStore } from '../../space/stores/space-store'
 import { setFontTool, executeSetFont, type SetFontResult } from '../setFontTool'
 import { useFontLibraryStore } from '../../stores/fontLibraryStore'
+import { getWebCliAgentConnection } from './cliAgentConnection'
 // 创作编排面板不再需要旧的工作流运行时桥接
 
 /** 工具名中文映射 */
@@ -961,6 +962,10 @@ export function useAgent() {
   const relationStore = useRelationStore()
   const settingsStore = useSettingsStore()
   const fileStore = useFileStore()
+
+  // 设置 CLI Agent 连接到全局，使 createWorldSmithAgent 能感知
+  const cliConnection = getWebCliAgentConnection()
+  setActiveCliAgentConnection(cliConnection)
 
   const { openSettings: _cmdOpenSettings } = useAgentCommands()
   bindAgentActions(sendMessage, _cmdOpenSettings)

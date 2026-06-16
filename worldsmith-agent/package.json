@@ -4,20 +4,26 @@
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
+  "bin": {
+    "worldsmith": "./bin/cli.mjs"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc"
+    "build": "tsc",
+    "cli": "tsx src/cli/index.ts"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "latest",
     "@earendil-works/pi-ai": "latest",
     "@worldsmith/agent-core": "workspace:*",
     "commander": "^14.0.3",
-    "dexie": "^4.4.2"
+    "dexie": "^4.4.2",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.0.0",
+    "@types/ws": "^8.18.0",
     "typescript": "~6.0.2"
   }
 }

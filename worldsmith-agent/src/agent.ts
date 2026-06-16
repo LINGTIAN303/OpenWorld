@@ -1,6 +1,8 @@
 import { CoreBackend } from './bridge'
+import { HybridBackend } from './hybrid-backend'
 import type { IAgentBackend } from './bridge'
 import type { AgentConfig, CreateAgentOptions } from './bridge-types'
+import type { CliAgentConnection } from './hybrid-backend'
 
 import { buildSystemPrompt } from './context/injector'
 import { findSkillById, resolveToolNames } from './skills/registry'
@@ -273,9 +275,27 @@ export async function createWorldSmithAgent(options: CreateAgentOptions): Promis
     beforeToolCall: options.beforeToolCall,
   }
 
-  const backend = new CoreBackend(config)
+  // 如果有 CLI Agent 连接，使用 HybridBackend（工具级路由）
+  const cliConnection = _activeCliAgentConnection
+  const backend = cliConnection?.connected
+    ? new HybridBackend({ ...config, cliAgentConnection: cliConnection })
+    : new CoreBackend(config)
+
   await backend.initialize()
   return backend
+}
+
+/** 当前活跃的 CLI Agent 连接（Web 端通过 setActiveCliAgentConnection 设置） */
+let _activeCliAgentConnection: CliAgentConnection | null = null
+
+/** 设置当前活跃的 CLI Agent 连接 */
+export function setActiveCliAgentConnection(connection: CliAgentConnection | null): void {
+  _activeCliAgentConnection = connection
+}
+
+/** 获取当前活跃的 CLI Agent 连接 */
+export function getActiveCliAgentConnection(): CliAgentConnection | null {
+  return _activeCliAgentConnection
 }
 
 export { DefaultToolBus } from './toolbus/toolbus'

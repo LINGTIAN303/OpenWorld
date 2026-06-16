@@ -4,6 +4,7 @@ import { createCliToolContext } from './cli-context'
 import { createCLISafetyGuard } from './cli-safety-guard'
 import { createCliSessionStore } from './cli-session-store'
 import { initToolMetaRegistry } from '../tools/tool-meta-registry'
+import { startServer } from './serve'
 import type { ProviderConfig } from '../providers/config'
 import type { AgentEvent } from '../bridge-types'
 import type { AgentMessage, AgentSession } from '../session/types'
@@ -1088,6 +1089,37 @@ Commands:
       if (availCmds.length > 0) console.log(`Cmds:  ${availCmds.join(', ')}`)
       console.log('Type /help for commands\n')
       prompt()
+    })
+
+  // ── serve 命令：启动 HTTP+WS 服务器，供 Web 端连接 ──
+  program
+    .command('serve')
+    .description('Start HTTP+WebSocket server for Web frontend integration')
+    .option('-p, --provider <provider>', 'LLM provider (deepseek, openai, anthropic)', 'deepseek')
+    .option('-m, --model <model>', 'Model ID', 'deepseek-chat')
+    .option('-k, --api-key <key>', 'API key (or use env WORLDSMITH_API_KEY)')
+    .option('-d, --data <path>', 'Data directory path', './worldsmith-data')
+    .option('--base-url <url>', 'Custom API base URL')
+    .option('--no-guard', 'Disable safety guard for sensitive operations')
+    .option('--port <port>', 'Server port', '3100')
+    .option('--host <host>', 'Server host', 'localhost')
+    .action(async (opts) => {
+      const port = parseInt(opts.port, 10)
+      if (isNaN(port) || port < 1 || port > 65535) {
+        console.error('Error: Invalid port number')
+        process.exit(1)
+      }
+
+      await startServer({
+        port,
+        host: opts.host,
+        provider: opts.provider,
+        model: opts.model,
+        apiKey: opts.apiKey || '',
+        baseUrl: opts.baseUrl,
+        data: opts.data,
+        guard: opts.guard,
+      })
     })
 
   program.parse()
