@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="kanban-view" @keydown.escape="editingField = null">
     <!-- 工具栏 -->
     <div class="toolbar">
@@ -329,7 +329,7 @@ function formatValue(val: unknown, field: any): string {
 .kcf-value { color: var(--text-color); }
 .kc-tags { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 6px; }
 .kanban-add-card { padding: 6px 4px 0; }
-.kia-btn { width: 100%; padding: 4px; border: 1px dashed var(--border-color, #ccc); border-radius: 4px; background: transparent; cursor: pointer; font-size: var(--font-size-sm); color: var(--text-tertiary); transition: all 0.1s; }
+.kia-btn { width: 100%; padding: 4px; border: 1px dashed var(--border-color, #ccc); border-radius: 4px; background: transparent; cursor: pointer; font-size: var(--font-size-sm); color: var(--text-tertiary); transition: background 0.1s, border-color 0.1s, color 0.1s, box-shadow 0.1s, transform 0.1s, opacity 0.1s, filter 0.1s; }
 .kia-btn:hover { border-color: var(--primary, #4f46e5); color: var(--primary, #4f46e5); }
 .kia-input { width: 100%; padding: 6px 8px; border: 1px solid var(--border-color, #ddd); border-radius: 4px; font-size: var(--font-size-sm); font-family: inherit; }
 .kia-actions { display: flex; gap: 4px; margin-top: 4px; }

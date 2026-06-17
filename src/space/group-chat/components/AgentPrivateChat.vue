@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="private-chat">
     <div class="private-header">
       <button class="btn-back" @click="$emit('close')"><WsIcon name="arrow-left" size="xs" /> 返回群聊</button>
@@ -585,7 +585,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 
 .btn-clear:hover { background: rgba(239, 68, 68, 0.1); color: #ef4444; border-color: rgba(239, 68, 68, 0.3); }

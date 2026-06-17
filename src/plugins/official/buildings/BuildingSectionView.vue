@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="bs-view">
     <div class="bs-toolbar">
       <button class="bs-btn" @click="$emit('back')" title="返回列表">
@@ -222,7 +222,7 @@ onMounted(async () => {
 .bs-toolbar-label { font-size: var(--font-size-xs); color: var(--color-text-secondary); white-space: nowrap; }
 .bs-toolbar-sep { width: 1px; height: 20px; background: var(--color-border); margin: 0 4px; }
 .bs-toolbar-spacer { flex: 1; }
-.bs-btn { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-bg-elevated); color: var(--color-text-primary); font-size: var(--font-size-sm); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+.bs-btn { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-bg-elevated); color: var(--color-text-primary); font-size: var(--font-size-sm); cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s; white-space: nowrap; }
 .bs-btn:hover { background: var(--color-bg-hover); border-color: var(--color-text-secondary); color: var(--color-text-primary); }
 .bs-toggle { display: flex; align-items: center; gap: 4px; font-size: var(--font-size-sm); color: var(--color-text-secondary); cursor: pointer; }
 .bs-toggle input { accent-color: var(--color-primary); }

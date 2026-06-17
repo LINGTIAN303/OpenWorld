@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="review-checkpoint">
     <div class="review-header">
       <span class="review-icon"><WsIcon name="clipboard-list" size="xs" /></span>
@@ -138,7 +138,7 @@ function onConfirmDirection(e?: KeyboardEvent) {
   border: 1px solid var(--color-border);
   background: var(--color-surface);
   color: var(--color-text);
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 
 .continue-btn {

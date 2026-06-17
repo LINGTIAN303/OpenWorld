@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <Transition name="ws-detail-backdrop">
     <div v-if="event" class="detail-backdrop"></div>
   </Transition>
@@ -137,7 +137,7 @@ const tabs = [
 .dp-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .dp-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--border-color); margin-bottom: 12px; overflow-x: auto; flex-shrink: 0; scrollbar-width: none; }
 .dp-tabs::-webkit-scrollbar { display: none; }
-.dp-tab { padding: 4px 8px; border: none; background: none; cursor: pointer; font-size: var(--font-size-xs); color: var(--text-tertiary); border-bottom: 2px solid transparent; margin-bottom: -2px; white-space: nowrap; transition: all var(--transition-fast); flex-shrink: 0; }
+.dp-tab { padding: 4px 8px; border: none; background: none; cursor: pointer; font-size: var(--font-size-xs); color: var(--text-tertiary); border-bottom: 2px solid transparent; margin-bottom: -2px; white-space: nowrap; transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast), filter var(--transition-fast); flex-shrink: 0; }
 .dp-tab:hover { color: var(--text-color); }
 .dp-tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: var(--font-weight-semibold); }
 .dp-scroll-area { flex: 1; overflow-y: auto; }

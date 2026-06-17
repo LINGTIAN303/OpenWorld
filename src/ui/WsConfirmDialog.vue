@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <Teleport to="body">
     <Transition name="ws-scale-fade">
       <div v-if="state.show" class="ws-confirm-overlay" @click.self="doCancel">
@@ -112,7 +112,7 @@ watch(() => state.value.show, (v) => {
   border-radius: var(--radius-btn);
   cursor: pointer;
   font-size: var(--font-size-sm);
-  transition: all var(--duration-fast) var(--ease-default);
+  transition: background var(--duration-fast) var(--ease-default), border-color var(--duration-fast) var(--ease-default), color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default), transform var(--duration-fast) var(--ease-default), opacity var(--duration-fast) var(--ease-default), filter var(--duration-fast) var(--ease-default);
 }
 .ws-confirm__cancel:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
 .ws-confirm__cancel:focus-visible { box-shadow: 0 0 0 2px var(--color-primary); outline: none; }
@@ -124,7 +124,7 @@ watch(() => state.value.show, (v) => {
   cursor: pointer;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
-  transition: all var(--duration-fast) var(--ease-default);
+  transition: background var(--duration-fast) var(--ease-default), border-color var(--duration-fast) var(--ease-default), color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default), transform var(--duration-fast) var(--ease-default), opacity var(--duration-fast) var(--ease-default), filter var(--duration-fast) var(--ease-default);
 }
 .ws-confirm__ok--info { background: var(--color-info); color: #fff; }
 .ws-confirm__ok--info:hover { filter: brightness(1.1); }

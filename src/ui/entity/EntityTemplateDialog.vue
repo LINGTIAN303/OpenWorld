@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <Teleport to="body">
     <div class="et-overlay" v-if="show" @click.self="close">
       <div class="et-modal">
@@ -173,7 +173,7 @@ function close() {
 .et-close { background: none; border: none; font-size: var(--font-size-xl); cursor: pointer; padding: 4px 8px; border-radius: 4px; }
 .et-close:hover { background: var(--hover-bg); }
 .et-tabs { display: flex; border-bottom: 1px solid var(--border); }
-.et-tabs button { flex: 1; padding: 8px; border: none; background: var(--bg); cursor: pointer; font-size: var(--font-size-base); color: var(--text-secondary); transition: all 0.15s; }
+.et-tabs button { flex: 1; padding: 8px; border: none; background: var(--bg); cursor: pointer; font-size: var(--font-size-base); color: var(--text-secondary); transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s; }
 .et-tabs button.active { background: var(--primary); color: var(--text-on-primary, #fff); }
 .et-body { padding: 16px 20px; overflow-y: auto; flex: 1; }
 .et-select { width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; margin-bottom: 12px; background: var(--bg); color: var(--text); }

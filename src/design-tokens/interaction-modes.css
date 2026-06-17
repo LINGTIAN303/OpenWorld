@@ -1,4 +1,4 @@
-/* ═══════════════════════════════════════════
+﻿/* ═══════════════════════════════════════════
    交互模式 CSS
    由 ThemeManifest.motionStyle.interactionMode 驱动
    通过 [data-interaction-mode] 属性选择器激活
@@ -50,7 +50,7 @@
 /* ─── Crystal Refract（水晶折射） ─── */
 [data-interaction-mode="crystal-refract"] .btn,
 [data-interaction-mode="crystal-refract"] .ws-interactive {
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background 0.15s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.15s cubic-bezier(0.4, 0, 0.2, 1), color 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1), transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), filter 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 [data-interaction-mode="crystal-refract"] .btn:hover:not(:disabled),
@@ -63,7 +63,7 @@
 [data-interaction-mode="crystal-refract"] .ws-interactive:active:not(:disabled) {
   transform: scale(0.96);
   filter: brightness(0.95);
-  transition: all 0.08s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background 0.08s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.08s cubic-bezier(0.4, 0, 0.2, 1), color 0.08s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.08s cubic-bezier(0.4, 0, 0.2, 1), transform 0.08s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.08s cubic-bezier(0.4, 0, 0.2, 1), filter 0.08s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 [data-interaction-mode="crystal-refract"] .card {

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="session-sidebar">
     <div class="sidebar-header">
       <h3 class="sidebar-title">群聊 <span class="title-count">{{ sessionCount }}</span></h3>
@@ -278,7 +278,7 @@ watch(currentId, () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 .new-session-btn:hover {
   border-color: var(--color-primary);

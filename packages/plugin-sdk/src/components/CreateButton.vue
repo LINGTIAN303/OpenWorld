@@ -34,7 +34,8 @@ defineEmits<{
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  /* 只过渡视觉属性，避免位置/尺寸变化被动画化导致布局抖动 */
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), filter var(--transition-fast);
   position: relative;
   overflow: hidden;
   white-space: nowrap;

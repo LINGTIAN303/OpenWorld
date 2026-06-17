@@ -553,7 +553,7 @@ const RELATION_PROPERTIES: Record<string, RelationProperty[]> = {
 .rel-s-type-opt {
   padding: 3px 8px; border: 1px solid var(--border-color); border-radius: 4px;
   background: var(--bg); cursor: pointer; font-size: var(--font-size-xs); color: var(--text-color);
-  transition: all 0.12s; display: flex; align-items: center; gap: 4px;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s, transform 0.12s, opacity 0.12s, filter 0.12s; display: flex; align-items: center; gap: 4px;
 }
 .rel-s-type-opt:hover { border-color: var(--primary); background: var(--primary-light); }
 .rel-s-type-opt.recommended { border-color: var(--primary); background: var(--primary-light); color: var(--primary); font-weight: var(--font-weight-semibold); }
@@ -591,7 +591,7 @@ const RELATION_PROPERTIES: Record<string, RelationProperty[]> = {
   width: 100%; padding: 6px 12px;
   background: var(--primary-light, #eef2ff); color: var(--primary, #4f46e5);
   border: 1px dashed var(--primary, #4f46e5); border-radius: 4px;
-  cursor: pointer; font-size: var(--font-size-sm); transition: all 0.15s;
+  cursor: pointer; font-size: var(--font-size-sm); transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 .rel-s-create-btn:hover { background: var(--primary, #4f46e5); color: white; }
 </style>

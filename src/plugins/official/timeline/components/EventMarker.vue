@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div
     class="event-marker"
     :class="[importanceClass, { selected: isSelected }]"
@@ -83,7 +83,7 @@ const tooltipStyle = computed(() => ({
   height: 12px;
   border-radius: 50%;
   border: 2px solid;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast), filter var(--transition-fast);
 }
 
 .imp-critical .marker-dot { background: var(--danger); border-color: var(--danger); }

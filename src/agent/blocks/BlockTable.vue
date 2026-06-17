@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="block-table">
     <div class="block-toggle" @click="expanded = !expanded">
       <span class="block-icon">📊</span>
@@ -68,7 +68,7 @@ const expanded = ref(false)
   color: var(--agent-text, #e0e0e0);
 }
 .block-expand-enter-active, .block-expand-leave-active {
-  transition: all 0.2s ease; overflow: hidden;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease, filter 0.2s ease; overflow: hidden;
 }
 .block-expand-enter-from, .block-expand-leave-to {
   opacity: 0;

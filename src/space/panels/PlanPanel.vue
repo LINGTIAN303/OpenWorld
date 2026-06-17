@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="plan-panel">
     <div class="panel-header">
       <h3 class="panel-title">任务计划</h3>
@@ -296,7 +296,7 @@ function formatTokens(n: number): string {
   font-weight: var(--font-weight-semibold, 600);
   flex-shrink: 0;
   margin-top: 1px;
-  transition: all 0.2s;
+  transition: background 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s, filter 0.2s;
 }
 
 .step-pending {

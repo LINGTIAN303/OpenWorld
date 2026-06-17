@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="mv-view">
     <div class="mv-toolbar">
       <button class="mv-btn" @click="$emit('back')" title="返回列表">
@@ -266,7 +266,7 @@ onMounted(async () => {
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
   white-space: nowrap;
 }
 

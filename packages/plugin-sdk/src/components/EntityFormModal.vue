@@ -1044,7 +1044,7 @@ onUnmounted(() => {
   background: var(--color-primary-hover);
 }
 .efm-add-field { grid-column: 1 / -1; margin-top: 4px; }
-.efm-add-btn { font-size: var(--font-size-sm); padding: 4px 12px; background: none; border: 1px dashed var(--border); border-radius: 4px; cursor: pointer; color: var(--text-tertiary); transition: all 0.15s; }
+.efm-add-btn { font-size: var(--font-size-sm); padding: 4px 12px; background: none; border: 1px dashed var(--border); border-radius: 4px; cursor: pointer; color: var(--text-tertiary); transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s; }
 .efm-add-btn:hover { border-color: var(--accent); color: var(--accent); }
 .efm-adder { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .efm-adder-input { padding: 5px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: var(--font-size-sm); background: var(--input-bg); color: var(--text); max-width: 120px; }

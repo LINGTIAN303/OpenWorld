@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="fs-wrap">
     <div class="fs-selected" @click="open = !open">
       <span class="fs-selected-text" :style="{ fontFamily: modelValue || 'inherit' }">
@@ -216,7 +216,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onClickOutside, true
 
 .fs-dropdown-enter-active,
 .fs-dropdown-leave-active {
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease, filter 0.15s ease;
 }
 
 .fs-dropdown-enter-from,

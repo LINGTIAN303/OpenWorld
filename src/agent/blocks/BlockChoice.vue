@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="block-choice">
     <div v-if="block.title" class="choice-title">{{ block.title }}</div>
     <div class="choice-options">
@@ -83,7 +83,7 @@ function onConfirm(): void {
   padding: 4px 10px; border-radius: 14px; cursor: pointer;
   border: 1px solid rgba(108,92,231,0.3); background: transparent;
   color: var(--agent-accent, #b388ff); font-size: 12px;
-  transition: all 0.15s; display: flex; flex-direction: column; align-items: center;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s; display: flex; flex-direction: column; align-items: center;
   position: relative; overflow: hidden;
 }
 .choice-btn:active { transform: scale(0.95); }

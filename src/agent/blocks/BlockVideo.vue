@@ -1,4 +1,4 @@
-<!--
+﻿<!--
   BlockVideo.vue - 视频展示组件
   用于在聊天消息中渲染 AI 生成的视频块。支持展开/折叠切换、全屏预览和导出保存。
 
@@ -202,7 +202,7 @@ function formatDuration(sec: number): string {
 .video-action-btn:hover { background: rgba(225, 112, 85, 0.15); }
 .video-caption { display: block; font-size: 11px; color: var(--agent-text-tertiary, #888); margin-top: 4px; }
 .video-meta { display: block; font-size: 10px; color: var(--agent-text-tertiary, #666); margin-top: 2px; }
-.block-expand-enter-active, .block-expand-leave-active { transition: all 0.2s ease; overflow: hidden; }
+.block-expand-enter-active, .block-expand-leave-active { transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease, filter 0.2s ease; overflow: hidden; }
 .block-expand-enter-from, .block-expand-leave-to { opacity: 0; }
 .video-ctx-menu {
   position: fixed; z-index: 10000;

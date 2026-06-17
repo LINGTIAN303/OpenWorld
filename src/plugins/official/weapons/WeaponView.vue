@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="weapon-view">
     <div v-if="viewMode === 'lineage'" class="wv-lineage">
       <WeaponLineageView @back="viewMode = 'list'" />
@@ -54,7 +54,7 @@ const weaponTabs: RelationTabDef[] = [
   border: 1px solid var(--border, #333);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 .wv-lin-btn:hover {
   color: var(--text-primary, #eee);

@@ -130,7 +130,7 @@ function removeField(key: string) {
   border: 1px dashed var(--border-color);
   border-radius: var(--radius-md, 8px);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease, filter 0.15s ease;
   background: transparent;
   user-select: none;
 }

@@ -321,7 +321,7 @@ async function onExport() {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 
 .fpp-export-btn:hover:not(:disabled) {
@@ -346,7 +346,7 @@ async function onExport() {
 
 .fpp-panel-enter-active,
 .fpp-panel-leave-active {
-  transition: all 0.25s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+  transition: background 0.25s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)), border-color 0.25s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)), color 0.25s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)), box-shadow 0.25s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)), transform 0.25s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)), opacity 0.25s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)), filter 0.25s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1));
 }
 
 .fpp-panel-enter-from,

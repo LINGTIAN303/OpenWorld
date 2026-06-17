@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <Transition name="ws-panel">
     <div v-if="visible" class="mm-detail-panel">
       <div class="mm-dp-header">
@@ -224,7 +224,7 @@ watch(() => props.nodeId, () => {
 .mm-dp-rel-item {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 8px; font-size: var(--font-size-xs);
-  cursor: pointer; transition: all var(--transition-fast);
+  cursor: pointer; transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast), filter var(--transition-fast);
   background: var(--color-bg-elevated);
   border: 1px solid var(--border-color);
   border-radius: 6px;
@@ -254,7 +254,7 @@ watch(() => props.nodeId, () => {
   padding: 3px 8px; font-size: var(--font-size-xs);
   border: 1px solid var(--border-color); border-radius: 4px;
   background: var(--card-bg); color: var(--text-secondary);
-  cursor: pointer; transition: all var(--transition-fast);
+  cursor: pointer; transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast), filter var(--transition-fast);
 }
 .mm-dp-btn-sm:hover { border-color: var(--primary); color: var(--primary); }
 .mm-dp-btn-sm.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
@@ -268,7 +268,7 @@ watch(() => props.nodeId, () => {
   padding: 6px 12px; border: 1px solid var(--border-color);
   border-radius: 6px; background: var(--card-bg);
   cursor: pointer; font-size: var(--font-size-xs); color: var(--text-secondary);
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast), filter var(--transition-fast);
   display: inline-flex; align-items: center; gap: 4px;
   flex: 1; justify-content: center;
 }

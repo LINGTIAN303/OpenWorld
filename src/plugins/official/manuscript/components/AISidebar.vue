@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="ai-sidebar" :class="{ open: visible }">
     <div class="ai-header">
       <span class="ai-title"><WsIcon name="profile" size="sm" /> AI 辅助</span>
@@ -169,7 +169,7 @@ defineExpose({ runAI })
 .ai-btn {
   padding: 5px 10px; border: 1px solid var(--border-color); border-radius: 6px;
   background: var(--input-bg); color: var(--text-color); font-size: var(--font-size-sm);
-  cursor: pointer; transition: all 0.1s;
+  cursor: pointer; transition: background 0.1s, border-color 0.1s, color 0.1s, box-shadow 0.1s, transform 0.1s, opacity 0.1s, filter 0.1s;
 }
 .ai-btn:hover { background: var(--hover-bg); border-color: var(--primary); }
 .ai-btn:disabled { opacity: 0.5; cursor: default; }

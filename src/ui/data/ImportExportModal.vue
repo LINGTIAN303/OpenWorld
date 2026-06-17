@@ -388,7 +388,7 @@ function close() {
   display: flex; align-items: center; gap: 4px;
   padding: 4px 10px; border: 1px solid var(--border, #ddd); border-radius: 6px;
   font-size: var(--font-size-sm); cursor: pointer; background: var(--bg, #fafafa);
-  transition: all 0.12s;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s, transform 0.12s, opacity 0.12s, filter 0.12s;
 }
 .ie-scope-item:hover { border-color: var(--primary, #4f46e5); background: var(--primary-light, #eef2ff); }
 .ie-scope-item.disabled { opacity: 0.4; cursor: not-allowed; }

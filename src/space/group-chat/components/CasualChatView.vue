@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="casual-chat-view">
     <!-- 左侧：双区域窄条 + 展开面板 -->
     <SidebarStrip :active-panel="activePanel" @toggle="onStripToggle" />
@@ -1112,7 +1112,7 @@ onBeforeUnmount(() => {
   display: inline-flex; align-items: center; gap: 3px;
   padding: 2px 8px; border-radius: 4px; font-size: 11px;
   background: var(--color-surface-elevated); border: 1px solid var(--color-border);
-  color: var(--color-text-secondary); transition: all 0.2s;
+  color: var(--color-text-secondary); transition: background 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s, filter 0.2s;
 }
 .streaming-tool-tag.running { border-color: var(--color-primary); color: var(--color-primary); }
 .streaming-tool-tag.completed { border-color: rgba(16, 185, 129, 0.3); color: #10b981; }
@@ -1129,10 +1129,10 @@ onBeforeUnmount(() => {
 .time-divider::before, .time-divider::after { content: ''; flex: 1; height: 1px; background: var(--color-border); }
 .divider-text { font-size: 11px; color: var(--color-text-tertiary); padding: 0 12px; white-space: nowrap; }
 
-.scroll-to-bottom { position: absolute; bottom: 68px; right: 16px; padding: 6px 14px; border: 1px solid var(--color-border); border-radius: 20px; background: var(--color-surface-elevated); box-shadow: 0 2px 8px rgba(0,0,0,0.12); cursor: pointer; font-size: 12px; color: var(--color-text); z-index: 10; transition: all 0.2s; backdrop-filter: blur(8px); opacity: 0.85; }
+.scroll-to-bottom { position: absolute; bottom: 68px; right: 16px; padding: 6px 14px; border: 1px solid var(--color-border); border-radius: 20px; background: var(--color-surface-elevated); box-shadow: 0 2px 8px rgba(0,0,0,0.12); cursor: pointer; font-size: 12px; color: var(--color-text); z-index: 10; transition: background 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s, filter 0.2s; backdrop-filter: blur(8px); opacity: 0.85; }
 .scroll-to-bottom:hover { background: var(--color-surface); box-shadow: 0 4px 12px rgba(0,0,0,0.18); }
 
-.msg-list-enter-active { transition: all 0.2s ease-out; }
+.msg-list-enter-active { transition: background 0.2s ease-out, border-color 0.2s ease-out, color 0.2s ease-out, box-shadow 0.2s ease-out, transform 0.2s ease-out, opacity 0.2s ease-out, filter 0.2s ease-out; }
 .msg-list-enter-from { opacity: 0; transform: translateY(8px); }
 
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }

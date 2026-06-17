@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="chat-controls">
     <template v-if="isActive">
       <div class="controls-left">
@@ -126,7 +126,7 @@ function onInject(e?: KeyboardEvent) {
   cursor: pointer;
   background: var(--color-surface-elevated);
   color: var(--color-text);
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 
 .ctrl-btn:hover {

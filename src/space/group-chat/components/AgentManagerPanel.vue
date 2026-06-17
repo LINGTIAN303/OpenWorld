@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <Teleport to="body">
     <Transition name="panel-slide">
       <div v-if="visible" class="agent-manager-overlay" @click.self="onOverlayClick">
@@ -245,7 +245,7 @@ onMounted(async () => {
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 .create-btn:hover { background: var(--color-surface); border-color: var(--color-primary); }
 

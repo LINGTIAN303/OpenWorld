@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="tree-node" :style="{ paddingLeft: depth * 20 + 'px' }">
     <div class="tree-line-container">
       <span v-if="depth > 0" class="tree-branch" :class="isLast ? 'tree-last' : 'tree-mid'"></span>
@@ -156,7 +156,7 @@ const breadcrumbText = computed(() => {
   color: var(--text-tertiary);
   flex-shrink: 0;
   margin-top: 6px;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast), filter var(--transition-fast);
 }
 .collapse-btn:hover {
   background: var(--hover-bg);

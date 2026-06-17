@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="font-selector" v-if="visible">
     <div class="selector-header">
       <span class="selector-title">选择字体</span>
@@ -243,7 +243,7 @@ const filteredSystemFonts = computed(() => {
   font-weight: 500;
   border-radius: 6px 6px 0 0;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
   border-bottom: 2px solid transparent;
 }
 .tab-btn:hover {

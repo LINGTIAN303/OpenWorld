@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="drawing-view">
     <!-- 画板列表视图 -->
     <div v-if="!selectedDrawingId" class="dv-board">
@@ -771,7 +771,7 @@ watch([layers, activeLayerIndex], () => {
 .dv-btn-back { font-size: var(--font-size-xs, 12px); }
 .dv-toolbar-name { font-size: var(--font-size-sm, 13px); font-weight: 600; color: var(--color-text-primary); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.dv-tool-btn { width: 28px; height: 28px; border: 1px solid transparent; border-radius: 4px; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--color-text-secondary); transition: all 0.15s; }
+.dv-tool-btn { width: 28px; height: 28px; border: 1px solid transparent; border-radius: 4px; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--color-text-secondary); transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s; }
 .dv-tool-btn:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
 .dv-tool-btn.active { background: color-mix(in srgb, var(--color-primary) 15%, transparent); color: var(--color-primary); border-color: var(--color-primary); }
 

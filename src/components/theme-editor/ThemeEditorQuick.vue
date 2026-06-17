@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="theme-quick">
     <div class="theme-quick__section">
       <h4 class="theme-quick__heading">选择预设主题</h4>
@@ -117,7 +117,7 @@ function applyQuickSettings() {
 .theme-quick__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: var(--space-3); }
 .theme-quick__card {
   cursor: pointer; border: 2px solid transparent; border-radius: var(--radius-md);
-  padding: var(--space-2); text-align: center; transition: all var(--duration-fast) var(--ease-default);
+  padding: var(--space-2); text-align: center; transition: background var(--duration-fast) var(--ease-default), border-color var(--duration-fast) var(--ease-default), color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default), transform var(--duration-fast) var(--ease-default), opacity var(--duration-fast) var(--ease-default), filter var(--duration-fast) var(--ease-default);
 }
 .theme-quick__card:hover { border-color: var(--color-primary); }
 .theme-quick__card--active { border-color: var(--color-primary); background: var(--color-primary-subtle); }
@@ -131,7 +131,7 @@ function applyQuickSettings() {
 .theme-quick__option {
   padding: var(--space-1) var(--space-3); border: 1px solid var(--color-border);
   border-radius: var(--radius-sm); background: transparent; font-size: var(--font-size-sm);
-  color: var(--color-text-secondary); cursor: pointer; transition: all var(--duration-fast) var(--ease-default);
+  color: var(--color-text-secondary); cursor: pointer; transition: background var(--duration-fast) var(--ease-default), border-color var(--duration-fast) var(--ease-default), color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default), transform var(--duration-fast) var(--ease-default), opacity var(--duration-fast) var(--ease-default), filter var(--duration-fast) var(--ease-default);
 }
 .theme-quick__option:hover { border-color: var(--color-primary); color: var(--color-primary); }
 .theme-quick__option--active { background: var(--color-primary-subtle); border-color: var(--color-primary); color: var(--color-primary); }

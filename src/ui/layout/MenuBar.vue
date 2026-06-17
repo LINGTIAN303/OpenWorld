@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="menubar">
     <div class="menubar-left">
       <button class="menubar-toggle" aria-label="切换侧边栏" @click="uiStore.toggleSidebar" :title="uiStore.sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'">☰</button>
@@ -314,7 +314,7 @@ async function saveFolder() {
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast), filter var(--transition-fast);
 }
 
 .menubar-toggle:hover,

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="group-chat-list">
     <div class="list-header">
       <input class="search-input" v-model="searchQuery" placeholder="搜索群聊..." />
@@ -259,7 +259,7 @@ function onDocumentClick(event: MouseEvent): void {
 .close-btn:hover { background: var(--color-surface-elevated); color: var(--color-text); }
 
 .mode-tabs { display: flex; gap: 2px; padding: 0 8px 6px; }
-.mode-tab { flex: 1; padding: 4px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); cursor: pointer; font-size: 11px; text-align: center; transition: all 0.15s; color: var(--color-text-secondary); }
+.mode-tab { flex: 1; padding: 4px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); cursor: pointer; font-size: 11px; text-align: center; transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s; color: var(--color-text-secondary); }
 .mode-tab.active { background: rgba(108,92,231,0.1); border-color: var(--color-primary); font-weight: 600; color: var(--color-text); }
 
 .list-body { flex: 1; overflow-y: auto; min-height: 0; }

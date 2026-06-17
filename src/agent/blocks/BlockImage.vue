@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <!--
     BlockImage.vue - 图片展示组件
     用于在聊天消息中渲染 AI 生成的图片块。支持展开/折叠切换和右键菜单操作。
@@ -237,7 +237,7 @@ function copySrc(): void {
 }
 .block-img { max-width: 100%; max-height: 300px; border-radius: 6px; object-fit: contain; cursor: pointer; }
 .img-caption { display: block; font-size: 11px; color: var(--agent-text-tertiary, #888); margin-top: 4px; }
-.block-expand-enter-active, .block-expand-leave-active { transition: all 0.2s ease; overflow: hidden; }
+.block-expand-enter-active, .block-expand-leave-active { transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease, filter 0.2s ease; overflow: hidden; }
 .block-expand-enter-from, .block-expand-leave-to { opacity: 0; }
 .img-ctx-menu {
   position: fixed; z-index: 10000;

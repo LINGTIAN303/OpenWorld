@@ -374,7 +374,7 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
   font-size: var(--font-size-xs);
   cursor: pointer;
-  transition: all 0.12s;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s, transform 0.12s, opacity 0.12s, filter 0.12s;
 }
 
 .afp-effect-btn:hover {
@@ -474,7 +474,7 @@ onBeforeUnmount(() => {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 
 .afp-generate-btn:hover:not(:disabled) {
@@ -497,7 +497,7 @@ onBeforeUnmount(() => {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 
 .afp-export-btn:hover:not(:disabled) {
@@ -522,7 +522,7 @@ onBeforeUnmount(() => {
 
 .afp-panel-enter-active,
 .afp-panel-leave-active {
-  transition: all 0.25s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+  transition: background 0.25s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)), border-color 0.25s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)), color 0.25s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)), box-shadow 0.25s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)), transform 0.25s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)), opacity 0.25s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)), filter 0.25s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1));
 }
 
 .afp-panel-enter-from,

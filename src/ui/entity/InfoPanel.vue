@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <Transition name="ws-panel-backdrop">
     <div v-if="entity" class="info-panel-backdrop"></div>
   </Transition>
@@ -447,13 +447,13 @@ function stripHtml(s: string): string {
 .ip-edit-btn {
   font-size: var(--font-size-sm); padding: 2px 8px; border-radius: 4px;
   border: 1px solid var(--border); background: var(--bg-tertiary);
-  cursor: pointer; color: var(--text-secondary); transition: all 0.12s;
+  cursor: pointer; color: var(--text-secondary); transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s, transform 0.12s, opacity 0.12s, filter 0.12s;
 }
 .ip-edit-btn.on { background: var(--accent-bg, rgba(167,139,250,0.12)); color: var(--accent); border-color: var(--accent); }
 .ip-del-btn {
   font-size: var(--font-size-sm); padding: 2px 8px; border-radius: 4px;
   border: 1px solid var(--danger, #e74c3c); background: transparent;
-  cursor: pointer; color: var(--danger, #e74c3c); transition: all 0.12s;
+  cursor: pointer; color: var(--danger, #e74c3c); transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s, transform 0.12s, opacity 0.12s, filter 0.12s;
 }
 .ip-del-btn:hover { background: var(--danger, #e74c3c); color: #fff; }
 .ip-hint { font-size: var(--font-size-xs); color: var(--text-tertiary); background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px; }
@@ -472,7 +472,7 @@ function stripHtml(s: string): string {
 .ip-prop-del { background: none; border: none; color: var(--danger, #e74c3c); font-size: var(--font-size-xs); cursor: pointer; padding: 0 2px; opacity: 0.5; transition: opacity 0.15s; }
 .ip-prop-del:hover { opacity: 1 !important; }
 .ip-add-field { margin-top: 6px; }
-.ip-add-btn { font-size: var(--font-size-xs); padding: 3px 10px; background: none; border: 1px dashed var(--border); border-radius: 4px; cursor: pointer; color: var(--text-tertiary); transition: all 0.15s; }
+.ip-add-btn { font-size: var(--font-size-xs); padding: 3px 10px; background: none; border: 1px dashed var(--border); border-radius: 4px; cursor: pointer; color: var(--text-tertiary); transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s; }
 .ip-add-btn:hover { border-color: var(--accent); color: var(--accent); }
 .ip-adder { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .ip-adder-key { max-width: 100px; font-size: var(--font-size-xs); }
@@ -548,11 +548,11 @@ function stripHtml(s: string): string {
 }
 .ip-order-btn-cancel:hover { background: var(--hover-bg); }
 
-.confirm-bar-enter-active, .confirm-bar-leave-active { transition: all 0.15s ease; }
+.confirm-bar-enter-active, .confirm-bar-leave-active { transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease, filter 0.15s ease; }
 .confirm-bar-enter-from, .confirm-bar-leave-to { transform: translateY(100%); opacity: 0; }
 
 
-.panel-enter-active, .panel-leave-active { transition: all 0.3s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)); }
+.panel-enter-active, .panel-leave-active { transition: background 0.3s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)), border-color 0.3s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)), color 0.3s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)), box-shadow 0.3s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)), transform 0.3s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)), opacity 0.3s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)), filter 0.3s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)); }
 .panel-enter-from, .panel-leave-to { transform: translateX(100%); opacity: 0; }
 
 .info-panel-backdrop {

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <!-- 选择型：浮出卡片，独立于折叠容器 -->
   <div v-if="interactiveType === 'choice'" class="itc-choice" :class="tc.status">
     <div class="itc-choice-header">
@@ -360,7 +360,7 @@ function formatResult(result: string): string {
   background: transparent;
   color: var(--agent-primary);
   font-size: 12px;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -766,7 +766,7 @@ function formatResult(result: string): string {
   border: 1px solid rgba(255, 255, 255, 0.1);
   cursor: pointer;
   font-size: 12px;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 
 .itc-confirm-reject:hover {
@@ -782,7 +782,7 @@ function formatResult(result: string): string {
   font-size: 12px;
   font-weight: 600;
   color: #fff;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 
 .itc-confirm-approve.warning {

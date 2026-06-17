@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="mindmap-toolbar">
     <input :value="searchQuery" class="search-input" placeholder="搜索节点...  (Enter 下一处)" @input="$emit('update:searchQuery', ($event.target as HTMLInputElement).value)" @keydown.enter="$emit('search-next')" @keydown.shift.enter="$emit('search-prev')" />
 
@@ -156,7 +156,7 @@ const typeFilters = [
   color: var(--text-color);
   outline: none;
   min-width: 180px;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast), filter var(--transition-fast);
 }
 .search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px var(--color-primary-subtle); }
 .search-counter {
@@ -171,7 +171,7 @@ const typeFilters = [
   display: flex; align-items: center; gap: 3px;
   padding: 2px 6px; border-radius: 4px; border: 1px solid;
   font-size: var(--font-size-xs); cursor: pointer; white-space: nowrap;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast), filter var(--transition-fast);
 }
 .type-chip:hover { transform: translateY(-1px); }
 .type-chip input { width: 12px; height: 12px; margin: 0; cursor: pointer; accent-color: var(--primary); }
@@ -182,7 +182,7 @@ const typeFilters = [
   width: 28px; height: 28px; border: 1px solid var(--border-color);
   border-radius: var(--radius-sm); background: transparent; cursor: pointer;
   font-size: var(--font-size-base); display: flex; align-items: center; justify-content: center;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast), filter var(--transition-fast);
   color: var(--text-secondary);
 }
 .icon-btn:hover { background: var(--hover-bg); color: var(--text-color); transform: translateY(-1px); }

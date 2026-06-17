@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="aw-panel">
     <div class="aw-title">态势感知</div>
     <div class="aw-modes">
@@ -78,7 +78,7 @@ defineEmits<{
   background: transparent;
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
   font-size: var(--font-size-xs);
 }
 
@@ -157,7 +157,7 @@ defineEmits<{
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
   display: inline-flex;
   align-items: center;
   justify-content: center;

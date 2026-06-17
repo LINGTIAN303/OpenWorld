@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="notebook-view">
     <div class="nb-toolbar">
       <div class="nb-toolbar-left">
@@ -498,10 +498,10 @@ useAgentPluginBridge('notebook', async (event) => {
 .notebook-view { display: flex; flex-direction: column; height: 100%; background: var(--color-bg-base); }
 .nb-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--color-border-subtle); background: var(--color-bg-surface); }
 .nb-toolbar-left { display: flex; gap: 4px; align-items: center; }
-.nb-sidebar-toggle { padding: 4px 8px; border-radius: 4px; border: 1px solid var(--color-border); background: transparent; color: var(--color-text-tertiary); font-size: var(--font-size-xs); cursor: pointer; transition: all 0.15s; display: flex; align-items: center; justify-content: center; }
+.nb-sidebar-toggle { padding: 4px 8px; border-radius: 4px; border: 1px solid var(--color-border); background: transparent; color: var(--color-text-tertiary); font-size: var(--font-size-xs); cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s; display: flex; align-items: center; justify-content: center; }
 .nb-sidebar-toggle:hover { background: var(--color-bg-hover); color: var(--color-text-secondary); border-color: var(--color-text-secondary); }
 .nb-toggle-icon { transition: transform 0.2s; display: inline-block; }
-.nb-mode-btn { padding: 4px 12px; border-radius: 4px; border: 1px solid transparent; background: transparent; color: var(--color-text-secondary); font-size: var(--font-size-sm); cursor: pointer; transition: all 0.15s; }
+.nb-mode-btn { padding: 4px 12px; border-radius: 4px; border: 1px solid transparent; background: transparent; color: var(--color-text-secondary); font-size: var(--font-size-sm); cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s; }
 .nb-mode-btn:hover { background: var(--color-bg-hover); }
 .nb-mode-btn.active { background: color-mix(in srgb, var(--color-primary) 15%, transparent); color: var(--color-primary); border-color: var(--color-primary); }
 .nb-toolbar-right { display: flex; gap: 6px; }

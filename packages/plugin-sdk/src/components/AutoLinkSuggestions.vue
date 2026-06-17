@@ -234,7 +234,7 @@ watch(() => props.properties, () => refresh(), { deep: true })
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 
 .als-confirm {

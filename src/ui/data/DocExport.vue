@@ -154,7 +154,7 @@ function close() { emit('close') }
 .de-options { display: flex; gap: 16px; margin-bottom: 12px; font-size: var(--font-size-base); cursor: pointer; }
 .de-options label { cursor: pointer; }
 .de-format-toggle { display: flex; gap: 0; margin-bottom: 12px; border: 1px solid var(--border, #ddd); border-radius: 6px; overflow: hidden; }
-.de-format-btn { padding: 6px 16px; border: none; background: var(--bg-tertiary, #f0f0f0); cursor: pointer; font-size: var(--font-size-sm); color: var(--text-secondary, #666); transition: all 0.2s; }
+.de-format-btn { padding: 6px 16px; border: none; background: var(--bg-tertiary, #f0f0f0); cursor: pointer; font-size: var(--font-size-sm); color: var(--text-secondary, #666); transition: background 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s, filter 0.2s; }
 .de-format-btn:not(:last-child) { border-right: 1px solid var(--border, var(--color-border)); }
 .de-format-btn.active { background: var(--accent, #4a90d9); color: #fff; }
 .de-format-btn:hover:not(.active) { background: var(--bg-secondary, #e8e8e8); }

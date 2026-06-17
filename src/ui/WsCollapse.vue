@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="ws-collapse">
     <div v-for="(panel, idx) in panels" :key="panel.key ?? idx" class="ws-collapse__panel">
       <button
@@ -91,7 +91,7 @@ function toggle(key: string | number) {
 
 .ws-collapse__body { padding: var(--space-3) var(--space-4); font-size: var(--font-size-sm); color: var(--color-text-secondary); }
 
-.ws-collapse-enter-active { transition: all var(--duration-normal) var(--ease-default); }
-.ws-collapse-leave-active { transition: all var(--duration-fast) var(--ease-in); }
+.ws-collapse-enter-active { transition: background var(--duration-normal) var(--ease-default), border-color var(--duration-normal) var(--ease-default), color var(--duration-normal) var(--ease-default), box-shadow var(--duration-normal) var(--ease-default), transform var(--duration-normal) var(--ease-default), opacity var(--duration-normal) var(--ease-default), filter var(--duration-normal) var(--ease-default); }
+.ws-collapse-leave-active { transition: background var(--duration-fast) var(--ease-in), border-color var(--duration-fast) var(--ease-in), color var(--duration-fast) var(--ease-in), box-shadow var(--duration-fast) var(--ease-in), transform var(--duration-fast) var(--ease-in), opacity var(--duration-fast) var(--ease-in), filter var(--duration-fast) var(--ease-in); }
 .ws-collapse-enter-from, .ws-collapse-leave-to { opacity: 0; max-height: 0; overflow: hidden; }
 </style>

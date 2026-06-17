@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="nb-board">
     <div v-if="notes.length === 0" class="nb-board-empty">
       <WsIcon name="dashboard" size="xl" />
@@ -93,7 +93,7 @@ function onColChange(colType: string, evt: any) {
 .nb-col-header { display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--color-border-subtle); color: var(--color-text-secondary); font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); }
 .nb-col-count { margin-left: auto; font-size: var(--font-size-xs); color: var(--color-text-tertiary); }
 .nb-col-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 60px; }
-.nb-board-card { background: var(--color-bg-elevated); border: 1px solid var(--color-border-subtle); border-radius: 8px; padding: 12px; cursor: pointer; transition: all 0.15s; }
+.nb-board-card { background: var(--color-bg-elevated); border: 1px solid var(--color-border-subtle); border-radius: 8px; padding: 12px; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s; }
 .nb-board-card:hover { border-color: var(--color-primary); transform: translateY(-1px); }
 .nb-bc-icon { font-size: var(--font-size-xl); margin-bottom: 6px; }
 .nb-bc-name { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); margin-bottom: 4px; }

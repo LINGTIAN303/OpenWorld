@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div
     class="casual-msg"
     :class="{
@@ -297,7 +297,7 @@ function onContextMenu(e: MouseEvent): void {
   border: 1px solid var(--color-border);
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 
 .tool-call-tag:hover { filter: brightness(1.05); }
@@ -414,8 +414,8 @@ function onContextMenu(e: MouseEvent): void {
   word-break: break-word;
 }
 
-.thinking-pop-enter-active { transition: all 0.15s ease-out; }
-.thinking-pop-leave-active { transition: all 0.1s ease-in; }
+.thinking-pop-enter-active { transition: background 0.15s ease-out, border-color 0.15s ease-out, color 0.15s ease-out, box-shadow 0.15s ease-out, transform 0.15s ease-out, opacity 0.15s ease-out, filter 0.15s ease-out; }
+.thinking-pop-leave-active { transition: background 0.1s ease-in, border-color 0.1s ease-in, color 0.1s ease-in, box-shadow 0.1s ease-in, transform 0.1s ease-in, opacity 0.1s ease-in, filter 0.1s ease-in; }
 .thinking-pop-enter-from { opacity: 0; transform: translateY(4px) scale(0.95); }
 .thinking-pop-leave-to { opacity: 0; transform: translateY(2px) scale(0.98); }
 </style>

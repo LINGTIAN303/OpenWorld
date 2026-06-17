@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <label :class="['ws-checkbox', { 'ws-checkbox--checked': modelValue, 'ws-checkbox--disabled': disabled }]">
     <input type="checkbox" class="ws-checkbox__input" :checked="modelValue" :disabled="disabled" @change="onChange" />
     <span class="ws-checkbox__box">
@@ -41,7 +41,7 @@ function onChange() {
 .ws-checkbox__box {
   width: 18px; height: 18px; border: 2px solid var(--color-border-strong);
   border-radius: var(--radius-xs); display: flex; align-items: center; justify-content: center;
-  transition: all var(--duration-fast) var(--ease-default); flex-shrink: 0;
+  transition: background var(--duration-fast) var(--ease-default), border-color var(--duration-fast) var(--ease-default), color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default), transform var(--duration-fast) var(--ease-default), opacity var(--duration-fast) var(--ease-default), filter var(--duration-fast) var(--ease-default); flex-shrink: 0;
 }
 .ws-checkbox--checked .ws-checkbox__box {
   background: var(--color-primary); border-color: var(--color-primary); color: #fff;

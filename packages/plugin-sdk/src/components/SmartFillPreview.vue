@@ -254,7 +254,7 @@ function truncate(text: string, max = 120): string {
   font-size: var(--font-size-xs, 11px);
   padding: 2px 6px;
   color: var(--text-secondary);
-  transition: all 0.12s;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s, transform 0.12s, opacity 0.12s, filter 0.12s;
 }
 .sfp-action:hover {
   border-color: var(--accent);
@@ -287,7 +287,7 @@ function truncate(text: string, max = 120): string {
   cursor: pointer;
   font-size: var(--font-size-sm, 13px);
   border: 1px solid var(--border-color, var(--border));
-  transition: all 0.12s;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s, transform 0.12s, opacity 0.12s, filter 0.12s;
 }
 .sfp-btn-accept-all {
   background: color-mix(in srgb, var(--color-success, #22c55e) 10%, transparent);

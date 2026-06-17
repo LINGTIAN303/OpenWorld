@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="theme-pro">
     <div class="theme-pro__toolbar">
       <span class="theme-pro__hint">编辑语义令牌，实时预览效果</span>
@@ -218,7 +218,7 @@ function getLuminance(hex: string): number {
 .theme-pro__reset {
   padding: var(--space-1) var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm);
   background: transparent; color: var(--color-text-secondary); font-size: var(--font-size-xs); cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-default);
+  transition: background var(--duration-fast) var(--ease-default), border-color var(--duration-fast) var(--ease-default), color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default), transform var(--duration-fast) var(--ease-default), opacity var(--duration-fast) var(--ease-default), filter var(--duration-fast) var(--ease-default);
 }
 .theme-pro__reset:hover { border-color: var(--color-danger); color: var(--color-danger); }
 

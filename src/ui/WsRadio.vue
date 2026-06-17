@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <label :class="['ws-radio', { 'ws-radio--checked': modelValue === value, 'ws-radio--disabled': disabled }]">
     <input type="radio" class="ws-radio__input" :checked="modelValue === value" :disabled="disabled" :name="name" @change="onChange" />
     <span class="ws-radio__circle">
@@ -40,7 +40,7 @@ function onChange() {
 .ws-radio__circle {
   width: 18px; height: 18px; border: 2px solid var(--color-border-strong);
   border-radius: 50%; display: flex; align-items: center; justify-content: center;
-  transition: all var(--duration-fast) var(--ease-default); flex-shrink: 0;
+  transition: background var(--duration-fast) var(--ease-default), border-color var(--duration-fast) var(--ease-default), color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default), transform var(--duration-fast) var(--ease-default), opacity var(--duration-fast) var(--ease-default), filter var(--duration-fast) var(--ease-default); flex-shrink: 0;
 }
 .ws-radio--checked .ws-radio__circle { border-color: var(--color-primary); }
 .ws-radio:not(.ws-radio--disabled):hover .ws-radio__circle { border-color: var(--color-primary); }

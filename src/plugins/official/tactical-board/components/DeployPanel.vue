@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="dp-panel">
     <div class="dp-title">部署单位</div>
     <div class="dp-team-select">
@@ -143,7 +143,7 @@ function onSelectEntity(entity: Entity) {
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 
 .dp-team-btn:hover { border-color: var(--color-text-secondary); }
@@ -254,7 +254,7 @@ function onSelectEntity(entity: Entity) {
   color: var(--color-text-primary);
   font-size: var(--font-size-xs);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
   text-align: center;
 }
 

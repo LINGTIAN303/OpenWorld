@@ -576,7 +576,7 @@ onMounted(async () => {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 .add-btn:hover {
   border-color: var(--color-primary);
@@ -666,7 +666,7 @@ onMounted(async () => {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 .scope-btn.active {
   border-color: var(--color-primary);
@@ -704,7 +704,7 @@ onMounted(async () => {
   font-size: var(--font-size-sm);
   cursor: pointer;
   border: none;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 
 .kb-btn-cancel {

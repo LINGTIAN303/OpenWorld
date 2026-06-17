@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="theme-code">
     <div class="theme-code__toolbar">
       <span class="theme-code__hint">JSON 格式编辑主题令牌</span>
@@ -157,7 +157,7 @@ async function exportToClipboard() {
 .theme-code__btn {
   padding: var(--space-1) var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm);
   background: transparent; color: var(--color-text-secondary); font-size: var(--font-size-xs); cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-default);
+  transition: background var(--duration-fast) var(--ease-default), border-color var(--duration-fast) var(--ease-default), color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default), transform var(--duration-fast) var(--ease-default), opacity var(--duration-fast) var(--ease-default), filter var(--duration-fast) var(--ease-default);
 }
 .theme-code__btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
 
@@ -196,7 +196,7 @@ async function exportToClipboard() {
   padding: var(--space-2) var(--space-4); border: none; border-radius: var(--radius-sm);
   background: var(--color-primary); color: var(--color-primary-foreground, #fff);
   font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-default);
+  transition: background var(--duration-fast) var(--ease-default), border-color var(--duration-fast) var(--ease-default), color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default), transform var(--duration-fast) var(--ease-default), opacity var(--duration-fast) var(--ease-default), filter var(--duration-fast) var(--ease-default);
 }
 .theme-code__apply-btn:hover { filter: brightness(1.1); }
 </style>

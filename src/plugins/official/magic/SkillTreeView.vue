@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="st-view">
     <div class="st-toolbar">
       <button class="st-btn" @click="$emit('back')" title="返回列表">
@@ -221,7 +221,7 @@ onMounted(async () => {
 .st-toolbar-label { font-size: var(--font-size-xs); color: var(--color-text-secondary); white-space: nowrap; }
 .st-toolbar-sep { width: 1px; height: 20px; background: var(--color-border); margin: 0 4px; }
 .st-toolbar-spacer { flex: 1; }
-.st-btn { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-bg-elevated); color: var(--color-text-primary); font-size: var(--font-size-sm); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+.st-btn { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-bg-elevated); color: var(--color-text-primary); font-size: var(--font-size-sm); cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s; white-space: nowrap; }
 .st-btn:hover { background: var(--color-bg-hover); border-color: var(--color-text-secondary); color: var(--color-text-primary); }
 .st-btn.active { background: var(--color-bg-hover); border-color: var(--color-primary); color: var(--color-primary); }
 .st-toggle { display: flex; align-items: center; gap: 4px; font-size: var(--font-size-sm); color: var(--color-text-secondary); cursor: pointer; }

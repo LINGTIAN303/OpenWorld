@@ -448,7 +448,7 @@ onMounted(async () => {
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 .font-btn:hover {
   border-color: var(--color-primary);
@@ -473,7 +473,7 @@ onMounted(async () => {
   color: var(--color-text-secondary);
   font-size: var(--font-size-2xs);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 .profile-btn.active {
   border-color: var(--color-primary);

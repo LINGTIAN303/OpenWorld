@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="mindmap-view">
     <MindmapToolbar
       :search-query="searchQuery"
@@ -1659,7 +1659,7 @@ useAgentPluginBridge('mindmap', (event) => {
 .mm-modal { background: var(--card-bg); border-radius: var(--radius-xl); padding: 20px; min-width: 280px; max-width: 480px; box-shadow: var(--shadow-xl); }
 .mm-modal h4 { margin-bottom: 12px; }
 .mm-modal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; margin-bottom: 12px; }
-.mm-type-card { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: none; cursor: pointer; font-size: var(--font-size-sm); transition: all var(--transition-fast); }
+.mm-type-card { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: none; cursor: pointer; font-size: var(--font-size-sm); transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast), filter var(--transition-fast); }
 .mm-type-card:hover { border-color: var(--primary); background: var(--primary-light); }
 .mm-textarea { width: 100%; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px; font-size: var(--font-size-sm); resize: vertical; background: var(--bg); color: var(--text-color); }
 .mm-batch-bar { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); background: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 6px 16px; box-shadow: var(--shadow-lg); display: flex; align-items: center; gap: 8px; font-size: var(--font-size-sm); z-index: 100; }

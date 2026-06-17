@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <WsModal :show="show" title="主题编辑器" size="lg" @close="$emit('close')">
     <div class="theme-editor">
       <div class="theme-editor__tabs">
@@ -46,7 +46,7 @@ const tabs = [
 .theme-editor__tab {
   padding: var(--space-1) var(--space-3); border: none; background: transparent;
   font-size: var(--font-size-sm); color: var(--color-text-secondary); cursor: pointer;
-  border-radius: var(--radius-sm); transition: all var(--duration-fast) var(--ease-default);
+  border-radius: var(--radius-sm); transition: background var(--duration-fast) var(--ease-default), border-color var(--duration-fast) var(--ease-default), color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default), transform var(--duration-fast) var(--ease-default), opacity var(--duration-fast) var(--ease-default), filter var(--duration-fast) var(--ease-default);
 }
 .theme-editor__tab:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
 .theme-editor__tab--active { background: var(--color-primary-subtle); color: var(--color-primary); font-weight: var(--font-weight-medium); }

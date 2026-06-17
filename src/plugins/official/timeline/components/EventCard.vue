@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div
     class="event-card"
     :class="{ highlighted: highlighted, 'is-range': isRange, compact }"
@@ -77,7 +77,7 @@ const statusClass = computed(() => {
   border-radius: var(--radius-md);
   padding: 12px 16px;
   cursor: pointer;
-  transition: all var(--transition);
+  transition: background var(--transition), border-color var(--transition), color var(--transition), box-shadow var(--transition), transform var(--transition), opacity var(--transition), filter var(--transition);
   box-shadow: var(--card-shadow);
   position: relative;
   flex: 1;

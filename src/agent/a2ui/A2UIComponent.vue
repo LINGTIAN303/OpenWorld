@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div :class="['a2ui-comp', `a2ui-${comp.component}`]">
     <template v-if="comp.component === 'Text'">
       <component :is="textTag" :class="['a2ui-text', variantClass]">{{ resolvedText }}</component>
@@ -660,7 +660,7 @@ const renderedMermaid = computed(() => {
 
 .a2ui-btn {
   padding: 4px 12px; border-radius: var(--radius-sm, 4px); border: 1px solid var(--agent-border, var(--color-border));
-  cursor: pointer; font-size: var(--font-size-sm); transition: all 0.15s ease; background: var(--agent-bg-tertiary, var(--color-bg-elevated));
+  cursor: pointer; font-size: var(--font-size-sm); transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease, filter 0.15s ease; background: var(--agent-bg-tertiary, var(--color-bg-elevated));
   color: var(--agent-text, var(--color-text-primary));
 }
 .a2ui-btn:hover { filter: brightness(1.2); }
@@ -689,7 +689,7 @@ const renderedMermaid = computed(() => {
 .a2ui-choices { display: flex; flex-wrap: wrap; gap: 4px; }
 .a2ui-choice {
   padding: 3px 10px; border-radius: 12px; border: 1px solid var(--agent-border, var(--color-border));
-  background: transparent; color: var(--agent-text-secondary, var(--color-text-tertiary)); font-size: var(--font-size-sm); cursor: pointer; transition: all 0.15s;
+  background: transparent; color: var(--agent-text-secondary, var(--color-text-tertiary)); font-size: var(--font-size-sm); cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 .a2ui-choice:hover { border-color: var(--agent-accent, var(--color-primary)); }
 .a2ui-choice.active { background: var(--agent-accent, var(--color-primary)); color: #fff; border-color: transparent; }
@@ -707,7 +707,7 @@ const renderedMermaid = computed(() => {
 .a2ui-tab-headers { display: flex; gap: 0; border-bottom: 1px solid var(--agent-border, var(--color-border)); }
 .a2ui-tab-btn {
   padding: 6px 14px; border: none; background: transparent; color: var(--agent-text-secondary, var(--color-text-tertiary));
-  font-size: var(--font-size-sm); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s;
+  font-size: var(--font-size-sm); cursor: pointer; border-bottom: 2px solid transparent; transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 .a2ui-tab-btn:hover { color: var(--agent-text, var(--color-text-primary)); }
 .a2ui-tab-btn.active { color: var(--agent-accent, var(--color-primary)); border-bottom-color: var(--agent-accent, var(--color-primary)); }
@@ -752,7 +752,7 @@ const renderedMermaid = computed(() => {
 .a2ui-tag {
   font-size: var(--font-size-xs); padding: 2px 8px; border-radius: 10px; cursor: pointer;
   background: var(--agent-bg-tertiary, var(--color-bg-elevated)); color: var(--agent-text-secondary, var(--color-text-tertiary));
-  border: 1px solid var(--agent-border, var(--color-border)); transition: all 0.15s;
+  border: 1px solid var(--agent-border, var(--color-border)); transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 .a2ui-tag:hover { border-color: var(--agent-accent, var(--color-primary)); color: var(--agent-accent, var(--color-primary)); }
 
@@ -828,7 +828,7 @@ const renderedMermaid = computed(() => {
 .a2ui-suggestion-picker { background: var(--agent-bg-tertiary, var(--color-bg-elevated)); border: 1px solid var(--agent-border, var(--color-border)); border-radius: var(--radius-md, 8px); padding: 12px; }
 .a2ui-sp-title { font-size: var(--font-size-base); font-weight: var(--font-weight-semibold); color: var(--agent-text, var(--color-text-primary)); margin-bottom: 10px; }
 .a2ui-sp-options { display: flex; flex-direction: column; gap: 6px; }
-.a2ui-sp-option { padding: 10px 12px; border: 1px solid var(--agent-border, var(--color-border)); border-radius: 6px; cursor: pointer; transition: all 0.15s; }
+.a2ui-sp-option { padding: 10px 12px; border: 1px solid var(--agent-border, var(--color-border)); border-radius: 6px; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s; }
 .a2ui-sp-option:hover { border-color: var(--agent-accent, var(--color-primary)); }
 .a2ui-sp-option.active { border-color: var(--agent-accent, var(--color-primary)); background: color-mix(in srgb, var(--color-primary) 10%, transparent); }
 .a2ui-sp-label { font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); color: var(--agent-text, var(--color-text-primary)); }

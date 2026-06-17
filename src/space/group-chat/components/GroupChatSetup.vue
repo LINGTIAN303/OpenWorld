@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="setup-panel">
     <div class="setup-scroll">
       <h2 class="setup-title">发起群聊讨论</h2>
@@ -503,7 +503,7 @@ function onStart(): void {
   background: var(--color-surface);
   cursor: pointer;
   text-align: center;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 
 .template-card:hover {
@@ -554,7 +554,7 @@ function onStart(): void {
   border: 1px solid var(--color-border);
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 
 .saved-card:hover {

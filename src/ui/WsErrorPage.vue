@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="ws-error-page" role="alert">
     <div class="ws-error-page__icon">
       <WsIcon name="close" size="xl" />
@@ -63,7 +63,7 @@ const displayTitle = computed(() => props.title || TITLES[props.type])
   padding: var(--space-2) var(--space-4); background: var(--color-bg-surface);
   color: var(--color-text-secondary); border: 1px solid var(--color-border);
   border-radius: var(--radius-btn); cursor: pointer; font-size: var(--font-size-sm);
-  transition: all var(--duration-fast) var(--ease-default);
+  transition: background var(--duration-fast) var(--ease-default), border-color var(--duration-fast) var(--ease-default), color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default), transform var(--duration-fast) var(--ease-default), opacity var(--duration-fast) var(--ease-default), filter var(--duration-fast) var(--ease-default);
 }
 .ws-error-page__retry:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
 .ws-error-page__retry:focus-visible { box-shadow: 0 0 0 2px var(--color-primary); outline: none; }

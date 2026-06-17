@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="character-view">
     <GenericEntityView
       ref="gevRef"
@@ -414,7 +414,7 @@ function switchToInfoTab() {
 .dp-type-label { font-size: var(--font-size-sm); color: var(--text-secondary); }
 
 /* Compare */
-.btn-compare { padding: 7px 14px; background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: var(--font-size-sm); transition: all var(--transition-fast); }
+.btn-compare { padding: 7px 14px; background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: var(--font-size-sm); transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast), filter var(--transition-fast); }
 .btn-compare.active { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }
 .compare-overlay { position: fixed; inset: 0; z-index: var(--z-overlay); background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; }
 .compare-panel { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 20px; min-width: 480px; max-width: 640px; max-height: 80vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
@@ -440,7 +440,7 @@ function switchToInfoTab() {
 .dp-app-stage { flex: 1; padding: 5px 8px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: var(--font-size-sm); font-family: inherit; }
 .dp-app-desc { width: 100%; padding: 5px 8px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: var(--font-size-sm); font-family: inherit; resize: vertical; }
 
-.btn-sm-add { padding: 4px 12px; background: none; border: 1px dashed var(--primary); color: var(--primary); border-radius: var(--radius-sm); cursor: pointer; font-size: var(--font-size-sm); transition: all var(--transition-fast); }
+.btn-sm-add { padding: 4px 12px; background: none; border: 1px dashed var(--primary); color: var(--primary); border-radius: var(--radius-sm); cursor: pointer; font-size: var(--font-size-sm); transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast), filter var(--transition-fast); }
 .btn-sm-add:hover { background: var(--primary-light); }
 .btn-sm { padding: 5px 12px; font-size: var(--font-size-sm); }
 

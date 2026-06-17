@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="slot-editor-overlay" @click.self="$emit('close')">
     <div class="slot-editor">
       <div class="editor-header">
@@ -351,7 +351,7 @@ for (const slot of profileStore.slots) {
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 
 .btn-guide:hover {
@@ -519,7 +519,7 @@ for (const slot of profileStore.slots) {
   cursor: pointer;
   display: flex;
   align-items: center;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 
 .btn-delete:hover {
@@ -576,7 +576,7 @@ for (const slot of profileStore.slots) {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 
 .btn-remove-entry:hover {
@@ -758,7 +758,7 @@ for (const slot of profileStore.slots) {
   font-size: 11px;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 
 .btn-add-entry:hover {

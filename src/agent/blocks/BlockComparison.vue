@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="block-comparison">
     <div class="block-toggle" @click="expanded = !expanded">
       <span class="block-icon">🔀</span>
@@ -61,6 +61,6 @@ const allKeys = computed(() => {
 .cmp-row.diff { background: rgba(108,92,231,0.06); border-radius: 3px; }
 .cmp-val { flex: 1; text-align: center; color: var(--agent-text, #e0e0e0); }
 .cmp-key { flex: 0 0 auto; padding: 0 8px; color: var(--agent-text-tertiary, #888); font-size: 11px; }
-.block-expand-enter-active, .block-expand-leave-active { transition: all 0.2s ease; overflow: hidden; }
+.block-expand-enter-active, .block-expand-leave-active { transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease, filter 0.2s ease; overflow: hidden; }
 .block-expand-enter-from, .block-expand-leave-to { opacity: 0; }
 </style>

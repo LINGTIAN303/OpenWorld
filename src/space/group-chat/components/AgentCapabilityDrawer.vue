@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="capability-panel">
     <div class="panel-header">
       <span class="panel-title">能力配置</span>
@@ -325,7 +325,7 @@ function resetToDerived(): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.12s;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s, transform 0.12s, opacity 0.12s, filter 0.12s;
 }
 
 .panel-close:hover {
@@ -344,7 +344,7 @@ function resetToDerived(): void {
 .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .section-header .section-label { margin-bottom: 0; }
 .section-actions { display: flex; gap: 4px; }
-.action-btn { border: none; background: none; color: var(--color-text-tertiary); font-size: 10px; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: all 0.12s; }
+.action-btn { border: none; background: none; color: var(--color-text-tertiary); font-size: 10px; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s, transform 0.12s, opacity 0.12s, filter 0.12s; }
 .action-btn:hover { color: var(--color-primary); background: rgba(108,92,231,0.06); }
 
 /* 技能区域 */
@@ -359,7 +359,7 @@ function resetToDerived(): void {
   padding: 7px 10px;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.12s;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s, transform 0.12s, opacity 0.12s, filter 0.12s;
   user-select: none;
 }
 .skill-row:hover { background: rgba(108,92,231,0.04); }
@@ -395,7 +395,7 @@ function resetToDerived(): void {
   font-size: 11px;
   font-weight: 500;
   color: var(--color-text-secondary);
-  transition: all 0.12s;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s, transform 0.12s, opacity 0.12s, filter 0.12s;
 }
 .advanced-toggle:hover { border-color: var(--color-primary); color: var(--color-text); }
 .advanced-arrow { margin-left: auto; }
@@ -414,7 +414,7 @@ function resetToDerived(): void {
   background: var(--color-surface);
   border-radius: 4px;
 }
-.reset-btn { border: 1px solid var(--color-border); background: none; color: var(--color-text-secondary); font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; transition: all 0.12s; }
+.reset-btn { border: 1px solid var(--color-border); background: none; color: var(--color-text-secondary); font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s, transform 0.12s, opacity 0.12s, filter 0.12s; }
 .reset-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
 
 /* 工具分类列表 */

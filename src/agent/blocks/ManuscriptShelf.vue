@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div v-if="manuscripts.length" class="manuscript-shelf">
     <div class="shelf-header" @click="expanded = !expanded">
       <WsIcon :name="expanded ? 'chevron-down' : 'chevron-right'" size="xs" />
@@ -102,7 +102,7 @@ function scrollToManuscript(id: string) {
   background: rgba(108, 92, 231, 0.06);
   border: 1px solid rgba(108, 92, 231, 0.15);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease, filter 0.15s ease;
 }
 .shelf-thumb:hover {
   background: rgba(108, 92, 231, 0.12);
@@ -136,7 +136,7 @@ function scrollToManuscript(id: string) {
 
 .shelf-expand-enter-active,
 .shelf-expand-leave-active {
-  transition: all 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease, filter 0.2s ease;
   overflow: hidden;
 }
 .shelf-expand-enter-from,

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <Transition :name="embedded ? '' : 'ws-menu'">
     <div
       v-if="embedded || visible"
@@ -1537,7 +1537,7 @@ function onSearchApiKeyChange(e: Event): void {
   color: var(--agent-text-secondary);
   font-size: var(--font-size-xs);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
   font-family: var(--agent-font);
 }
 
@@ -1557,7 +1557,7 @@ function onSearchApiKeyChange(e: Event): void {
 
 .sub-slide-enter-active,
 .sub-slide-leave-active {
-  transition: all 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease, filter 0.2s ease;
   overflow: hidden;
 }
 
@@ -1665,7 +1665,7 @@ function onSearchApiKeyChange(e: Event): void {
 .mcp-presets { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--agent-border); }
 .mcp-presets-title { font-size: var(--font-size-xs); color: var(--agent-text-tertiary); margin-bottom: 6px; font-family: var(--agent-font); }
 .mcp-presets-grid { display: flex; flex-wrap: wrap; gap: 4px; }
-.preset-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--agent-border); background: var(--agent-hover-bg); cursor: pointer; transition: all 0.15s; min-width: 90px; }
+.preset-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--agent-border); background: var(--agent-hover-bg); cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s; min-width: 90px; }
 .preset-btn:hover:not(:disabled) { border-color: var(--agent-accent); background: color-mix(in srgb, var(--agent-primary) 8%, transparent); }
 .preset-btn.added { opacity: 0.4; cursor: default; }
 .preset-name { font-size: var(--font-size-xs); font-weight: var(--font-weight-medium); color: var(--agent-text); font-family: var(--agent-font); }
@@ -1686,7 +1686,7 @@ function onSearchApiKeyChange(e: Event): void {
   border: 1px solid var(--agent-border);
   background: var(--agent-hover-bg);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease, filter 0.15s ease;
   text-align: left;
   font-family: var(--agent-font);
   color: var(--agent-text);
@@ -1893,7 +1893,7 @@ function onSearchApiKeyChange(e: Event): void {
   font-size: var(--font-size-sm);
   font-family: var(--agent-font);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 
 .settings-btn:hover {
@@ -2049,7 +2049,7 @@ function onSearchApiKeyChange(e: Event): void {
   background: var(--agent-hover-bg);
   color: var(--agent-text-secondary);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
   font-size: var(--font-size-2xs, 11px);
   white-space: nowrap;
 }

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <WsModal :show="show" title="项目管理" size="md" @close="$emit('close')">
     <div class="project-manager">
       <!-- 新建项目 -->
@@ -333,7 +333,7 @@ async function onImportProject() {
   background: transparent;
   cursor: pointer;
   font-size: var(--font-size-sm, 13px);
-  transition: all var(--transition-fast, 0.15s);
+  transition: background var(--transition-fast, 0.15s), border-color var(--transition-fast, 0.15s), color var(--transition-fast, 0.15s), box-shadow var(--transition-fast, 0.15s), transform var(--transition-fast, 0.15s), opacity var(--transition-fast, 0.15s), filter var(--transition-fast, 0.15s);
 }
 
 .pm-create-btn-dir:hover {
@@ -474,7 +474,7 @@ async function onImportProject() {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all var(--transition-fast, 0.15s);
+  transition: background var(--transition-fast, 0.15s), border-color var(--transition-fast, 0.15s), color var(--transition-fast, 0.15s), box-shadow var(--transition-fast, 0.15s), transform var(--transition-fast, 0.15s), opacity var(--transition-fast, 0.15s), filter var(--transition-fast, 0.15s);
 }
 
 .pm-action-btn:hover {
@@ -524,7 +524,7 @@ async function onImportProject() {
   color: var(--text-secondary, var(--color-text-secondary));
   font-size: var(--font-size-sm, 13px);
   cursor: pointer;
-  transition: all var(--transition-fast, 0.15s);
+  transition: background var(--transition-fast, 0.15s), border-color var(--transition-fast, 0.15s), color var(--transition-fast, 0.15s), box-shadow var(--transition-fast, 0.15s), transform var(--transition-fast, 0.15s), opacity var(--transition-fast, 0.15s), filter var(--transition-fast, 0.15s);
 }
 
 .pm-import-btn:hover:not(:disabled) {

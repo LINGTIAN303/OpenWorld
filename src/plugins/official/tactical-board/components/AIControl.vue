@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="ac-panel">
     <div class="ac-title">AI 控制</div>
     <div class="ac-teams">
@@ -120,7 +120,7 @@ const teamList = computed(() => [
   color: #8b949e;
   font-size: var(--font-size-xs);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
   white-space: nowrap;
 }
 
@@ -159,7 +159,7 @@ const teamList = computed(() => [
   color: #8b949e;
   font-size: var(--font-size-xs);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 
 .ac-speed-btn:hover {
@@ -186,7 +186,7 @@ const teamList = computed(() => [
   color: #c9d1d9;
   font-size: var(--font-size-xs);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
   text-align: center;
 }
 

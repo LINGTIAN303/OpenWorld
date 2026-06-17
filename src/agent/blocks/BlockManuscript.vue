@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div
     class="manuscript-canvas"
     :class="canvasClasses"
@@ -662,7 +662,7 @@ function onCorrectorExport(_config: ExportCorrectorConfig) {
   background: rgba(128, 128, 128, 0.08);
   color: inherit;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease, filter 0.15s ease;
   font-family: inherit;
 }
 .ms-tool-btn:hover {

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="folder-tree" @contextmenu.prevent="openContextMenu($event, 'empty')">
     <template v-if="searchMode">
       <div
@@ -360,7 +360,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeyDown))
 .ft-folder-header {
   display: flex; align-items: center; gap: 4px; padding: 5px 6px; border-radius: 4px;
   cursor: pointer; font-size: var(--font-size-sm); color: var(--color-text-secondary);
-  transition: all 0.1s; user-select: none;
+  transition: background 0.1s, border-color 0.1s, color 0.1s, box-shadow 0.1s, transform 0.1s, opacity 0.1s, filter 0.1s; user-select: none;
 }
 .ft-folder-header:hover { background: var(--color-bg-hover); }
 .ft-folder-drag {
@@ -390,7 +390,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeyDown))
 .ft-note-item {
   display: flex; align-items: center; gap: 6px; padding: 5px 8px 5px 28px;
   border-radius: 4px; cursor: pointer; font-size: var(--font-size-sm);
-  color: var(--color-text-secondary); transition: all 0.1s;
+  color: var(--color-text-secondary); transition: background 0.1s, border-color 0.1s, color 0.1s, box-shadow 0.1s, transform 0.1s, opacity 0.1s, filter 0.1s;
 }
 .ft-note-item:hover { background: var(--color-bg-hover); }
 .ft-note-item.active { background: color-mix(in srgb, var(--color-primary) 15%, transparent); color: var(--color-primary); }

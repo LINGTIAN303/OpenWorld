@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="model-switcher" :class="{ expanded: isExpanded }" ref="switcherRef">
     <button class="model-pill" @mousedown.prevent @click.stop="open = !open; if (open) updateDropdownPosition()">
       <img v-if="providerIconUrl" :src="providerIconUrl" class="model-pill-icon" alt="" />
@@ -168,7 +168,7 @@ onBeforeUnmount(() => {
   font-size: var(--font-size-xs);
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.2s;
+  transition: background 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s, filter 0.2s;
   height: 32px;
 }
 

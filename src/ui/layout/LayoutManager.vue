@@ -133,7 +133,7 @@ function close() {
 .lm-preset-del { background: none; border: none; cursor: pointer; font-size: var(--font-size-xs); color: var(--danger, var(--color-danger)); padding: 2px 6px; border-radius: 3px; opacity: 0.5; transition: opacity 0.12s; }
 .lm-preset-del:hover { opacity: 1; }
 .lm-type-actions { padding: 6px 14px 10px; display: flex; gap: 6px; }
-.lm-action-btn { font-size: var(--font-size-xs); padding: 3px 10px; border: 1px solid var(--border, var(--color-border)); border-radius: 4px; background: var(--bg, var(--color-bg-elevated)); cursor: pointer; color: var(--text-secondary); transition: all 0.12s; }
+.lm-action-btn { font-size: var(--font-size-xs); padding: 3px 10px; border: 1px solid var(--border, var(--color-border)); border-radius: 4px; background: var(--bg, var(--color-bg-elevated)); cursor: pointer; color: var(--text-secondary); transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s, transform 0.12s, opacity 0.12s, filter 0.12s; }
 .lm-action-btn:hover { border-color: var(--primary, var(--color-primary)); color: var(--primary, var(--color-primary)); }
 .lm-empty { font-size: var(--font-size-sm); color: var(--text-tertiary); padding: 4px 0; }
 .lm-footer { display: flex; justify-content: space-between; padding: 12px 20px; border-top: 1px solid var(--border, var(--color-border)); }

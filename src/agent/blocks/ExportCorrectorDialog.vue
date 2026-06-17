@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <Teleport to="body">
     <Transition name="corrector">
       <div v-if="show" class="corrector-overlay" @click.self="onOverlayClick">
@@ -914,7 +914,7 @@ onBeforeUnmount(() => {
   cursor: pointer;
   color: inherit;
   font-family: inherit;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 .ft-btn:hover {
   background: rgba(255,255,255,0.08);

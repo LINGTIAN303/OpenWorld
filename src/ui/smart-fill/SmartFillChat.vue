@@ -396,7 +396,7 @@ onUnmounted(() => {
   border-radius: var(--radius-sm, 4px);
   cursor: pointer;
   font-size: var(--font-size-sm, 13px);
-  transition: all 0.12s;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s, transform 0.12s, opacity 0.12s, filter 0.12s;
 }
 .sf-chat-send:hover:not(:disabled) {
   background: var(--accent, var(--color-primary));

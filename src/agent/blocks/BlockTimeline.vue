@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="block-timeline">
     <div class="block-toggle" @click="expanded = !expanded">
       <span class="block-icon">📅</span>
@@ -63,6 +63,6 @@ const expanded = ref(false)
 .tl-time { font-size: 11px; color: var(--agent-accent, #b388ff); font-weight: 500; }
 .tl-label { font-size: 13px; color: var(--agent-text, #e0e0e0); }
 .tl-desc { font-size: 11px; color: var(--agent-text-tertiary, #888); }
-.block-expand-enter-active, .block-expand-leave-active { transition: all 0.2s ease; overflow: hidden; }
+.block-expand-enter-active, .block-expand-leave-active { transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease, filter 0.2s ease; overflow: hidden; }
 .block-expand-enter-from, .block-expand-leave-to { opacity: 0; }
 </style>

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="group-chat-layout">
     <SidebarStrip :active-panel="activePanel" @toggle="onStripToggle" />
     <Transition name="sidebar-expand">
@@ -469,7 +469,7 @@ onBeforeUnmount(() => {
   display: inline-flex; align-items: center; gap: 3px;
   padding: 2px 8px; border-radius: 4px; font-size: 11px;
   background: var(--color-surface); border: 1px solid var(--color-border);
-  color: var(--color-text-secondary); transition: all 0.2s;
+  color: var(--color-text-secondary); transition: background 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s, filter 0.2s;
 }
 .streaming-tool-tag.running { border-color: var(--color-primary); color: var(--color-primary); }
 .streaming-tool-tag.completed { border-color: rgba(16, 185, 129, 0.3); color: #10b981; }
@@ -478,7 +478,7 @@ onBeforeUnmount(() => {
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 .header-actions { display: flex; gap: 6px; }
-.action-btn { padding: 3px 10px; border: 1px solid var(--color-border); border-radius: 6px; font-size: var(--font-size-2xs); cursor: pointer; background: var(--color-surface-elevated); color: var(--color-text); transition: all 0.15s; }
+.action-btn { padding: 3px 10px; border: 1px solid var(--color-border); border-radius: 6px; font-size: var(--font-size-2xs); cursor: pointer; background: var(--color-surface-elevated); color: var(--color-text); transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s; }
 .new-btn { border-color: var(--color-primary); color: var(--color-primary); }
 .new-btn:hover { background: var(--color-primary); color: white; }
 

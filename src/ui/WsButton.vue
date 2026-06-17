@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <button
     :class="['ws-button', `ws-button--${props.type}`, `ws-button--${props.size}`, { 'ws-button--block': props.block, 'ws-button--loading': props.loading, 'ws-button--disabled': props.disabled, 'ws-button--icon-only': props.iconOnly }]"
     :disabled="props.disabled || props.loading"
@@ -46,7 +46,7 @@ defineEmits<{ click: [e: MouseEvent] }>()
   font-weight: var(--button-font-weight);
   border: var(--button-border);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-default);
+  transition: background var(--duration-fast) var(--ease-default), border-color var(--duration-fast) var(--ease-default), color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default), transform var(--duration-fast) var(--ease-default), opacity var(--duration-fast) var(--ease-default), filter var(--duration-fast) var(--ease-default);
   position: relative;
   white-space: nowrap;
   user-select: none;

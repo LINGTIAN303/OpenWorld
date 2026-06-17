@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div v-if="msg.role === 'system'" class="group-msg system-msg">
     <span class="system-text">{{ msg.content }}</span>
   </div>
@@ -353,7 +353,7 @@ function onCopy() {
   border: 1px solid var(--color-border);
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 
 .tool-call-tag:hover { filter: brightness(1.05); }

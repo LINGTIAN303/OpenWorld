@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <Teleport to="body">
     <div class="dialog-backdrop" @click.self="$emit('close')"></div>
     <div class="dialog-wrapper" :style="wrapperStyle">
@@ -631,7 +631,7 @@ function onCreate(): void {
 
 .source-section { margin-bottom: 14px; }
 .source-options { display: flex; gap: 8px; }
-.source-option { flex: 1; padding: 8px; border: 2px solid var(--color-border); border-radius: 8px; cursor: pointer; text-align: center; transition: all 0.15s; }
+.source-option { flex: 1; padding: 8px; border: 2px solid var(--color-border); border-radius: 8px; cursor: pointer; text-align: center; transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s; }
 .source-option.active { border-color: var(--color-primary); background: rgba(108,92,231,0.06); }
 .source-icon { font-size: 18px; display: block; margin-bottom: 2px; }
 .source-label { font-size: 11px; font-weight: 600; }
@@ -656,7 +656,7 @@ function onCreate(): void {
 .baselayer-section { margin-bottom: 14px; }
 .baselayer-desc { font-size: 10px; color: var(--color-text-tertiary); margin-bottom: 6px; }
 .baselayer-options { display: flex; gap: 6px; }
-.baselayer-option { flex: 1; padding: 8px 6px; border: 2px solid var(--color-border); border-radius: 8px; cursor: pointer; text-align: center; transition: all 0.15s; }
+.baselayer-option { flex: 1; padding: 8px 6px; border: 2px solid var(--color-border); border-radius: 8px; cursor: pointer; text-align: center; transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s; }
 .baselayer-option:hover { border-color: var(--color-primary); }
 .baselayer-option.active { border-color: var(--color-primary); background: rgba(108,92,231,0.06); }
 .baselayer-option-title { display: block; font-size: 12px; font-weight: 600; margin-bottom: 2px; }
@@ -671,7 +671,7 @@ function onCreate(): void {
   border-radius: 8px;
   padding: 10px 12px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s, filter 0.15s;
 }
 .capability-card:hover {
   border-color: var(--color-primary);

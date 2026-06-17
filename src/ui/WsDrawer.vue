@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <Teleport to="body">
     <Transition name="ws-drawer-overlay">
       <div v-if="show" class="ws-drawer-overlay" @click="onOverlayClick"></div>
@@ -101,7 +101,7 @@ function onBeforeLeave() {
   width: 28px; height: 28px; border: none; background: transparent;
   border-radius: var(--radius-sm); cursor: pointer; font-size: var(--font-size-base);
   color: var(--color-text-tertiary); display: flex; align-items: center; justify-content: center;
-  transition: all var(--duration-fast) var(--ease-default);
+  transition: background var(--duration-fast) var(--ease-default), border-color var(--duration-fast) var(--ease-default), color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default), transform var(--duration-fast) var(--ease-default), opacity var(--duration-fast) var(--ease-default), filter var(--duration-fast) var(--ease-default);
 }
 .ws-drawer__close:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
 .ws-drawer__close:focus-visible { box-shadow: var(--shadow-focus-ring); outline: none; }

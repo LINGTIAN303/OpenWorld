@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="export-overlay" @click.self="$emit('close')">
     <div class="export-dialog">
       <h3><WsIcon name="item" size="sm" /> 导出</h3>
@@ -109,7 +109,7 @@ async function doExport() {
 .export-fmt-btn {
   padding: 6px 12px; border: 1px solid var(--border-color); border-radius: 6px;
   background: var(--input-bg); color: var(--text-color); font-size: var(--font-size-sm);
-  cursor: pointer; transition: all 0.1s;
+  cursor: pointer; transition: background 0.1s, border-color 0.1s, color 0.1s, box-shadow 0.1s, transform 0.1s, opacity 0.1s, filter 0.1s;
 }
 .export-fmt-btn:hover { border-color: var(--primary); }
 .export-fmt-btn.active { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }

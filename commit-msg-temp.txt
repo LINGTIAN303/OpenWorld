@@ -1,0 +1,21 @@
+perf: replace all `transition: all` with explicit property transitions
+
+Root cause confirmed via Chrome DevTools performance trace:
+- Sidebar collapse triggered CLS 0.80 (80% from a single layout shift of 0.68)
+- BUTTON.create-btn jumped from (119,86) to (960,49) during animation
+- `transition: all 0.12s` on the button animated this position jump,
+  forcing the browser to recalculate layout every frame for 120ms
+
+Fix: replaced 181 occurrences of `transition: all <duration>` across 117 files
+with explicit visual-only property transitions:
+  background, border-color, color, box-shadow, transform, opacity, filter
+
+This prevents layout properties (width, height, position, grid) from being
+animated when parent containers resize, eliminating the layout thrashing
+that caused panel expand/collapse lag across the entire app.
+
+Affected areas (all reported lag scenarios):
+- Plugin sidebar expand/collapse
+- Agent space input bar expand/collapse
+- Activity log + plan panel simultaneous expand/collapse
+- Group chat list + friend list panel expand/collapse
