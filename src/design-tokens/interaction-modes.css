@@ -90,6 +90,7 @@
 }
 
 /* ─── 全局过渡平滑 ─── */
-[data-interaction-mode] * {
-  transition-property: background-color, border-color, color, box-shadow, transform, filter, opacity;
-}
+/* 注：原 [data-interaction-mode] * 通配符规则已移除
+   原因：通配符选择器强制浏览器为所有元素跟踪 filter/box-shadow/transform
+   等昂贵属性变化，导致面板展开/收缩时样式计算开销激增。
+   各交互模式的精确过渡规则已在上方各模式块中定义。 */

@@ -56,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onBeforeUnmount } from 'vue'
 import WsIcon from '../ui/WsIcon.vue'
 import { modelSupportsVision } from './modelRegistry'
 
@@ -319,12 +319,31 @@ function doSend(): void {
   emit('send', text, currentAttachments)
 }
 
+// autoResize 的 rAF 句柄，避免每次输入都触发强制同步布局（layout thrashing）
+let autoResizeRaf: number | null = null
+
 function autoResize(): void {
-  const el = inputRef.value
-  if (!el) return
-  el.style.height = 'auto'
-  el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+  // 使用 rAF 合并同一帧内的多次 resize 请求
+  // 避免连续读写 style.height + scrollHeight 导致的 layout thrashing
+  if (autoResizeRaf !== null) return
+  autoResizeRaf = requestAnimationFrame(() => {
+    autoResizeRaf = null
+    const el = inputRef.value
+    if (!el) return
+    // 先重置高度以获取真实 scrollHeight
+    el.style.height = 'auto'
+    // 在同一帧内读取 scrollHeight 并写回，避免跨帧布局抖动
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+  })
 }
+
+// 组件卸载时取消未执行的 rAF 回调，避免访问已销毁的 ref
+onBeforeUnmount(() => {
+  if (autoResizeRaf !== null) {
+    cancelAnimationFrame(autoResizeRaf)
+    autoResizeRaf = null
+  }
+})
 
 async function compressImage(dataUrl: string, mimeType: string): Promise<{ base64: string; mimeType: string }> {
   return new Promise((resolve) => {
@@ -408,7 +427,6 @@ defineExpose({ inputRef, menuBtnRef })
   border-radius: var(--agent-radius-sm);
   padding: 8px 12px;
   background: var(--agent-input-bg);
-  backdrop-filter: blur(8px);
   color: var(--agent-text);
   font-size: var(--font-size-base); line-height: 1.4; outline: none;
   font-family: var(--agent-font);

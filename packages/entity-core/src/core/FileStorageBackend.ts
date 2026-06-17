@@ -594,7 +594,9 @@ export class FileStorageBackend implements StorageBackend {
       await this.loadKv()
     }
     this._kvCache.set(key, value)
-    await this.flushKv()
+    this.markSelfWrite()
+    // 防抖异步持久化（不阻塞调用方）
+    this.flushKvAsync()
   }
 
   async kvDelete(key: string): Promise<void> {
@@ -603,7 +605,9 @@ export class FileStorageBackend implements StorageBackend {
       await this.loadKv()
     }
     this._kvCache.delete(key)
-    await this.flushKv()
+    this.markSelfWrite()
+    // 防抖异步持久化（不阻塞调用方）
+    this.flushKvAsync()
   }
 
   async kvGetAll(): Promise<[string, string][]> {
@@ -618,6 +622,18 @@ export class FileStorageBackend implements StorageBackend {
     if (!this._projectDir) return
     const pairs = Array.from(this._kvCache.entries())
     await writeTextFile(`${this._projectDir}/.worldsmith/kv_store.json`, JSON.stringify(pairs, null, 2), true)
+  }
+
+  /** 异步将 KV 存储持久化到文件（防抖合并，不阻塞调用方） */
+  private _flushKvTimer: ReturnType<typeof setTimeout> | null = null
+  private flushKvAsync(): void {
+    if (this._flushKvTimer) clearTimeout(this._flushKvTimer)
+    this._flushKvTimer = setTimeout(() => {
+      this._flushKvTimer = null
+      this.flushKv().catch(err =>
+        console.warn('[FileStorageBackend] KV 文件写入失败:', err),
+      )
+    }, 100)
   }
 
   private async loadKv(): Promise<void> {
@@ -674,20 +690,24 @@ export class FileStorageBackend implements StorageBackend {
     if (!this._filesMetaLoaded) {
       await this.loadFilesMeta()
     }
-    // 写文件内容
-    await writeTextFile(
+    this.markSelfWrite()
+    // 写文件内容（异步化，不阻塞调用方）
+    writeTextFile(
       `${this._projectDir}/.worldsmith/files_content/${file.id}.json`,
       JSON.stringify(content, null, 2),
       true,
+    ).catch(err =>
+      console.warn('[FileStorageBackend] 文件内容写入失败:', err),
     )
-    // 更新元数据
+    // 更新元数据（内存同步）
     const idx = this._filesMeta.findIndex(f => f.id === file.id)
     if (idx >= 0) {
       this._filesMeta[idx] = file
     } else {
       this._filesMeta.push(file)
     }
-    await this.flushFilesMeta()
+    // 防抖异步持久化元数据
+    this.flushFilesMetaAsync()
   }
 
   async updateFile(id: string, changes: Partial<ProjectFile>): Promise<void> {
@@ -698,7 +718,9 @@ export class FileStorageBackend implements StorageBackend {
     const idx = this._filesMeta.findIndex(f => f.id === id)
     if (idx >= 0) {
       this._filesMeta[idx] = { ...this._filesMeta[idx], ...changes }
-      await this.flushFilesMeta()
+      this.markSelfWrite()
+      // 防抖异步持久化元数据
+      this.flushFilesMetaAsync()
     }
   }
 
@@ -707,13 +729,13 @@ export class FileStorageBackend implements StorageBackend {
     if (!this._filesMetaLoaded) {
       await this.loadFilesMeta()
     }
-    // 删除内容文件
-    try {
-      await deleteFile(`${this._projectDir}/.worldsmith/files_content/${id}.json`)
-    } catch { /* 忽略 */ }
-    // 更新元数据
+    this.markSelfWrite()
+    // 删除内容文件（异步化）
+    deleteFile(`${this._projectDir}/.worldsmith/files_content/${id}.json`).catch(() => { /* 忽略 */ })
+    // 更新元数据（内存同步）
     this._filesMeta = this._filesMeta.filter(f => f.id !== id)
-    await this.flushFilesMeta()
+    // 防抖异步持久化元数据
+    this.flushFilesMetaAsync()
   }
 
   async getFileContent(id: string): Promise<ProjectFileContent | undefined> {
@@ -733,6 +755,18 @@ export class FileStorageBackend implements StorageBackend {
       JSON.stringify(this._filesMeta, null, 2),
       true,
     )
+  }
+
+  /** 异步将文件元数据持久化到文件（防抖合并，不阻塞调用方） */
+  private _flushFilesMetaTimer: ReturnType<typeof setTimeout> | null = null
+  private flushFilesMetaAsync(): void {
+    if (this._flushFilesMetaTimer) clearTimeout(this._flushFilesMetaTimer)
+    this._flushFilesMetaTimer = setTimeout(() => {
+      this._flushFilesMetaTimer = null
+      this.flushFilesMeta().catch(err =>
+        console.warn('[FileStorageBackend] 文件元数据写入失败:', err),
+      )
+    }, 100)
   }
 
   private async loadFilesMeta(): Promise<void> {
